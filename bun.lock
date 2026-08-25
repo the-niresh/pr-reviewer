@@ -9,6 +9,12 @@
         "vitest": "^2.1.4",
       },
     },
+    "apps/web": {
+      "name": "@pr-reviewer/web",
+      "dependencies": {
+        "@pr-reviewer/core": "workspace:*",
+      },
+    },
     "packages/core": {
       "name": "@pr-reviewer/core",
       "dependencies": {
@@ -80,6 +86,8 @@
     "@napi-rs/lzma-linux-x64-gnu": ["@napi-rs/lzma-linux-x64-gnu@1.5.1", "", { "os": "linux", "cpu": "x64" }, "sha512-oTXEIha4SsuXdTA4Iyskj0kpdx2yVXdhd75c2v3xGrHFfVMsbhTPZU/nMPL4sWKo4pBHm3aucLaqGlF696dTyQ=="],
 
     "@pr-reviewer/core": ["@pr-reviewer/core@workspace:packages/core"],
+
+    "@pr-reviewer/web": ["@pr-reviewer/web@workspace:apps/web"],
 
     "@rollup/rollup-android-arm-eabi": ["@rollup/rollup-android-arm-eabi@4.63.0", "", { "os": "android", "cpu": "arm" }, "sha512-70TeIFezKKy65LgAVyQh+w94/gjWhvPWaLaGGeMEgVrPkQhuj/M5bAYYZzIFUj9Y69oHyTm5Um/R6gcLh4A8JA=="],
 
