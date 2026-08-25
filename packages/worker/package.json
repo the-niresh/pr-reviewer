@@ -1,0 +1,16 @@
+{
+  "name": "@pr-reviewer/worker",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "start": "bun src/index.ts",
+    "typecheck": "tsc -p ../../tsconfig.base.json",
+    "test": "vitest run --passWithNoTests"
+  },
+  "dependencies": {
+    "@pr-reviewer/core": "workspace:*"
+  },
+  "devDependencies": {
+    "@types/node": "^22.10.2"
+  }
+}

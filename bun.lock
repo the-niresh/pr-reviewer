@@ -30,6 +30,15 @@
         "tsx": "^4.19.2",
       },
     },
+    "packages/worker": {
+      "name": "@pr-reviewer/worker",
+      "dependencies": {
+        "@pr-reviewer/core": "workspace:*",
+      },
+      "devDependencies": {
+        "@types/node": "^22.10.2",
+      },
+    },
   },
   "packages": {
     "@emnapi/runtime": ["@emnapi/runtime@1.11.3", "", { "dependencies": { "tslib": "^2.4.0" } }, "sha512-Xz4Tpyki7XyrpbUK1jR1AhdAdaXyhhY4lZ3neLodmhpuWfy2PAQN5B46sAiU4liOXGLkHypn/qU+jvfWSCYYLA=="],
@@ -165,6 +174,8 @@
     "@pr-reviewer/core": ["@pr-reviewer/core@workspace:packages/core"],
 
     "@pr-reviewer/web": ["@pr-reviewer/web@workspace:apps/web"],
+
+    "@pr-reviewer/worker": ["@pr-reviewer/worker@workspace:packages/worker"],
 
     "@rollup/rollup-android-arm-eabi": ["@rollup/rollup-android-arm-eabi@4.63.0", "", { "os": "android", "cpu": "arm" }, "sha512-70TeIFezKKy65LgAVyQh+w94/gjWhvPWaLaGGeMEgVrPkQhuj/M5bAYYZzIFUj9Y69oHyTm5Um/R6gcLh4A8JA=="],
 
