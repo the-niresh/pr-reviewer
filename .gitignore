@@ -12,3 +12,10 @@ data/
 .superpowers/
 docs/superpowers/
 docs/specs/
+.venv/
+__pycache__/
+.mypy_cache/
+.pytest_cache/
+.ruff_cache/
+.coverage
+*.egg-info/

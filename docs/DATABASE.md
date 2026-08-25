@@ -4,7 +4,7 @@ Local installs use Docker Postgres with pgvector.
 
 Hosted demo and production use Neon Postgres with pgvector enabled.
 
-We are not using Prisma or Drizzle in v1. Runtime queries use `pg`. Migrations are plain SQL files in `packages/core/src/db/migrations`.
+We are not using Prisma or Drizzle in v1. Runtime queries use `psycopg`. Migrations are plain SQL files in `src/pr_reviewer/db/migrations`.
 
 Neon is the hosted default because it is cheap to start, supports Postgres and pgvector, works well with Vercel or a separate worker, and avoids self-hosting database ops during the first release.
 
@@ -20,8 +20,10 @@ Each event receives a database-generated monotonic `sequence`. Event readers ord
 
 ## Local setup
 
-Run `docker compose up -d postgres`, then `bun run db:migrate`. The migration command uses `postgresql://pr_reviewer:pr_reviewer@localhost:54329/pr_reviewer` when `DATABASE_URL` is not set.
+Run `docker compose up -d postgres`, then `uv run pr-reviewer-db-migrate`. The migration command uses `postgresql://pr_reviewer:pr_reviewer@localhost:54329/pr_reviewer` when `DATABASE_URL` is not set.
 
 Set `DATABASE_URL` to the Neon connection string in hosted environments and include `sslmode=verify-full`. Do not add that value to a committed file or require it for local checks.
 
-For a pre-deploy migration rebaseline, run `ALLOW_DEV_MIGRATION_REBASE=1 bun run db:rebase-migration -- <migration-filename>`. This updates only an existing `schema_migrations` checksum and is never part of normal migration execution.
+The Python runtime keeps strict TLS verification. If a Neon URL has `sslmode=verify-full` and no `sslrootcert`, the config layer adds the `certifi` CA bundle before opening psycopg connections.
+
+For a pre-deploy migration rebaseline, run `ALLOW_DEV_MIGRATION_REBASE=1 uv run pr-reviewer-db-rebase-migration <migration-filename>`. This updates only an existing `schema_migrations` checksum and is never part of normal migration execution.
