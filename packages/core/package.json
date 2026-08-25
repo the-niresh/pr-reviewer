@@ -4,9 +4,16 @@
   "type": "module",
   "scripts": {
     "typecheck": "tsc -p ../../tsconfig.base.json",
-    "test": "vitest run"
+    "test": "vitest run",
+    "db:migrate": "tsx src/db/migrate.ts"
   },
   "dependencies": {
+    "pg": "^8.13.1",
     "zod": "^3.23.8"
+  },
+  "devDependencies": {
+    "@types/node": "^22.10.2",
+    "@types/pg": "^8.11.10",
+    "tsx": "^4.19.2"
   }
 }

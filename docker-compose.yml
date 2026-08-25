@@ -1,0 +1,14 @@
+services:
+  postgres:
+    image: pgvector/pgvector:pg16
+    ports:
+      - "54329:5432"
+    environment:
+      POSTGRES_USER: pr_reviewer
+      POSTGRES_PASSWORD: pr_reviewer
+      POSTGRES_DB: pr_reviewer
+    volumes:
+      - pr_reviewer_postgres:/var/lib/postgresql/data
+
+volumes:
+  pr_reviewer_postgres:
