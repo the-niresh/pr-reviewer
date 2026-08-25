@@ -24,6 +24,9 @@ describe("claimReviewJob", () => {
           status: "running",
           attempts: 1,
           availableAt: new Date("2026-08-25T00:00:00.000Z"),
+          lockedBy: "worker_test_1",
+          lockedUntil: new Date("2026-08-25T00:06:00.000Z"),
+          lastError: null,
           createdAt: new Date("2026-08-25T00:00:00.000Z"),
           updatedAt: new Date("2026-08-25T00:01:00.000Z"),
         },
@@ -36,11 +39,10 @@ describe("claimReviewJob", () => {
       attempts: 1,
     });
 
-    expect(query).toHaveBeenCalledWith(
-      expect.stringContaining("status = 'pending' and available_at <= now()"),
-    );
-    expect(query).toHaveBeenCalledWith(expect.stringContaining("for update skip locked"));
-    expect(query).toHaveBeenCalledWith(expect.stringContaining("attempts = attempts + 1"));
+    expect(query).toHaveBeenCalledWith(expect.stringContaining("status = 'pending' and available_at <= now()"), ["worker_test_1", "5 minutes"]);
+    expect(query).toHaveBeenCalledWith(expect.stringContaining("for update skip locked"), ["worker_test_1", "5 minutes"]);
+    expect(query).toHaveBeenCalledWith(expect.stringContaining("attempts = attempts + 1"), ["worker_test_1", "5 minutes"]);
+    expect(query).toHaveBeenCalledWith(expect.stringContaining("locked_until = now() + $2::interval"), ["worker_test_1", "5 minutes"]);
   });
 
   it("returns null when no pending job is available", async () => {
