@@ -10,7 +10,8 @@
     "check": "bun run --filter '*' typecheck && bun run --filter '*' test",
     "dev": "bun run --filter @pr-reviewer/web dev",
     "worker": "bun run --filter @pr-reviewer/worker start",
-    "db:migrate": "bun run --filter @pr-reviewer/core db:migrate"
+    "db:migrate": "bun run --filter @pr-reviewer/core db:migrate",
+    "db:rebase-migration": "bun run --filter @pr-reviewer/core db:rebase-migration"
   },
   "devDependencies": {
     "typescript": "^5.6.3",

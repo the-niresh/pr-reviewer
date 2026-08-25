@@ -1,6 +1,8 @@
 import { describe, expect, it } from "vitest";
 import { getMissingAppliedMigrationFilenames } from "./migrate";
+import { validateMigrationRebaseRequest } from "./rebaseMigrationChecksum";
 import { schemaTableNames } from "./schema";
+import { readFile } from "node:fs/promises";
 
 describe("database schema", () => {
   it("contains the durable review tables", () => {
@@ -24,5 +26,26 @@ describe("database schema", () => {
         ["0001_initial.sql"],
       ),
     ).toEqual(["0002_foreign_key_indexes.sql"]);
+  });
+
+  it("requires an explicit flag and migration filename for checksum repair", () => {
+    expect(() => validateMigrationRebaseRequest({}, "0003_review_job_leases.sql")).toThrow(
+      "ALLOW_DEV_MIGRATION_REBASE=1",
+    );
+    expect(() => validateMigrationRebaseRequest({ ALLOW_DEV_MIGRATION_REBASE: "1" }, undefined)).toThrow(
+      "migration filename is required",
+    );
+    expect(
+      validateMigrationRebaseRequest(
+        { ALLOW_DEV_MIGRATION_REBASE: "1" },
+        "0003_review_job_leases.sql",
+      ),
+    ).toBe("0003_review_job_leases.sql");
+  });
+
+  it("does not requeue running jobs in the lease migration", async () => {
+    const sql = await readFile(new URL("./migrations/0003_review_job_leases.sql", import.meta.url), "utf8");
+
+    expect(sql).not.toMatch(/update\s+review_jobs/i);
   });
 });

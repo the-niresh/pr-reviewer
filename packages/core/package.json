@@ -5,7 +5,8 @@
   "scripts": {
     "typecheck": "tsc -p ../../tsconfig.base.json",
     "test": "DATABASE_URL=postgresql://pr_reviewer:pr_reviewer@localhost:54329/pr_reviewer vitest run",
-    "db:migrate": "tsx src/db/migrate.ts"
+    "db:migrate": "tsx src/db/migrate.ts",
+    "db:rebase-migration": "tsx src/db/rebaseMigrationChecksum.ts"
   },
   "dependencies": {
     "pg": "^8.13.1",
