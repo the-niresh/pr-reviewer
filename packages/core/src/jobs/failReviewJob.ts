@@ -1,4 +1,4 @@
-import { db } from "../db/client";
+import { db, type WorkerDatabaseClient } from "../db/client";
 
 export const MAX_REVIEW_JOB_ATTEMPTS = 3;
 export const REVIEW_JOB_RETRY_INTERVAL = "1 minute";
@@ -8,8 +8,22 @@ type FailedReviewJob = {
   status: "pending" | "failed";
 };
 
-export async function failReviewJob(jobId: string, workerId: string, error: string): Promise<void> {
-  const client = await db.connect();
+export async function failReviewJob(
+  jobId: string,
+  workerId: string,
+  error: string,
+  suppliedClient?: WorkerDatabaseClient,
+): Promise<void> {
+  let client: WorkerDatabaseClient;
+  let release: (() => void) | undefined;
+
+  if (suppliedClient === undefined) {
+    const pooledClient = await db.connect();
+    client = pooledClient;
+    release = () => pooledClient.release();
+  } else {
+    client = suppliedClient;
+  }
 
   try {
     await client.query("begin");
@@ -47,6 +61,6 @@ export async function failReviewJob(jobId: string, workerId: string, error: stri
     await client.query("rollback");
     throw failure;
   } finally {
-    client.release();
+    release?.();
   }
 }

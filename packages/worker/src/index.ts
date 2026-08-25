@@ -1,6 +1,12 @@
 import { claimReviewJob, type ReviewJob } from "@pr-reviewer/core/src/jobs/claimReviewJob";
 import { completeReviewJob } from "@pr-reviewer/core/src/jobs/completeReviewJob";
-import { db } from "@pr-reviewer/core/src/db/client";
+import {
+  db,
+  runWorkerDatabaseOperation,
+  type WorkerDatabaseClient,
+  WorkerDatabaseOperationAbortedError,
+  WorkerDatabaseOperationTimedOutError,
+} from "@pr-reviewer/core/src/db/client";
 import { failReviewJob } from "@pr-reviewer/core/src/jobs/failReviewJob";
 import { renewReviewJobLease } from "@pr-reviewer/core/src/jobs/renewReviewJobLease";
 
@@ -27,11 +33,11 @@ export type WorkerOptions = {
   workerId?: string;
 };
 
-type JobStore = {
-  claim: (workerId: string) => Promise<ReviewJob | null>;
-  complete: (jobId: string, workerId: string) => Promise<void>;
-  fail: (jobId: string, workerId: string, error: string) => Promise<void>;
-  renew: (jobId: string, workerId: string) => Promise<void>;
+export type JobStore = {
+  claim: (workerId: string, client: WorkerDatabaseClient) => Promise<ReviewJob | null>;
+  complete: (jobId: string, workerId: string, client: WorkerDatabaseClient) => Promise<void>;
+  fail: (jobId: string, workerId: string, error: string, client: WorkerDatabaseClient) => Promise<void>;
+  renew: (jobId: string, workerId: string, client: WorkerDatabaseClient) => Promise<void>;
 };
 
 const defaultJobStore: JobStore = {
@@ -62,7 +68,7 @@ export async function runWorker({
     while (!stopController.signal.aborted) {
       const claimResult = await runDatabaseCall(
         "claim review job",
-        () => jobStore.claim(workerId),
+        (client) => jobStore.claim(workerId, client),
         stopController.signal,
         databaseCallTimeoutMs,
         reportError,
@@ -78,7 +84,7 @@ export async function runWorker({
         if (job !== null) {
           await runDatabaseCall(
             "release claimed job during shutdown",
-            () => jobStore.fail(job.id, workerId, "Worker shutdown requested before review started"),
+            (client) => jobStore.fail(job.id, workerId, "Worker shutdown requested before review started", client),
             stopController.signal,
             databaseCallTimeoutMs,
             reportError,
@@ -113,7 +119,7 @@ export async function runWorker({
         if (result.error !== null) {
           const failResult = await runDatabaseCall(
             "fail review job",
-            () => jobStore.fail(job.id, workerId, getErrorMessage(result.error)),
+            (client) => jobStore.fail(job.id, workerId, getErrorMessage(result.error), client),
             stopController.signal,
             databaseCallTimeoutMs,
             reportError,
@@ -126,7 +132,7 @@ export async function runWorker({
 
         const completeResult = await runDatabaseCall(
           "complete review job",
-          () => jobStore.complete(job.id, workerId),
+          (client) => jobStore.complete(job.id, workerId, client),
           stopController.signal,
           databaseCallTimeoutMs,
           reportError,
@@ -140,7 +146,7 @@ export async function runWorker({
       if (result.kind === "stopped") {
         const failResult = await runDatabaseCall(
           "fail review job during shutdown",
-          () => jobStore.fail(job.id, workerId, "Worker shutdown requested during review"),
+          (client) => jobStore.fail(job.id, workerId, "Worker shutdown requested during review", client),
           stopController.signal,
           databaseCallTimeoutMs,
           reportError,
@@ -167,34 +173,24 @@ type DatabaseCallResult<T> =
 
 async function runDatabaseCall<T>(
   name: string,
-  operation: () => Promise<T>,
+  operation: (client: WorkerDatabaseClient) => Promise<T>,
   signal: AbortSignal,
   timeoutMs: number,
   reportError: (message: string) => void,
 ): Promise<DatabaseCallResult<T>> {
-  const task = Promise.resolve()
-    .then(operation)
-    .then(
-      (value) => ({ kind: "completed" as const, value }),
-      (error: unknown) => ({ kind: "failed" as const, error }),
-    );
-  const abortWaiter = createAbortWaiter(signal);
-  const timeout = createTimeout(timeoutMs);
-  const result = await Promise.race([task, abortWaiter.promise, timeout.promise]);
-  abortWaiter.cancel();
-  timeout.cancel();
-
-  if (result.kind === "failed") {
-    throw result.error;
+  try {
+    return { kind: "completed", value: await runWorkerDatabaseOperation(operation, { signal, timeoutMs }) };
+  } catch (error) {
+    if (error instanceof WorkerDatabaseOperationAbortedError) {
+      reportError(`Database call aborted during shutdown: ${name}`);
+      return { kind: "aborted" };
+    }
+    if (error instanceof WorkerDatabaseOperationTimedOutError) {
+      reportError(`Database call timed out: ${name}`);
+      return { kind: "timed_out" };
+    }
+    throw error;
   }
-
-  if (result.kind === "aborted") {
-    reportError(`Database call aborted during shutdown: ${name}`);
-  } else if (result.kind === "timed_out") {
-    reportError(`Database call timed out: ${name}`);
-  }
-
-  return result;
 }
 
 function startLeaseRenewal({
@@ -226,7 +222,7 @@ function startLeaseRenewal({
     renewalInFlight = true;
     void runDatabaseCall(
       "renew review job lease",
-      () => jobStore.renew(job.id, workerId),
+      (client) => jobStore.renew(job.id, workerId, client),
       signal,
       databaseCallTimeoutMs,
       reportError,
@@ -332,25 +328,6 @@ function createAbortWaiter(signal: AbortSignal): {
     cancel: () => {
       if (onAbort !== undefined) {
         signal.removeEventListener("abort", onAbort);
-      }
-    },
-  };
-}
-
-function createTimeout(timeoutMs: number): {
-  promise: Promise<{ kind: "timed_out" }>;
-  cancel: () => void;
-} {
-  let timer: ReturnType<typeof setTimeout> | undefined;
-  const promise = new Promise<{ kind: "timed_out" }>((resolve) => {
-    timer = setTimeout(() => resolve({ kind: "timed_out" }), timeoutMs);
-  });
-
-  return {
-    promise,
-    cancel: () => {
-      if (timer !== undefined) {
-        clearTimeout(timer);
       }
     },
   };

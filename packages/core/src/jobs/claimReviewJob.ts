@@ -1,4 +1,4 @@
-import { db } from "../db/client";
+import { db, type WorkerDatabaseClient } from "../db/client";
 
 export type ReviewJobStatus = "pending" | "running" | "succeeded" | "failed";
 
@@ -18,8 +18,8 @@ export type ReviewJob = {
 
 export const REVIEW_JOB_LEASE_INTERVAL = "5 minutes";
 
-export async function claimReviewJob(workerId: string): Promise<ReviewJob | null> {
-  const result = await db.query<ReviewJob>(
+export async function claimReviewJob(workerId: string, client?: WorkerDatabaseClient): Promise<ReviewJob | null> {
+  const result = await (client ?? db).query<ReviewJob>(
     `with next_job as (
        select id
        from review_jobs

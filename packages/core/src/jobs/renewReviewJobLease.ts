@@ -1,8 +1,8 @@
-import { db } from "../db/client";
+import { db, type WorkerDatabaseClient } from "../db/client";
 import { REVIEW_JOB_LEASE_INTERVAL } from "./claimReviewJob";
 
-export async function renewReviewJobLease(jobId: string, workerId: string): Promise<void> {
-  const result = await db.query<{ id: string }>(
+export async function renewReviewJobLease(jobId: string, workerId: string, client?: WorkerDatabaseClient): Promise<void> {
+  const result = await (client ?? db).query<{ id: string }>(
     `update review_jobs
      set locked_until = now() + $3::interval, updated_at = now()
      where id = $1
