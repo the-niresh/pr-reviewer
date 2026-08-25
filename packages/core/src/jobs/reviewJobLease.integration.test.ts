@@ -4,6 +4,7 @@ import { migrate } from "../db/migrate";
 import { claimReviewJob } from "./claimReviewJob";
 import { completeReviewJob } from "./completeReviewJob";
 import { failReviewJob } from "./failReviewJob";
+import { renewReviewJobLease } from "./renewReviewJobLease";
 
 describe("review job leases", () => {
   let deliveryNumber = 0;
@@ -56,6 +57,21 @@ describe("review job leases", () => {
     });
   });
 
+  it("skips a job row held by another transaction", async () => {
+    const jobId = await createReviewJob();
+    const lockClient = await db.connect();
+
+    try {
+      await lockClient.query("begin");
+      await lockClient.query("select id from review_jobs where id = $1 for update", [jobId]);
+
+      await expect(claimReviewJob("worker-b")).resolves.toBeNull();
+    } finally {
+      await lockClient.query("rollback");
+      lockClient.release();
+    }
+  });
+
   it("rejects completion and failure from a worker that does not own the lease", async () => {
     await createReviewJob();
     const claimed = await claimReviewJob("worker-a");
@@ -93,6 +109,26 @@ describe("review job leases", () => {
     expect(result.rows).toEqual([
       { status: "failed", attempts: 3, last_error: "failure from worker-3" },
     ]);
+  });
+
+  it("renews the lease only for its owning worker", async () => {
+    await createReviewJob();
+    const claimed = await claimReviewJob("worker-a");
+
+    if (claimed === null) {
+      throw new Error("Expected a job to be claimed");
+    }
+
+    await db.query("update review_jobs set locked_until = now() + interval '1 second' where id = $1", [claimed.id]);
+    await expect(renewReviewJobLease(claimed.id, "worker-a")).resolves.toBeUndefined();
+    await expect(renewReviewJobLease(claimed.id, "worker-b")).rejects.toThrow();
+
+    const result = await db.query<{ locked_by: string; locked_until: Date }>(
+      "select locked_by, locked_until from review_jobs where id = $1",
+      [claimed.id],
+    );
+    expect(result.rows[0].locked_by).toBe("worker-a");
+    expect(result.rows[0].locked_until.getTime()).toBeGreaterThan(Date.now() + 4 * 60 * 1000);
   });
 
   async function createReviewJob(): Promise<string> {

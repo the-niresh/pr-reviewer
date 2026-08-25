@@ -1,14 +1,16 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
 
-const { claimReviewJob, completeReviewJob, failReviewJob } = vi.hoisted(() => ({
+const { claimReviewJob, completeReviewJob, failReviewJob, renewReviewJobLease } = vi.hoisted(() => ({
   claimReviewJob: vi.fn(),
   completeReviewJob: vi.fn(),
   failReviewJob: vi.fn(),
+  renewReviewJobLease: vi.fn(),
 }));
 
 vi.mock("@pr-reviewer/core/src/jobs/claimReviewJob", () => ({ claimReviewJob }));
 vi.mock("@pr-reviewer/core/src/jobs/completeReviewJob", () => ({ completeReviewJob }));
 vi.mock("@pr-reviewer/core/src/jobs/failReviewJob", () => ({ failReviewJob }));
+vi.mock("@pr-reviewer/core/src/jobs/renewReviewJobLease", () => ({ renewReviewJobLease }));
 vi.mock("@pr-reviewer/core/src/db/client", () => ({ db: { end: vi.fn() } }));
 
 import { runWorker } from "./index";
@@ -18,6 +20,7 @@ describe("runWorker", () => {
     claimReviewJob.mockReset();
     completeReviewJob.mockReset();
     failReviewJob.mockReset();
+    renewReviewJobLease.mockReset();
   });
 
   it("stops an idle worker when SIGTERM fires", async () => {
@@ -41,6 +44,7 @@ describe("runWorker", () => {
       signal: controller.signal,
       shutdownTimeoutMs: 100,
       runJob,
+      reportError: vi.fn(),
     });
 
     await waitFor(() => expect(runJob).toHaveBeenCalledOnce());
@@ -59,6 +63,7 @@ describe("runWorker", () => {
       signal: controller.signal,
       shutdownTimeoutMs: 20,
       runJob,
+      reportError: vi.fn(),
     });
 
     await waitFor(() => expect(runJob).toHaveBeenCalledOnce());
@@ -66,6 +71,48 @@ describe("runWorker", () => {
 
     await expect(settlesWithin(worker, 100)).resolves.toBe(true);
     expect(failReviewJob).not.toHaveBeenCalled();
+  });
+
+  it("stops after shutdown when a claim database call hangs", async () => {
+    const controller = new AbortController();
+    const reportError = vi.fn();
+    claimReviewJob.mockImplementation(() => new Promise(() => {}));
+    const worker = runWorker({
+      signal: controller.signal,
+      databaseCallTimeoutMs: 60_000,
+      reportError,
+    });
+
+    await waitFor(() => expect(claimReviewJob).toHaveBeenCalledOnce());
+    controller.abort();
+
+    await expect(settlesWithin(worker, 100)).resolves.toBe(true);
+    expect(reportError).toHaveBeenCalledWith(expect.stringContaining("claim"));
+  });
+
+  it("renews an active job lease before the lease can expire", async () => {
+    const controller = new AbortController();
+    claimReviewJob.mockResolvedValueOnce({ id: "job-1", status: "running" });
+    renewReviewJobLease.mockResolvedValue(undefined);
+    const runJob = vi.fn(
+      () =>
+        new Promise<void>((resolve) => {
+          setTimeout(() => {
+            controller.abort();
+            resolve();
+          }, 30);
+        }),
+    );
+
+    await runWorker({
+      signal: controller.signal,
+      leaseRenewalIntervalMs: 5,
+      runJob,
+      reportError: vi.fn(),
+    });
+
+    expect(renewReviewJobLease).toHaveBeenCalledWith("job-1", expect.any(String));
+    expect(completeReviewJob).not.toHaveBeenCalled();
   });
 });
 

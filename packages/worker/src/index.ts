@@ -2,9 +2,12 @@ import { claimReviewJob, type ReviewJob } from "@pr-reviewer/core/src/jobs/claim
 import { completeReviewJob } from "@pr-reviewer/core/src/jobs/completeReviewJob";
 import { db } from "@pr-reviewer/core/src/db/client";
 import { failReviewJob } from "@pr-reviewer/core/src/jobs/failReviewJob";
+import { renewReviewJobLease } from "@pr-reviewer/core/src/jobs/renewReviewJobLease";
 
 const DEFAULT_POLL_INTERVAL_MS = 1_000;
 const DEFAULT_SHUTDOWN_TIMEOUT_MS = 30_000;
+const DEFAULT_DATABASE_CALL_TIMEOUT_MS = 10_000;
+const DEFAULT_LEASE_RENEWAL_INTERVAL_MS = 60_000;
 
 export type RunReviewJob = (job: ReviewJob, signal: AbortSignal) => Promise<void>;
 
@@ -13,19 +16,41 @@ export async function runReviewJob(_job: ReviewJob, _signal: AbortSignal): Promi
 }
 
 export type WorkerOptions = {
+  databaseCallTimeoutMs?: number;
+  jobStore?: JobStore;
+  leaseRenewalIntervalMs?: number;
   pollIntervalMs?: number;
+  reportError?: (message: string) => void;
   shutdownTimeoutMs?: number;
   runJob?: RunReviewJob;
   signal?: AbortSignal;
   workerId?: string;
 };
 
+type JobStore = {
+  claim: (workerId: string) => Promise<ReviewJob | null>;
+  complete: (jobId: string, workerId: string) => Promise<void>;
+  fail: (jobId: string, workerId: string, error: string) => Promise<void>;
+  renew: (jobId: string, workerId: string) => Promise<void>;
+};
+
+const defaultJobStore: JobStore = {
+  claim: claimReviewJob,
+  complete: completeReviewJob,
+  fail: failReviewJob,
+  renew: renewReviewJobLease,
+};
+
 export async function runWorker({
+  databaseCallTimeoutMs = DEFAULT_DATABASE_CALL_TIMEOUT_MS,
+  leaseRenewalIntervalMs = DEFAULT_LEASE_RENEWAL_INTERVAL_MS,
   pollIntervalMs = DEFAULT_POLL_INTERVAL_MS,
+  reportError = writeWorkerError,
   shutdownTimeoutMs = DEFAULT_SHUTDOWN_TIMEOUT_MS,
   runJob = runReviewJob,
   signal,
   workerId = `worker_${process.pid}`,
+  jobStore = defaultJobStore,
 }: WorkerOptions = {}): Promise<void> {
   const stopController = new AbortController();
   const stop = () => stopController.abort();
@@ -35,11 +60,29 @@ export async function runWorker({
 
   try {
     while (!stopController.signal.aborted) {
-      const job = await claimReviewJob(workerId);
+      const claimResult = await runDatabaseCall(
+        "claim review job",
+        () => jobStore.claim(workerId),
+        stopController.signal,
+        databaseCallTimeoutMs,
+        reportError,
+      );
+
+      if (claimResult.kind !== "completed") {
+        break;
+      }
+
+      const job = claimResult.value;
 
       if (stopController.signal.aborted) {
         if (job !== null) {
-          await failReviewJob(job.id, workerId, "Worker shutdown requested before review started");
+          await runDatabaseCall(
+            "release claimed job during shutdown",
+            () => jobStore.fail(job.id, workerId, "Worker shutdown requested before review started"),
+            stopController.signal,
+            databaseCallTimeoutMs,
+            reportError,
+          );
         }
         break;
       }
@@ -49,20 +92,64 @@ export async function runWorker({
         continue;
       }
 
-      const result = await runJobUntilShutdown(runJob, job, stopController.signal, shutdownTimeoutMs);
+      const jobController = new AbortController();
+      const stopJob = () => jobController.abort();
+      stopController.signal.addEventListener("abort", stopJob, { once: true });
+      const renewal = startLeaseRenewal({
+        databaseCallTimeoutMs,
+        intervalMs: leaseRenewalIntervalMs,
+        job,
+        jobStore,
+        reportError,
+        signal: jobController.signal,
+        stopJob,
+        workerId,
+      });
+      const result = await runJobUntilShutdown(runJob, job, jobController.signal, shutdownTimeoutMs);
+      renewal.stop();
+      stopController.signal.removeEventListener("abort", stopJob);
 
       if (result.kind === "completed") {
         if (result.error !== null) {
-          await failReviewJob(job.id, workerId, getErrorMessage(result.error));
+          const failResult = await runDatabaseCall(
+            "fail review job",
+            () => jobStore.fail(job.id, workerId, getErrorMessage(result.error)),
+            stopController.signal,
+            databaseCallTimeoutMs,
+            reportError,
+          );
+          if (failResult.kind !== "completed") {
+            break;
+          }
           continue;
         }
 
-        await completeReviewJob(job.id, workerId);
+        const completeResult = await runDatabaseCall(
+          "complete review job",
+          () => jobStore.complete(job.id, workerId),
+          stopController.signal,
+          databaseCallTimeoutMs,
+          reportError,
+        );
+        if (completeResult.kind !== "completed") {
+          break;
+        }
         continue;
       }
 
       if (result.kind === "stopped") {
-        await failReviewJob(job.id, workerId, "Worker shutdown requested during review");
+        const failResult = await runDatabaseCall(
+          "fail review job during shutdown",
+          () => jobStore.fail(job.id, workerId, "Worker shutdown requested during review"),
+          stopController.signal,
+          databaseCallTimeoutMs,
+          reportError,
+        );
+        if (failResult.kind !== "completed") {
+          break;
+        }
+      } else {
+        reportError(`Review job ${job.id} exceeded the shutdown deadline; its lease remains for recovery`);
       }
 
       break;
@@ -71,6 +158,101 @@ export async function runWorker({
     process.removeListener("SIGTERM", stop);
     signal?.removeEventListener("abort", stop);
   }
+}
+
+type DatabaseCallResult<T> =
+  | { kind: "completed"; value: T }
+  | { kind: "aborted" }
+  | { kind: "timed_out" };
+
+async function runDatabaseCall<T>(
+  name: string,
+  operation: () => Promise<T>,
+  signal: AbortSignal,
+  timeoutMs: number,
+  reportError: (message: string) => void,
+): Promise<DatabaseCallResult<T>> {
+  const task = Promise.resolve()
+    .then(operation)
+    .then(
+      (value) => ({ kind: "completed" as const, value }),
+      (error: unknown) => ({ kind: "failed" as const, error }),
+    );
+  const abortWaiter = createAbortWaiter(signal);
+  const timeout = createTimeout(timeoutMs);
+  const result = await Promise.race([task, abortWaiter.promise, timeout.promise]);
+  abortWaiter.cancel();
+  timeout.cancel();
+
+  if (result.kind === "failed") {
+    throw result.error;
+  }
+
+  if (result.kind === "aborted") {
+    reportError(`Database call aborted during shutdown: ${name}`);
+  } else if (result.kind === "timed_out") {
+    reportError(`Database call timed out: ${name}`);
+  }
+
+  return result;
+}
+
+function startLeaseRenewal({
+  databaseCallTimeoutMs,
+  intervalMs,
+  job,
+  jobStore,
+  reportError,
+  signal,
+  stopJob,
+  workerId,
+}: {
+  databaseCallTimeoutMs: number;
+  intervalMs: number;
+  job: ReviewJob;
+  jobStore: JobStore;
+  reportError: (message: string) => void;
+  signal: AbortSignal;
+  stopJob: () => void;
+  workerId: string;
+}): { stop: () => void } {
+  let active = true;
+  let renewalInFlight = false;
+  const timer = setInterval(() => {
+    if (!active || signal.aborted || renewalInFlight) {
+      return;
+    }
+
+    renewalInFlight = true;
+    void runDatabaseCall(
+      "renew review job lease",
+      () => jobStore.renew(job.id, workerId),
+      signal,
+      databaseCallTimeoutMs,
+      reportError,
+    )
+      .then((result) => {
+        if (active && result.kind !== "completed") {
+          stopJob();
+        }
+      })
+      .catch((error: unknown) => {
+        if (active) {
+          reportError(`Review job ${job.id} lease renewal failed: ${getErrorMessage(error)}`);
+          stopJob();
+        }
+      })
+      .finally(() => {
+        renewalInFlight = false;
+      });
+  }, intervalMs);
+
+  return {
+    stop: () => {
+      active = false;
+      clearInterval(timer);
+    },
+  };
 }
 
 type JobRunResult =
@@ -155,10 +337,33 @@ function createAbortWaiter(signal: AbortSignal): {
   };
 }
 
+function createTimeout(timeoutMs: number): {
+  promise: Promise<{ kind: "timed_out" }>;
+  cancel: () => void;
+} {
+  let timer: ReturnType<typeof setTimeout> | undefined;
+  const promise = new Promise<{ kind: "timed_out" }>((resolve) => {
+    timer = setTimeout(() => resolve({ kind: "timed_out" }), timeoutMs);
+  });
+
+  return {
+    promise,
+    cancel: () => {
+      if (timer !== undefined) {
+        clearTimeout(timer);
+      }
+    },
+  };
+}
+
 function waitForShutdownDeadline(timeoutMs: number): Promise<{ kind: "timed_out" }> {
   return new Promise((resolve) => {
     setTimeout(() => resolve({ kind: "timed_out" }), timeoutMs);
   });
+}
+
+function writeWorkerError(message: string): void {
+  process.stderr.write(`${message}\n`);
 }
 
 if (import.meta.main) {
