@@ -12,6 +12,6 @@ Self-hosted Postgres is a later option if traffic, cost, or compliance needs jus
 
 ## Local setup
 
-Run `docker compose up -d postgres`, then `pnpm db:migrate`. The migration command uses `postgresql://pr_reviewer:pr_reviewer@localhost:54329/pr_reviewer` when `DATABASE_URL` is not set.
+Run `docker compose up -d postgres`, then `bun run db:migrate`. The migration command uses `postgresql://pr_reviewer:pr_reviewer@localhost:54329/pr_reviewer` when `DATABASE_URL` is not set.
 
 Set `DATABASE_URL` to the Neon connection string in hosted environments. Do not add that value to a committed file or require it for local checks.
