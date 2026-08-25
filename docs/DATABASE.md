@@ -10,6 +10,12 @@ Neon is the hosted default because it is cheap to start, supports Postgres and p
 
 Self-hosted Postgres is a later option if traffic, cost, or compliance needs justify owning backups, patching, monitoring, and failover.
 
+## Event and cost records
+
+`agent_events` is the append-only audit trail for each review job. Writers only insert rows. The database rejects updates and deletes.
+
+Each model request writes one `model_calls` row and one linked `model_call.recorded` event in the same transaction. The model row stores the provider, model name, prompt version id, token counts, and `cost_usd`. Request metadata is stored in `request_metadata`; `response_metadata.latencyMs` stores request latency in milliseconds.
+
 ## Local setup
 
 Run `docker compose up -d postgres`, then `bun run db:migrate`. The migration command uses `postgresql://pr_reviewer:pr_reviewer@localhost:54329/pr_reviewer` when `DATABASE_URL` is not set.
