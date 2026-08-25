@@ -1,4 +1,5 @@
 import { describe, expect, it } from "vitest";
+import { getMissingAppliedMigrationFilenames } from "./migrate";
 import { schemaTableNames } from "./schema";
 
 describe("database schema", () => {
@@ -14,5 +15,14 @@ describe("database schema", () => {
       "human_decisions",
       "agent_events",
     ]);
+  });
+
+  it("detects an applied migration that is no longer on disk", () => {
+    expect(
+      getMissingAppliedMigrationFilenames(
+        ["0001_initial.sql", "0002_foreign_key_indexes.sql"],
+        ["0001_initial.sql"],
+      ),
+    ).toEqual(["0002_foreign_key_indexes.sql"]);
   });
 });

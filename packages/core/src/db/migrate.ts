@@ -15,6 +15,20 @@ type Migration = {
   checksum: string;
 };
 
+type AppliedMigration = {
+  filename: string;
+  checksum: string;
+};
+
+export function getMissingAppliedMigrationFilenames(
+  appliedFilenames: readonly string[],
+  availableFilenames: readonly string[],
+): string[] {
+  const available = new Set(availableFilenames);
+
+  return appliedFilenames.filter((filename) => !available.has(filename));
+}
+
 async function loadMigrations(): Promise<Migration[]> {
   const filenames = (await readdir(migrationsDirectory))
     .filter((filename) => filename.endsWith(".sql"))
@@ -47,14 +61,29 @@ export async function migrate(): Promise<void> {
       )
     `);
 
-    for (const migration of migrations) {
-      const applied = await client.query<{ checksum: string }>(
-        "select checksum from schema_migrations where filename = $1",
-        [migration.filename],
-      );
+    const appliedResult = await client.query<AppliedMigration>(
+      "select filename, checksum from schema_migrations",
+    );
+    const missingAppliedMigrations = getMissingAppliedMigrationFilenames(
+      appliedResult.rows.map(({ filename }) => filename),
+      migrations.map(({ filename }) => filename),
+    );
 
-      if (applied.rowCount === 1) {
-        if (applied.rows[0]?.checksum !== migration.checksum) {
+    if (missingAppliedMigrations.length > 0) {
+      throw new Error(
+        `Applied migration files are missing: ${missingAppliedMigrations.join(", ")}`,
+      );
+    }
+
+    const appliedMigrations = new Map(
+      appliedResult.rows.map(({ filename, checksum }) => [filename, checksum]),
+    );
+
+    for (const migration of migrations) {
+      const appliedChecksum = appliedMigrations.get(migration.filename);
+
+      if (appliedChecksum !== undefined) {
+        if (appliedChecksum !== migration.checksum) {
           throw new Error(`Migration checksum mismatch: ${migration.filename}`);
         }
         continue;
