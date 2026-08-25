@@ -8,6 +8,9 @@
     "test": "vitest run"
   },
   "dependencies": {
-    "@pr-reviewer/core": "workspace:*"
+    "@pr-reviewer/core": "workspace:*",
+    "next": "^15",
+    "react": "^19",
+    "react-dom": "^19"
   }
 }

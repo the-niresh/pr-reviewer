@@ -7,7 +7,7 @@ vi.mock("@pr-reviewer/core/src/jobs/enqueueReviewJob", () => ({
   enqueueReviewJob,
 }));
 
-import { POST } from "./route";
+import { MAX_WEBHOOK_BODY_BYTES, POST } from "./route";
 
 describe("POST /api/github/webhook", () => {
   const secret = "test-webhook-secret";
@@ -72,10 +72,50 @@ describe("POST /api/github/webhook", () => {
     expect(enqueueReviewJob).not.toHaveBeenCalled();
   });
 
+  it("rejects malformed JSON with an invalid signature before parsing it", async () => {
+    const response = await POST(
+      new Request("http://localhost/api/github/webhook", {
+        body: "{invalid",
+        headers: {
+          "x-github-delivery": "delivery-1",
+          "x-github-event": "pull_request",
+          "x-hub-signature-256": "sha256=invalid",
+        },
+        method: "POST",
+      }),
+    );
+
+    expect(response.status).toBe(401);
+    expect(enqueueReviewJob).not.toHaveBeenCalled();
+  });
+
+  it("rejects an absent signature", async () => {
+    const response = await POST(
+      new Request("http://localhost/api/github/webhook", {
+        body: JSON.stringify({ action: "opened" }),
+        headers: {
+          "x-github-delivery": "delivery-1",
+          "x-github-event": "pull_request",
+        },
+        method: "POST",
+      }),
+    );
+
+    expect(response.status).toBe(401);
+    expect(enqueueReviewJob).not.toHaveBeenCalled();
+  });
+
   it("rejects malformed JSON after signature verification", async () => {
     const response = await POST(signedRequest("{invalid"));
 
     expect(response.status).toBe(400);
+    expect(enqueueReviewJob).not.toHaveBeenCalled();
+  });
+
+  it("rejects a body over the configured limit before verification or enqueueing", async () => {
+    const response = await POST(signedRequest("x".repeat(MAX_WEBHOOK_BODY_BYTES + 1)));
+
+    expect(response.status).toBe(413);
     expect(enqueueReviewJob).not.toHaveBeenCalled();
   });
 
