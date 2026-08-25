@@ -6,6 +6,8 @@ requires-python = ">=3.12"
 dependencies = [
   "certifi>=2026.7.22",
   "fastapi>=0.116.1",
+  "httpx>=0.28.1",
+  "pyjwt[crypto]>=2.10.1",
   "psycopg[binary,pool]>=3.2.9",
   "pydantic>=2.11.7",
   "python-dotenv>=1.1.1",
@@ -27,7 +29,6 @@ packages = ["src/pr_reviewer"]
 
 [dependency-groups]
 dev = [
-  "httpx>=0.28.1",
   "mypy>=1.17.1",
   "pytest>=8.4.1",
   "pytest-cov>=6.2.1",
