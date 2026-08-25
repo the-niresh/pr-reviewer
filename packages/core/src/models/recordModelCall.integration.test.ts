@@ -30,7 +30,7 @@ describe("model call ledger database integration", () => {
       promptVersion: promptVersionId,
       inputTokens: 123,
       outputTokens: 45,
-      costUsd: "0.001234",
+      costUsd: "0.000000000001",
       latencyMs: 678,
       metadata: { requestId: "req-1" },
     });
@@ -43,11 +43,12 @@ describe("model call ledger database integration", () => {
       input_tokens: number;
       output_tokens: number;
       cost_usd: string;
+      latency_ms: number;
       request_metadata: { requestId: string };
-      response_metadata: { latencyMs: number };
+      response_metadata: Record<string, never>;
     }>(
       `select id, prompt_version_id, provider, model_name, input_tokens, output_tokens,
-              cost_usd::text, request_metadata, response_metadata
+              cost_usd::text, latency_ms, request_metadata, response_metadata
        from model_calls
        where review_job_id = $1`,
       [reviewJobId],
@@ -61,15 +62,16 @@ describe("model call ledger database integration", () => {
         model_name: "gpt-5-mini",
         input_tokens: 123,
         output_tokens: 45,
-        cost_usd: "0.001234",
+        cost_usd: "0.000000000001",
+        latency_ms: 678,
         request_metadata: { requestId: "req-1" },
-        response_metadata: { latencyMs: 678 },
+        response_metadata: {},
       }),
     ]);
     expect(events).toHaveLength(1);
     expect(events[0].payload).toMatchObject({
       modelCallId: modelCalls.rows[0].id,
-      costUsd: "0.001234",
+      costUsd: "0.000000000001",
       latencyMs: 678,
     });
   });
@@ -79,7 +81,7 @@ async function createReviewJob(): Promise<string> {
   const deliveryId = `model-delivery-${randomUUID()}`;
   await db.query("insert into github_deliveries (id, event_name) values ($1, 'pull_request')", [deliveryId]);
   const result = await db.query<{ id: string }>(
-    "insert into review_jobs (delivery_id, status) values ($1, 'pending') returning id",
+    "insert into review_jobs (delivery_id, status) values ($1, 'succeeded') returning id",
     [deliveryId],
   );
   return result.rows[0].id;

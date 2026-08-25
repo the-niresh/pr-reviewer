@@ -47,8 +47,8 @@ describe("recordModelCall", () => {
         123,
         45,
         "0.001234",
+        678,
         JSON.stringify({ requestId: "req-1" }),
-        JSON.stringify({ latencyMs: 678 }),
       ],
     );
     expect(query).toHaveBeenNthCalledWith(
@@ -99,5 +99,23 @@ describe("recordModelCall", () => {
 
     expect(query).toHaveBeenNthCalledWith(4, "rollback");
     expect(release).toHaveBeenCalledOnce();
+  });
+
+  it("rejects costs that the database precision cannot store exactly", async () => {
+    await expect(
+      recordModelCall({
+        reviewJobId: "job-1",
+        provider: "openai",
+        model: "gpt-5-mini",
+        promptVersion: "00000000-0000-0000-0000-000000000001",
+        inputTokens: 1,
+        outputTokens: 1,
+        costUsd: "0.0000000000001",
+        latencyMs: 1,
+        metadata: {},
+      }),
+    ).rejects.toThrow("at most 12 decimal places");
+
+    expect(connect).not.toHaveBeenCalled();
   });
 });

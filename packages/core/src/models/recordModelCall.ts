@@ -34,10 +34,10 @@ export async function recordModelCall(input: ModelCallInput): Promise<void> {
          input_tokens,
          output_tokens,
          cost_usd,
-         request_metadata,
-         response_metadata
+         latency_ms,
+         request_metadata
        )
-       values ($1, $2, $3, $4, $5, $6, $7::numeric, $8::jsonb, $9::jsonb)
+       values ($1, $2, $3, $4, $5, $6, $7::numeric, $8, $9::jsonb)
        returning id`,
       [
         input.reviewJobId,
@@ -47,8 +47,8 @@ export async function recordModelCall(input: ModelCallInput): Promise<void> {
         input.inputTokens,
         input.outputTokens,
         input.costUsd,
+        input.latencyMs,
         serializeJsonObject(input.metadata),
-        serializeJsonObject({ latencyMs: input.latencyMs }),
       ],
     );
 
@@ -94,7 +94,7 @@ function validateModelCallInput(input: ModelCallInput): void {
   if (!Number.isSafeInteger(input.latencyMs) || input.latencyMs < 0) {
     throw new TypeError("latencyMs must be a non-negative safe integer");
   }
-  if (!/^\d+(?:\.\d+)?$/.test(input.costUsd)) {
-    throw new TypeError("costUsd must be a non-negative decimal string");
+  if (!/^(?:0|[1-9]\d{0,5})(?:\.\d{1,12})?$/.test(input.costUsd)) {
+    throw new TypeError("costUsd must be a non-negative decimal string with at most 12 decimal places");
   }
 }

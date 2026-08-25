@@ -33,13 +33,14 @@ describe("event spine", () => {
     );
   });
 
-  it("lists events by creation time and id", async () => {
+  it("lists events by append sequence", async () => {
     const createdAt = new Date("2026-08-26T10:00:00.000Z");
     query.mockResolvedValueOnce({
       rowCount: 2,
       rows: [
         {
           id: "00000000-0000-0000-0000-000000000001",
+          sequence: "7",
           reviewJobId: "job-1",
           eventType: "webhook.accepted",
           payload: { deliveryId: "delivery-1" },
@@ -51,6 +52,7 @@ describe("event spine", () => {
     await expect(listEventsForJob("job-1")).resolves.toEqual([
       {
         id: "00000000-0000-0000-0000-000000000001",
+        sequence: "7",
         reviewJobId: "job-1",
         eventType: "webhook.accepted",
         payload: { deliveryId: "delivery-1" },
@@ -59,7 +61,7 @@ describe("event spine", () => {
     ]);
 
     expect(query).toHaveBeenCalledWith(
-      expect.stringContaining("order by created_at asc, id asc"),
+      expect.stringContaining("order by sequence asc"),
       ["job-1"],
     );
   });

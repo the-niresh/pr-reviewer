@@ -20,6 +20,7 @@ export type RecordEventInput = {
 
 export type AgentEvent = {
   id: string;
+  sequence: string;
   reviewJobId: string | null;
   eventType: AgentEventType;
   payload: JsonObject;

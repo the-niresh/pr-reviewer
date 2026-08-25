@@ -1,4 +1,5 @@
-import { afterAll, beforeAll, beforeEach, describe, expect, it } from "vitest";
+import { afterAll, afterEach, beforeAll, beforeEach, describe, expect, it } from "vitest";
+import { randomUUID } from "node:crypto";
 import { db } from "../db/client";
 import { migrate } from "../db/migrate";
 import { claimReviewJob } from "./claimReviewJob";
@@ -8,13 +9,27 @@ import { renewReviewJobLease } from "./renewReviewJobLease";
 
 describe("review job leases", () => {
   let deliveryNumber = 0;
+  let createdJobIds: string[] = [];
 
   beforeAll(async () => {
     await migrate();
   });
 
-  beforeEach(async () => {
-    await db.query("truncate agent_events, review_jobs, github_deliveries cascade");
+  beforeEach(() => {
+    createdJobIds = [];
+  });
+
+  afterEach(async () => {
+    if (createdJobIds.length === 0) {
+      return;
+    }
+
+    await db.query(
+      `update review_jobs
+       set status = 'succeeded', locked_by = null, locked_until = null
+       where id = any($1::uuid[])`,
+      [createdJobIds],
+    );
   });
 
   afterAll(async () => {
@@ -22,13 +37,12 @@ describe("review job leases", () => {
   });
 
   it("gives concurrent workers different pending jobs", async () => {
-    await createReviewJob();
-    await createReviewJob();
+    const firstJobId = await createReviewJob();
+    const secondJobId = await createReviewJob();
 
-    const [first, second] = await Promise.all([
-      claimReviewJob("worker-a"),
-      claimReviewJob("worker-b"),
-    ]);
+    const [first, second] = await withOtherEligibleJobsLocked([firstJobId, secondJobId], () =>
+      Promise.all([claimReviewJob("worker-a"), claimReviewJob("worker-b")]),
+    );
 
     expect(first).not.toBeNull();
     expect(second).not.toBeNull();
@@ -47,7 +61,7 @@ describe("review job leases", () => {
       [jobId],
     );
 
-    const claimed = await claimReviewJob("replacement-worker");
+    const claimed = await withOtherEligibleJobsLocked([jobId], () => claimReviewJob("replacement-worker"));
 
     expect(claimed).toMatchObject({
       id: jobId,
@@ -59,22 +73,14 @@ describe("review job leases", () => {
 
   it("skips a job row held by another transaction", async () => {
     const jobId = await createReviewJob();
-    const lockClient = await db.connect();
-
-    try {
-      await lockClient.query("begin");
-      await lockClient.query("select id from review_jobs where id = $1 for update", [jobId]);
-
+    await withOtherEligibleJobsLocked([], async () => {
       await expect(claimReviewJob("worker-b")).resolves.toBeNull();
-    } finally {
-      await lockClient.query("rollback");
-      lockClient.release();
-    }
+    });
   });
 
   it("rejects completion and failure from a worker that does not own the lease", async () => {
     await createReviewJob();
-    const claimed = await claimReviewJob("worker-a");
+    const claimed = await withOtherEligibleJobsLocked(createdJobIds, () => claimReviewJob("worker-a"));
 
     if (claimed === null) {
       throw new Error("Expected a job to be claimed");
@@ -91,20 +97,23 @@ describe("review job leases", () => {
   });
 
   it("retries a failed job three times before marking it failed", async () => {
-    await createReviewJob();
+    const jobId = await createReviewJob();
 
-    for (const workerId of ["worker-1", "worker-2", "worker-3"]) {
-      const claimed = await claimReviewJob(workerId);
-      if (claimed === null) {
-        throw new Error("Expected a job to be claimed");
+    await withOtherEligibleJobsLocked([jobId], async () => {
+      for (const workerId of ["worker-1", "worker-2", "worker-3"]) {
+        const claimed = await claimReviewJob(workerId);
+        if (claimed === null) {
+          throw new Error("Expected a job to be claimed");
+        }
+
+        await failReviewJob(claimed.id, workerId, `failure from ${workerId}`);
+        await db.query("update review_jobs set available_at = now() where id = $1", [claimed.id]);
       }
-
-      await failReviewJob(claimed.id, workerId, `failure from ${workerId}`);
-      await db.query("update review_jobs set available_at = now() where id = $1", [claimed.id]);
-    }
+    });
 
     const result = await db.query<{ status: string; attempts: number; last_error: string }>(
-      "select status, attempts, last_error from review_jobs",
+      "select status, attempts, last_error from review_jobs where id = $1",
+      [jobId],
     );
     expect(result.rows).toEqual([
       { status: "failed", attempts: 3, last_error: "failure from worker-3" },
@@ -113,7 +122,7 @@ describe("review job leases", () => {
 
   it("renews the lease only for its owning worker", async () => {
     await createReviewJob();
-    const claimed = await claimReviewJob("worker-a");
+    const claimed = await withOtherEligibleJobsLocked(createdJobIds, () => claimReviewJob("worker-a"));
 
     if (claimed === null) {
       throw new Error("Expected a job to be claimed");
@@ -133,12 +142,40 @@ describe("review job leases", () => {
 
   async function createReviewJob(): Promise<string> {
     deliveryNumber += 1;
-    const deliveryId = `lease-delivery-${deliveryNumber}`;
+    const deliveryId = `lease-delivery-${deliveryNumber}-${randomUUID()}`;
     await db.query("insert into github_deliveries (id, event_name) values ($1, 'pull_request')", [deliveryId]);
     const result = await db.query<{ id: string }>(
       "insert into review_jobs (delivery_id, status) values ($1, 'pending') returning id",
       [deliveryId],
     );
-    return result.rows[0].id;
+    const jobId = result.rows[0].id;
+    createdJobIds.push(jobId);
+    return jobId;
+  }
+
+  async function withOtherEligibleJobsLocked<T>(
+    fixtureJobIds: string[],
+    operation: () => Promise<T>,
+  ): Promise<T> {
+    const lockClient = await db.connect();
+
+    try {
+      await lockClient.query("begin");
+      await lockClient.query(
+        `select id
+         from review_jobs
+         where id <> all($1::uuid[])
+           and (
+             (status = 'pending' and available_at <= now())
+             or (status = 'running' and locked_until <= now())
+           )
+         for update`,
+        [fixtureJobIds],
+      );
+      return await operation();
+    } finally {
+      await lockClient.query("rollback");
+      lockClient.release();
+    }
   }
 });
