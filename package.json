@@ -1,0 +1,15 @@
+{
+  "name": "pr-reviewer",
+  "private": true,
+  "packageManager": "pnpm@9.12.0",
+  "scripts": {
+    "check": "pnpm -r typecheck && pnpm -r test",
+    "dev": "pnpm --filter @pr-reviewer/web dev",
+    "worker": "pnpm --filter @pr-reviewer/worker start",
+    "db:migrate": "pnpm --filter @pr-reviewer/core db:migrate"
+  },
+  "devDependencies": {
+    "typescript": "^5.6.3",
+    "vitest": "^2.1.4"
+  }
+}
