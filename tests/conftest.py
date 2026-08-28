@@ -15,7 +15,7 @@ from pr_reviewer.db.client import close_pool, connection  # noqa: E402
 
 
 @pytest.fixture
-def make_verified_installation_access() -> Callable[[int, int], object]:
+def make_verified_installation_access() -> Callable[[int, int, dict[int, str] | None], object]:
     """Test-only construction of VerifiedInstallationAccess.
 
     Runtime Task 2 gives VerifiedInstallationAccess exactly one real construction site in src/
@@ -25,13 +25,21 @@ def make_verified_installation_access() -> Callable[[int, int], object]:
     outside the src/ scan that check enforces, rather than adding a second construction site to
     production code. A fixture, not a plain importable function, because tests/ has no
     __init__.py and is not set up as an importable package.
+
+    repositories maps github_repository_id -> name, the same shape GitHub's own response would
+    give the real verifier. Defaults to empty for tests that never call approve_pairing with a
+    non-empty repository_ids list.
     """
 
-    def factory(github_user_id: int, installation_id: int) -> object:
+    def factory(
+        github_user_id: int, installation_id: int, repositories: dict[int, str] | None = None
+    ) -> object:
         from pr_reviewer.contracts.runner import VerifiedInstallationAccess
 
         return VerifiedInstallationAccess(
-            github_user_id=github_user_id, installation_id=installation_id
+            github_user_id=github_user_id,
+            installation_id=installation_id,
+            repositories=repositories or {},
         )
 
     return factory
