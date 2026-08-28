@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 import os
-from collections.abc import Iterator
+from collections.abc import Callable, Iterator
 
 import pytest
 
@@ -12,6 +12,29 @@ os.environ.setdefault(
 os.environ.setdefault("GITHUB_WEBHOOK_SECRET", "test-secret")
 
 from pr_reviewer.db.client import close_pool, connection  # noqa: E402
+
+
+@pytest.fixture
+def make_verified_installation_access() -> Callable[[int, int], object]:
+    """Test-only construction of VerifiedInstallationAccess.
+
+    Runtime Task 2 gives VerifiedInstallationAccess exactly one real construction site in src/
+    (control_plane/pairing.py's verify_installation_access, which itself has no working GitHub
+    OAuth call yet), enforced by test_verified_installation_access_has_exactly_one_construction_
+    site. Tests need a way to build one anyway, so this factory lives in tests/conftest.py,
+    outside the src/ scan that check enforces, rather than adding a second construction site to
+    production code. A fixture, not a plain importable function, because tests/ has no
+    __init__.py and is not set up as an importable package.
+    """
+
+    def factory(github_user_id: int, installation_id: int) -> object:
+        from pr_reviewer.contracts.runner import VerifiedInstallationAccess
+
+        return VerifiedInstallationAccess(
+            github_user_id=github_user_id, installation_id=installation_id
+        )
+
+    return factory
 
 
 @pytest.fixture(autouse=True)
