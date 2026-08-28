@@ -22,13 +22,13 @@ def clean_database() -> Iterator[None]:
             truncate
               model_calls,
               agent_events,
-              human_decisions,
-              findings,
               review_jobs,
-              pull_requests,
               github_deliveries,
               prompt_versions,
-              code_chunks
+              repository_assignments,
+              runners,
+              repositories,
+              installations
             restart identity cascade
             """
         )

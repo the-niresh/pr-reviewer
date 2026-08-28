@@ -25,6 +25,7 @@ from pr_reviewer.db.client import connection
 
 RETIRED_TABLES = ("findings", "code_chunks", "human_decisions", "pull_requests")
 SRC_ROOT = Path(__file__).resolve().parent.parent / "src" / "pr_reviewer"
+HOSTED_HANDLE_IMPORT = re.compile(r"^\s*(?:from|import)\s+pr_reviewer\.db\.client\b", re.M)
 
 
 def test_retired_tables_do_not_exist_in_the_hosted_schema() -> None:
@@ -43,21 +44,25 @@ def test_retired_tables_do_not_exist_in_the_hosted_schema() -> None:
     )
 
 
-def test_retired_tables_have_zero_references_in_application_code() -> None:
-    # Static proof, not prose. Dropping a table a writer still targets must be impossible to do
-    # accidentally, so this scans every module under src/pr_reviewer for a whole-word mention of
-    # each retired table name, rather than trusting a comment that says "nothing uses this".
+def test_retired_tables_have_zero_references_in_hosted_modules() -> None:
+    # A retired table is not forbidden everywhere: Task 5 moves findings and human_decisions into
+    # local_store/, where local runner code will legitimately reference them by name. What must
+    # stay at zero is a reference from a module that talks to the hosted database. Hosted-ness is
+    # defined by importing pr_reviewer.db.client (the hosted connection handle), not by directory,
+    # so this also catches a hosted reference from a package nobody thought to exclude by path.
     offenders: dict[str, list[str]] = {name: [] for name in RETIRED_TABLES}
     for path in sorted(SRC_ROOT.rglob("*.py")):
         if "__pycache__" in path.parts:
             continue
         text = path.read_text(encoding="utf-8")
+        if not HOSTED_HANDLE_IMPORT.search(text):
+            continue
         for name in RETIRED_TABLES:
             if re.search(rf"\b{name}\b", text):
                 offenders[name].append(str(path.relative_to(SRC_ROOT.parent.parent)))
 
     referenced = {name: files for name, files in offenders.items() if files}
-    assert not referenced, f"retired tables still referenced in application code: {referenced}"
+    assert not referenced, f"retired tables referenced from a hosted module: {referenced}"
 
 
 def test_inserting_into_a_retired_table_is_rejected_by_the_database() -> None:
