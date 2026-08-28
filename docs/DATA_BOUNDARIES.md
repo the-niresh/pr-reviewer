@@ -24,6 +24,9 @@ cannot hold free text, an allowlisted column with a documented reason, or a colu
 | `github_deliveries` | `event_name` | GitHub webhook event name, a fixed enum (e.g. pull_request). |
 | `github_deliveries` | `id` | GitHub's own delivery id: an opaque identifier, not content. |
 | `installations` | `account_login` | GitHub account or org login: a public identifier GitHub itself shows on every page of the installation, not review content. |
+| `oauth_states` | `binding_hash` | A one-way hash of the per-attempt binding secret. The secret itself is never stored, so this column cannot be reversed back into it. |
+| `oauth_states` | `return_to` | One of our own fixed, allowlisted control-plane paths (see github_oauth.ALLOWED_RETURN_TO_PATHS), validated before this row is ever written. Never a caller-supplied URL, never review content. |
+| `oauth_states` | `state_hash` | A one-way hash of the OAuth state value. The state itself is never stored, so this column cannot be reversed back into it. |
 | `pairing_codes` | `challenge` | PKCE code_challenge sent by the runner before any human is involved. Not secret, and not reversible to the verifier it was derived from; not review content either way. |
 | `pairing_codes` | `code_hash` | A one-way hash of the pairing code. The code itself is never stored, so this column cannot be reversed back into it. |
 | `pairing_codes` | `device_name` | Operator-chosen label for the runner device being paired, not review content. |

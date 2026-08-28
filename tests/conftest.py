@@ -21,13 +21,14 @@ def make_verified_installation_access() -> (
 ):
     """Test-only construction of VerifiedInstallationAccess.
 
-    Runtime Task 2 gives VerifiedInstallationAccess exactly one real construction site in src/
-    (control_plane/pairing.py's verify_installation_access, which itself has no working GitHub
-    OAuth call yet), enforced by test_verified_installation_access_has_exactly_one_construction_
-    site. Tests need a way to build one anyway, so this factory lives in tests/conftest.py,
-    outside the src/ scan that check enforces, rather than adding a second construction site to
-    production code. A fixture, not a plain importable function, because tests/ has no
-    __init__.py and is not set up as an importable package.
+    VerifiedInstallationAccess has exactly one real construction site in src/
+    (control_plane/github_oauth.py's verify_installation_access, which calls GitHub's own
+    /user/installations), enforced by
+    test_verified_installation_access_construction_site_is_exactly_github_oauth in
+    tests/test_github_oauth.py. Tests need a way to build one anyway, so this factory lives in
+    tests/conftest.py, outside the src/ scan that check enforces, rather than adding a second
+    construction site to production code. A fixture, not a plain importable function, because
+    tests/ has no __init__.py and is not set up as an importable package.
 
     repositories maps github_repository_id -> name, the same shape GitHub's own response would
     give the real verifier. Defaults to empty for tests that never call approve_pairing with a
@@ -58,6 +59,7 @@ def clean_database() -> Iterator[None]:
               github_deliveries,
               prompt_versions,
               pairing_codes,
+              oauth_states,
               repository_assignments,
               runners,
               repositories,

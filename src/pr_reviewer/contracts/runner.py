@@ -88,14 +88,15 @@ class VerifiedInstallationAccess(BaseModel):
     """Proof that github_user_id controls installation_id, plus the repositories GitHub said that
     installation covers.
 
-    Task 2 gives this exactly one construction site in src/ (control_plane/pairing.py's
-    verify_installation_access), enforced by
-    test_verified_installation_access_has_exactly_one_construction_site_in_src. It cannot be
-    built from three loose values wherever one is convenient: approve_pairing takes this object,
-    not a github_user_id and an installation_id and a repositories dict as three separate
-    parameters a caller could mismatch. repositories maps github_repository_id to name exactly as
-    GitHub's own response would, so approve_pairing never has to trust a caller-supplied name for
-    a caller-supplied id.
+    This has exactly one construction site in src/ (control_plane/github_oauth.py's
+    verify_installation_access, which calls GitHub's /user/installations with the user's own
+    OAuth token), enforced by
+    test_verified_installation_access_construction_site_is_exactly_github_oauth in
+    tests/test_github_oauth.py. It cannot be built from three loose values wherever one is
+    convenient: approve_pairing takes this object, not a github_user_id and an installation_id
+    and a repositories dict as three separate parameters a caller could mismatch. repositories
+    maps github_repository_id to name exactly as GitHub's own response would, so approve_pairing
+    never has to trust a caller-supplied name for a caller-supplied id.
     """
 
     model_config = ConfigDict(frozen=True)

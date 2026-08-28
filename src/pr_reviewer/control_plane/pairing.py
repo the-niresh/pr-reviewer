@@ -55,25 +55,6 @@ class _ExchangeConflict(Exception):
         self.refused = refused
 
 
-def verify_installation_access(
-    github_user_id: int, installation_id: int, repositories: dict[int, str]
-) -> VerifiedInstallationAccess:
-    """The one construction site for VerifiedInstallationAccess in src/.
-
-    Runtime Task 2 does not build GitHub OAuth, so this function has no way yet to actually check
-    that github_user_id controls installation_id; Task 2A replaces this body with a real call to
-    GitHub's /user/installations using the user's OAuth token, and a real listing of that
-    installation's repositories. Keeping construction behind one named function, instead of
-    building the value object inline wherever it is needed, means that swap touches exactly this
-    file and nothing that calls approve_pairing has to change.
-    """
-    return VerifiedInstallationAccess(
-        github_user_id=github_user_id,
-        installation_id=installation_id,
-        repositories=repositories,
-    )
-
-
 def create_pairing_code(device_name: str, challenge: str) -> PairingChallenge:
     # PKCE: the runner already generated its own verifier and sends only the challenge (a hash of
     # the verifier) here. It presents the verifier itself at exchange time, and only a value that

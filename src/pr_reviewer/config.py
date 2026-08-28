@@ -16,12 +16,16 @@ LOCAL_DATABASE_URL = "postgresql://pr_reviewer:pr_reviewer@localhost:54329/pr_re
 class Settings:
     database_url: str
     github_webhook_secret: str
+    github_oauth_client_id: str
+    github_oauth_client_secret: str
 
 
 def get_settings() -> Settings:
     return Settings(
         database_url=normalize_database_url(os.environ.get("DATABASE_URL", LOCAL_DATABASE_URL)),
         github_webhook_secret=os.environ.get("GITHUB_WEBHOOK_SECRET", ""),
+        github_oauth_client_id=os.environ.get("GITHUB_OAUTH_CLIENT_ID", ""),
+        github_oauth_client_secret=os.environ.get("GITHUB_OAUTH_CLIENT_SECRET", ""),
     )
 
 

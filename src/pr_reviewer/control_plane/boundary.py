@@ -46,6 +46,19 @@ ALLOWLIST: dict[tuple[str, str], str] = {
         "GitHub account or org login: a public identifier GitHub itself shows on every page of "
         "the installation, not review content."
     ),
+    ("oauth_states", "state_hash"): (
+        "A one-way hash of the OAuth state value. The state itself is never stored, so this "
+        "column cannot be reversed back into it."
+    ),
+    ("oauth_states", "binding_hash"): (
+        "A one-way hash of the per-attempt binding secret. The secret itself is never stored, so "
+        "this column cannot be reversed back into it."
+    ),
+    ("oauth_states", "return_to"): (
+        "One of our own fixed, allowlisted control-plane paths (see "
+        "github_oauth.ALLOWED_RETURN_TO_PATHS), validated before this row is ever written. Never "
+        "a caller-supplied URL, never review content."
+    ),
     ("pairing_codes", "device_name"): (
         "Operator-chosen label for the runner device being paired, not review content."
     ),

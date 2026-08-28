@@ -4,11 +4,15 @@ from pr_reviewer.control_plane.boundary import (
     HostedSchemaViolation,
     assert_no_private_columns,
 )
+from pr_reviewer.control_plane.github_oauth import (
+    begin_sign_in,
+    complete_sign_in,
+    verify_installation_access,
+)
 from pr_reviewer.control_plane.pairing import (
     approve_pairing,
     create_pairing_code,
     exchange_pairing_code,
-    verify_installation_access,
 )
 from pr_reviewer.control_plane.repository_policy import (
     assign_repository_to_runner,
@@ -32,6 +36,8 @@ __all__ = [
     "assign_repository_to_runner",
     "authenticate_runner",
     "authorize_repository",
+    "begin_sign_in",
+    "complete_sign_in",
     "create_pairing_code",
     "exchange_pairing_code",
     "hash_runner_credential",
