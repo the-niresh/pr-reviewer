@@ -35,10 +35,14 @@ cannot hold free text, an allowlisted column with a documented reason, or a colu
 | `prompt_versions` | `name` | Name of one of our own prompt templates, not customer content. |
 | `prompt_versions` | `version` | Version label for one of our own prompt templates. |
 | `repositories` | `name` | GitHub repository name: an identifier, not repository content. |
+| `review_jobs` | `base_sha` | GitHub base commit SHA: an identifier, not repository content. |
 | `review_jobs` | `delivery_id` | References github_deliveries.id, an opaque identifier. |
+| `review_jobs` | `head_sha` | GitHub head commit SHA: an identifier, not repository content. |
 | `review_jobs` | `last_error` | Short operator-facing error string for worker logs and status APIs. Must stay a message or exception class name, never a diff, stack trace, or file content. |
+| `review_jobs` | `lease_token_hash` | A one-way hash of the job lease token. The token itself is never stored, so this column cannot be reversed back into it. |
 | `review_jobs` | `locked_by` | Worker id holding the current lease, an operational identifier. |
-| `review_jobs` | `status` | Fixed enum ('pending', 'running', 'succeeded', 'failed'), enforced by a check constraint. |
+| `review_jobs` | `policy_version` | Our own policy version label applied to the job, operational config, not review content. |
+| `review_jobs` | `status` | Fixed enum ('pending', 'running', 'succeeded', 'failed', 'superseded'), enforced by a check constraint. |
 | `runners` | `credential_hash` | A one-way hash of the runner's credential. The credential itself is never stored, so this column cannot be reversed back into it. |
 | `runners` | `device_name` | Operator-chosen label for a runner device, not review content. |
 | `runners` | `mode` | Fixed enum ('analysis_only', 'full'), enforced by a check constraint. |

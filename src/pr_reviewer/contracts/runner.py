@@ -2,7 +2,8 @@ from __future__ import annotations
 
 import uuid
 from datetime import datetime
-from typing import Literal
+from decimal import Decimal
+from typing import Any, Literal
 
 from pydantic import BaseModel, ConfigDict, Field
 
@@ -150,3 +151,72 @@ class RunnerAuthDenied(BaseModel):
     model_config = ConfigDict(frozen=True)
 
     reason: RunnerAuthDenialReason
+
+
+JobLeaseDenialReason = Literal["invalid_or_expired"]
+JobTerminalState = Literal["succeeded", "failed"]
+
+
+class JobBudget(BaseModel):
+    model_config = ConfigDict(frozen=True, extra="forbid")
+
+    max_tokens: int = Field(ge=0)
+    max_cost_usd: Decimal = Field(ge=0)
+
+
+class JobEnvelope(BaseModel):
+    """Typed identifiers and policy for one leased review. No command strings.
+
+    lease_token is minted at claim and bound to the claiming runner in the same
+    statement. Heartbeat and acknowledge must present it; it is not a job field
+    GitHub supplied, it is the capability that proves this runner holds the lease.
+    """
+
+    model_config = ConfigDict(frozen=True, extra="forbid")
+
+    job_id: uuid.UUID
+    installation_id: int
+    repository_id: int
+    pull_request_number: int = Field(gt=0)
+    base_sha: str = Field(min_length=1)
+    head_sha: str = Field(min_length=1)
+    policy_version: str = Field(min_length=1)
+    budget: JobBudget
+    trace_id: uuid.UUID
+    lease_token: str = Field(min_length=1)
+
+    def __init__(self, **data: Any) -> None:
+        super().__init__(**data)
+
+
+class NoJob(BaseModel):
+    model_config = ConfigDict(frozen=True, extra="forbid")
+
+
+class LeaseState(BaseModel):
+    model_config = ConfigDict(frozen=True, extra="forbid")
+
+    status: Literal["active", "invalid_or_expired"]
+
+
+class JobAcknowledgement(BaseModel):
+    model_config = ConfigDict(frozen=True, extra="forbid")
+
+    terminal_state: JobTerminalState
+    error_class: str | None = None
+    input_tokens: int = Field(ge=0)
+    output_tokens: int = Field(ge=0)
+    cost_usd: Decimal = Field(ge=0)
+    latency_ms: int = Field(ge=0)
+    local_result_hash: str = Field(min_length=1)
+
+    def __init__(self, **data: Any) -> None:
+        super().__init__(**data)
+
+
+class JobProtocolDenied(Exception):
+    """Wrong lease, expired lease, and unknown job collapse to one reason."""
+
+    def __init__(self, reason: JobLeaseDenialReason = "invalid_or_expired") -> None:
+        self.reason = reason
+        super().__init__(reason)
