@@ -4,6 +4,12 @@ from pr_reviewer.control_plane.boundary import (
     HostedSchemaViolation,
     assert_no_private_columns,
 )
+from pr_reviewer.control_plane.pairing import (
+    approve_pairing,
+    create_pairing_code,
+    exchange_pairing_code,
+    verify_installation_access,
+)
 from pr_reviewer.control_plane.repository_policy import (
     assign_repository_to_runner,
     authorize_repository,
@@ -15,14 +21,19 @@ from pr_reviewer.control_plane.repository_policy import (
     revoke_installation,
     revoke_runner,
 )
+from pr_reviewer.control_plane.runner_auth import authenticate_runner, rotate_runner_credential
 
 __all__ = [
     "HOSTED_EXEMPTIONS",
     "HostedSchemaViolation",
     "app",
+    "approve_pairing",
     "assert_no_private_columns",
     "assign_repository_to_runner",
+    "authenticate_runner",
     "authorize_repository",
+    "create_pairing_code",
+    "exchange_pairing_code",
     "hash_runner_credential",
     "register_installation",
     "register_repository",
@@ -30,4 +41,6 @@ __all__ = [
     "rename_repository",
     "revoke_installation",
     "revoke_runner",
+    "rotate_runner_credential",
+    "verify_installation_access",
 ]

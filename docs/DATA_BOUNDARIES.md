@@ -24,6 +24,10 @@ cannot hold free text, an allowlisted column with a documented reason, or a colu
 | `github_deliveries` | `event_name` | GitHub webhook event name, a fixed enum (e.g. pull_request). |
 | `github_deliveries` | `id` | GitHub's own delivery id: an opaque identifier, not content. |
 | `installations` | `account_login` | GitHub account or org login: a public identifier GitHub itself shows on every page of the installation, not review content. |
+| `pairing_codes` | `challenge` | PKCE code_challenge sent by the runner before any human is involved. Not secret, and not reversible to the verifier it was derived from; not review content either way. |
+| `pairing_codes` | `code_hash` | A one-way hash of the pairing code. The code itself is never stored, so this column cannot be reversed back into it. |
+| `pairing_codes` | `device_name` | Operator-chosen label for the runner device being paired, not review content. |
+| `pairing_codes` | `repository_ids` | Our own repositories.id values selected at approval, an array of opaque identifiers, not repository content. |
 | `prompt_versions` | `content` | Our own prompt template text, operational config we author ourselves, not a customer's source, diff, or finding. No writer exists yet; unused scaffolding from migration 0001. |
 | `prompt_versions` | `name` | Name of one of our own prompt templates, not customer content. |
 | `prompt_versions` | `version` | Version label for one of our own prompt templates. |

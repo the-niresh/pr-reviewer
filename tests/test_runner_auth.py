@@ -12,9 +12,10 @@ from __future__ import annotations
 
 from collections.abc import Callable
 
+from pr_reviewer.contracts.runner import RunnerCredential, VerifiedInstallationAccess
 from pr_reviewer.db.client import connection
 
-VerifiedAccessFactory = Callable[[int, int], object]
+VerifiedAccessFactory = Callable[[int, int], VerifiedInstallationAccess]
 
 
 def insert_installation(installation_id: int) -> None:
@@ -35,7 +36,7 @@ def pair_and_exchange_a_runner(
     installation_id: int,
     make_verified_installation_access: VerifiedAccessFactory,
     device_name: str = "laptop",
-) -> object:
+) -> RunnerCredential:
     from pr_reviewer.contracts.runner import RunnerCredential
     from pr_reviewer.control_plane.pairing import (
         approve_pairing,

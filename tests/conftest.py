@@ -11,11 +11,14 @@ os.environ.setdefault(
 )
 os.environ.setdefault("GITHUB_WEBHOOK_SECRET", "test-secret")
 
+from pr_reviewer.contracts.runner import VerifiedInstallationAccess  # noqa: E402
 from pr_reviewer.db.client import close_pool, connection  # noqa: E402
 
 
 @pytest.fixture
-def make_verified_installation_access() -> Callable[[int, int, dict[int, str] | None], object]:
+def make_verified_installation_access() -> (
+    Callable[[int, int, dict[int, str] | None], VerifiedInstallationAccess]
+):
     """Test-only construction of VerifiedInstallationAccess.
 
     Runtime Task 2 gives VerifiedInstallationAccess exactly one real construction site in src/
@@ -33,9 +36,7 @@ def make_verified_installation_access() -> Callable[[int, int, dict[int, str] | 
 
     def factory(
         github_user_id: int, installation_id: int, repositories: dict[int, str] | None = None
-    ) -> object:
-        from pr_reviewer.contracts.runner import VerifiedInstallationAccess
-
+    ) -> VerifiedInstallationAccess:
         return VerifiedInstallationAccess(
             github_user_id=github_user_id,
             installation_id=installation_id,
@@ -56,6 +57,7 @@ def clean_database() -> Iterator[None]:
               review_jobs,
               github_deliveries,
               prompt_versions,
+              pairing_codes,
               repository_assignments,
               runners,
               repositories,

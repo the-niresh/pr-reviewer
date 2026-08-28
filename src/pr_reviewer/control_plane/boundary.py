@@ -46,6 +46,21 @@ ALLOWLIST: dict[tuple[str, str], str] = {
         "GitHub account or org login: a public identifier GitHub itself shows on every page of "
         "the installation, not review content."
     ),
+    ("pairing_codes", "device_name"): (
+        "Operator-chosen label for the runner device being paired, not review content."
+    ),
+    ("pairing_codes", "code_hash"): (
+        "A one-way hash of the pairing code. The code itself is never stored, so this column "
+        "cannot be reversed back into it."
+    ),
+    ("pairing_codes", "challenge"): (
+        "PKCE code_challenge sent by the runner before any human is involved. Not secret, and "
+        "not reversible to the verifier it was derived from; not review content either way."
+    ),
+    ("pairing_codes", "repository_ids"): (
+        "Our own repositories.id values selected at approval, an array of opaque identifiers, "
+        "not repository content."
+    ),
     ("prompt_versions", "name"): "Name of one of our own prompt templates, not customer content.",
     ("prompt_versions", "version"): "Version label for one of our own prompt templates.",
     ("prompt_versions", "content"): (

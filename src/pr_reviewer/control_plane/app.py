@@ -7,12 +7,14 @@ from fastapi import FastAPI, Request
 from fastapi.responses import JSONResponse
 
 from pr_reviewer.config import get_settings
+from pr_reviewer.control_plane.pairing_api import router as pairing_router
 from pr_reviewer.github import verify_github_signature
 from pr_reviewer.jobs import enqueue_review_job
 
 MAX_WEBHOOK_BODY_BYTES = 1024 * 1024
 
 app = FastAPI(title="PR Reviewer")
+app.include_router(pairing_router)
 
 
 @app.post("/api/github/webhook")

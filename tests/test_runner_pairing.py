@@ -19,16 +19,17 @@ repository_assignments is the single authoritative place that decides who holds 
 
 from __future__ import annotations
 
+import ast
 import hashlib
-import re
 import uuid
 from collections.abc import Callable
 from concurrent.futures import ThreadPoolExecutor
 from pathlib import Path
 
+from pr_reviewer.contracts.runner import VerifiedInstallationAccess
 from pr_reviewer.db.client import connection
 
-VerifiedAccessFactory = Callable[[int, int, dict[int, str] | None], object]
+VerifiedAccessFactory = Callable[[int, int, dict[int, str] | None], VerifiedInstallationAccess]
 
 SRC_ROOT = Path(__file__).resolve().parent.parent / "src" / "pr_reviewer"
 
@@ -65,7 +66,9 @@ def insert_installation(installation_id: int) -> None:
 
 def revoke_installation_row(installation_id: int) -> None:
     with connection() as conn, conn.transaction():
-        conn.execute("update installations set revoked_at = now() where id = %s", (installation_id,))
+        conn.execute(
+            "update installations set revoked_at = now() where id = %s", (installation_id,)
+        )
 
 
 def count_runners_named(device_name: str) -> int:
@@ -83,14 +86,25 @@ def test_verified_installation_access_has_exactly_one_construction_site_in_src()
     # module constructs VerifiedInstallationAccess directly instead of going through the one
     # verified path, this fails. Scoped to src/ only, so the test-only builder in tests/conftest.py
     # does not count.
-    construction_pattern = re.compile(r"\bVerifiedInstallationAccess\(")
+    #
+    # Walking the AST for real ast.Call nodes, the same approach test_package_boundaries.py uses
+    # for imports, rather than pattern-matching text: "VerifiedInstallationAccess(" also appears
+    # in the class definition itself (a ClassDef, not a Call), and a class defining its own name
+    # is not a construction site. The class has to be defined somewhere; only a call constructs
+    # one.
     sites: list[str] = []
     for path in sorted(SRC_ROOT.rglob("*.py")):
         if "__pycache__" in path.parts:
             continue
-        text = path.read_text(encoding="utf-8")
-        if construction_pattern.search(text):
-            sites.append(str(path.relative_to(SRC_ROOT.parent.parent)))
+        tree = ast.parse(path.read_text(encoding="utf-8"), filename=str(path))
+        for node in ast.walk(tree):
+            if not isinstance(node, ast.Call):
+                continue
+            func = node.func
+            called_name = func.id if isinstance(func, ast.Name) else getattr(func, "attr", None)
+            if called_name == "VerifiedInstallationAccess":
+                sites.append(str(path.relative_to(SRC_ROOT.parent.parent)))
+                break
 
     assert sites == ["src/pr_reviewer/control_plane/pairing.py"], (
         "VerifiedInstallationAccess must be constructed in exactly "
@@ -112,7 +126,7 @@ def test_pairing_code_is_stored_hashed_never_plaintext() -> None:
 def test_exchange_returns_a_working_credential_exactly_once(
     make_verified_installation_access: VerifiedAccessFactory,
 ) -> None:
-    from pr_reviewer.contracts.runner import RunnerCredential
+    from pr_reviewer.contracts.runner import AuthenticatedRunner, RunnerCredential
     from pr_reviewer.control_plane.pairing import (
         approve_pairing,
         create_pairing_code,
@@ -133,6 +147,7 @@ def test_exchange_returns_a_working_credential_exactly_once(
     assert result.credential
 
     authenticated = authenticate_runner(result.credential)
+    assert isinstance(authenticated, AuthenticatedRunner)
     assert authenticated.runner_id == result.runner_id
 
 
@@ -302,7 +317,8 @@ def test_approve_pairing_registers_a_repository_that_does_not_exist_yet(
 
     with connection() as conn:
         row = conn.execute(
-            "select id, name from repositories where installation_id = %s and github_repository_id = %s",
+            "select id, name from repositories"
+            " where installation_id = %s and github_repository_id = %s",
             (installation_id, 778899),
         ).fetchone()
     assert row is not None

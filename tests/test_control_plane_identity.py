@@ -58,7 +58,15 @@ def make_repository(
 
 
 def make_runner(device_name: str = "laptop", credential: str = "s3cr3t") -> uuid.UUID:
-    return register_runner(device_name, credential, ANALYSIS_ONLY_CAPABILITIES)
+    with connection() as conn, conn.transaction():
+        return register_runner(conn, device_name, credential, ANALYSIS_ONLY_CAPABILITIES)
+
+
+def make_assignment(
+    repository_id: uuid.UUID, runner_id: uuid.UUID
+) -> AssignmentGranted | AssignmentRefused:
+    with connection() as conn, conn.transaction():
+        return assign_repository_to_runner(conn, repository_id, runner_id)
 
 
 # --- identity is the numeric ID, a name is a label ---------------------------------------------
@@ -68,7 +76,7 @@ def test_repository_identity_is_the_numeric_github_id_not_the_name() -> None:
     make_installation(1001)
     repository_row_id = make_repository(1001, github_repository_id=555, name="widgets")
     runner_id = make_runner()
-    assign_repository_to_runner(repository_row_id, runner_id)
+    make_assignment(repository_row_id, runner_id)
 
     before = authorize_repository(1001, 555, runner_id)
     rename_repository(repository_row_id, "widgets-renamed")
@@ -83,7 +91,7 @@ def test_renaming_a_repository_does_not_move_orphan_or_expose_data() -> None:
     make_installation(1002)
     repository_row_id = make_repository(1002, github_repository_id=556, name="original-name")
     runner_id = make_runner(device_name="rename-test-runner")
-    assign_repository_to_runner(repository_row_id, runner_id)
+    make_assignment(repository_row_id, runner_id)
 
     rename_repository(repository_row_id, "renamed")
 
@@ -128,7 +136,7 @@ def test_repository_transfer_does_not_carry_data_to_the_new_installation() -> No
     make_installation(old_installation_id)
     old_repository_row_id = make_repository(old_installation_id, github_repository_id, "moved-repo")
     runner_id = make_runner(device_name="transfer-test-runner")
-    assign_repository_to_runner(old_repository_row_id, runner_id)
+    make_assignment(old_repository_row_id, runner_id)
 
     before_transfer = authorize_repository(old_installation_id, github_repository_id, runner_id)
     assert isinstance(before_transfer, RepositoryAuthorization)
@@ -176,7 +184,7 @@ def test_cross_installation_access_is_denied_for_a_repository_registered_elsewhe
     make_installation(4002)
     repository_row_id = make_repository(4001, github_repository_id=888, name="repo-a")
     runner_id = make_runner(device_name="cross-install-runner")
-    assign_repository_to_runner(repository_row_id, runner_id)
+    make_assignment(repository_row_id, runner_id)
 
     result = authorize_repository(4002, 888, runner_id)
 
@@ -222,7 +230,7 @@ def test_runner_assigned_to_a_different_repository_cannot_reach_this_one() -> No
     repository_a = make_repository(4301, github_repository_id=902, name="repo-a")
     repository_b = make_repository(4301, github_repository_id=903, name="repo-b")
     runner_id = make_runner(device_name="scoped-runner")
-    assign_repository_to_runner(repository_a, runner_id)
+    make_assignment(repository_a, runner_id)
     del repository_b
 
     result = authorize_repository(4301, 903, runner_id)
@@ -259,10 +267,10 @@ def test_second_runner_pairing_an_assigned_repository_is_refused_not_auto_revoke
     first_runner_id = make_runner(device_name="first-laptop")
     second_runner_id = make_runner(device_name="second-laptop")
 
-    first_result = assign_repository_to_runner(repository_row_id, first_runner_id)
+    first_result = make_assignment(repository_row_id, first_runner_id)
     assert isinstance(first_result, AssignmentGranted)
 
-    second_result = assign_repository_to_runner(repository_row_id, second_runner_id)
+    second_result = make_assignment(repository_row_id, second_runner_id)
 
     assert isinstance(second_result, AssignmentRefused)
     assert second_result.active_runner.runner_id == first_runner_id
@@ -304,7 +312,8 @@ def test_runner_capabilities_and_lifecycle_fields_are_recorded() -> None:
         platform="darwin",
         version="1.2.3",
     )
-    runner_id = register_runner("full-mode-runner", "another-credential", capabilities)
+    with connection() as conn, conn.transaction():
+        runner_id = register_runner(conn, "full-mode-runner", "another-credential", capabilities)
 
     with connection() as conn:
         row = conn.execute(
@@ -345,7 +354,7 @@ def test_revoked_runner_fails_authorization() -> None:
     make_installation(6001)
     repository_row_id = make_repository(6001, github_repository_id=1201, name="revoked-runner-repo")
     runner_id = make_runner(device_name="soon-revoked-runner")
-    assign_repository_to_runner(repository_row_id, runner_id)
+    make_assignment(repository_row_id, runner_id)
     assert isinstance(authorize_repository(6001, 1201, runner_id), RepositoryAuthorization)
 
     revoke_runner(runner_id)
@@ -361,7 +370,7 @@ def test_revoked_installation_fails_authorization() -> None:
         6101, github_repository_id=1301, name="revoked-install-repo"
     )
     runner_id = make_runner(device_name="revoked-install-runner")
-    assign_repository_to_runner(repository_row_id, runner_id)
+    make_assignment(repository_row_id, runner_id)
     assert isinstance(authorize_repository(6101, 1301, runner_id), RepositoryAuthorization)
 
     revoke_installation(6101)
