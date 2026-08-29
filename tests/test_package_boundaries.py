@@ -57,7 +57,9 @@ CONTROL_PLANE_FORBIDDEN_TARGETS = frozenset(
 # client, which is the only current handle onto hosted-only settings (Neon credentials, the
 # webhook secret, and, once it exists, the GitHub App private key).
 RUNNER_SIDE_PACKAGES = frozenset({"runner", "local_store", "notifications"})
-RUNNER_SIDE_FORBIDDEN_MODULES = frozenset({"pr_reviewer.db.client", "pr_reviewer.db"})
+RUNNER_SIDE_FORBIDDEN_MODULES = frozenset(
+    {"pr_reviewer.db.client", "pr_reviewer.db", "pr_reviewer.control_plane"}
+)
 
 
 def _module_name_for_file(file_path: Path) -> str:

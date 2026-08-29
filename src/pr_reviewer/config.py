@@ -18,6 +18,8 @@ class Settings:
     github_webhook_secret: str
     github_oauth_client_id: str
     github_oauth_client_secret: str
+    github_app_id: str
+    github_app_private_key: str
 
 
 def get_settings() -> Settings:
@@ -26,6 +28,8 @@ def get_settings() -> Settings:
         github_webhook_secret=os.environ.get("GITHUB_WEBHOOK_SECRET", ""),
         github_oauth_client_id=os.environ.get("GITHUB_OAUTH_CLIENT_ID", ""),
         github_oauth_client_secret=os.environ.get("GITHUB_OAUTH_CLIENT_SECRET", ""),
+        github_app_id=os.environ.get("GITHUB_APP_ID", ""),
+        github_app_private_key=os.environ.get("GITHUB_APP_PRIVATE_KEY", ""),
     )
 
 

@@ -220,3 +220,20 @@ class JobProtocolDenied(Exception):
     def __init__(self, reason: JobLeaseDenialReason = "invalid_or_expired") -> None:
         self.reason = reason
         super().__init__(reason)
+
+
+class GitHubJobToken(BaseModel):
+    """A short-lived GitHub installation token, scoped to one job's repository and to read-only
+    permissions (Runtime Task 4).
+
+    Minted by issue_job_token in exchange for a valid job lease -- the same lease_token JobEnvelope
+    carries, checked the same way acknowledge_job already checks it. Returned once, over
+    authenticated HTTPS, and never written to Neon or to local disk: there is no column or table
+    anywhere that holds it, by construction, not by redaction.
+    """
+
+    model_config = ConfigDict(frozen=True, extra="forbid")
+
+    token: str = Field(min_length=1)
+    github_repository_id: int
+    expires_at: datetime

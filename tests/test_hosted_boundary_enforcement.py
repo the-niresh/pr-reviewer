@@ -50,6 +50,12 @@ def test_retired_tables_have_zero_references_in_hosted_modules() -> None:
     # stay at zero is a reference from a module that talks to the hosted database. Hosted-ness is
     # defined by importing pr_reviewer.db.client (the hosted connection handle), not by directory,
     # so this also catches a hosted reference from a package nobody thought to exclude by path.
+    #
+    # The match is SQL-shaped, not a bare word boundary: a table can only ever be referenced in
+    # SQL preceded by one of from/into/join/update/table. findings in particular is both a retired
+    # table and this project's core domain word (FindingCandidate, etc. land on hosted modules in
+    # later tasks), so a bare \bfindings\b would trip on every docstring, variable name, and class
+    # name that says "finding" -- none of which are a query against the table.
     offenders: dict[str, list[str]] = {name: [] for name in RETIRED_TABLES}
     for path in sorted(SRC_ROOT.rglob("*.py")):
         if "__pycache__" in path.parts:
@@ -58,7 +64,7 @@ def test_retired_tables_have_zero_references_in_hosted_modules() -> None:
         if not HOSTED_HANDLE_IMPORT.search(text):
             continue
         for name in RETIRED_TABLES:
-            if re.search(rf"\b{name}\b", text):
+            if re.search(rf"\b(?:from|into|join|update|table)\s+{name}\b", text, re.IGNORECASE):
                 offenders[name].append(str(path.relative_to(SRC_ROOT.parent.parent)))
 
     referenced = {name: files for name, files in offenders.items() if files}

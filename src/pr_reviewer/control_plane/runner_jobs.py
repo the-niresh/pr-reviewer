@@ -18,6 +18,7 @@ from pydantic import BaseModel
 
 from pr_reviewer.contracts.runner import (
     AuthenticatedRunner,
+    GitHubJobToken,
     JobAcknowledgement,
     JobBudget,
     JobEnvelope,
@@ -28,6 +29,7 @@ from pr_reviewer.contracts.runner import (
 )
 from pr_reviewer.control_plane.repository_policy import hash_runner_credential
 from pr_reviewer.control_plane.runner_auth import authenticate_runner
+from pr_reviewer.control_plane.token_broker import issue_job_token
 from pr_reviewer.db.client import connection
 from pr_reviewer.events.record_event import JsonObject, serialize_json_object
 from pr_reviewer.jobs.claim_review_job import REVIEW_JOB_LEASE_INTERVAL
@@ -89,6 +91,19 @@ def acknowledge_jobs_route(
     except JobProtocolDenied as denied:
         raise HTTPException(status_code=409, detail=denied.reason) from denied
     return {"status": "ok"}
+
+
+@router.post("/jobs/{job_id}/token")
+def issue_job_token_route(
+    job_id: uuid.UUID,
+    body: _LeaseTokenBody,
+    authorization: str | None = Header(default=None),
+) -> GitHubJobToken:
+    runner = _authenticate_bearer(authorization)
+    try:
+        return issue_job_token(runner.runner_id, job_id, body.lease_token)
+    except JobProtocolDenied as denied:
+        raise HTTPException(status_code=409, detail=denied.reason) from denied
 
 
 def claim_job(runner: AuthenticatedRunner) -> JobEnvelope | NoJob:
