@@ -426,7 +426,7 @@ constructor.
 - ✅ Recover a claimed job after daemon restart only while its control-plane lease remains valid.
 - ✅ Run all backend checks.
 
-### Task 5A - ⬜ Correlated trace IDs and cross-store trace reconstruction
+### Task 5A - ✅ Correlated trace IDs and cross-store trace reconstruction
 
 **Files:**
 - Create: `src/pr_reviewer/observability/trace.py`
@@ -443,15 +443,15 @@ constructor.
 - Produces: `reviewer trace <job-id>` with a redacted human view and a machine-readable export.
 
 **TDD steps:**
-- ⬜ Write a failing test that a trace assembled from only one store is reported as incomplete, naming which side is missing.
-- ⬜ Run `uv run pytest tests/test_trace_join.py -v` and confirm the join cases fail.
-- ⬜ Carry one trace ID from webhook receipt through job claim, token issue, GitHub calls, model calls, decisions, and posting. Every hosted and local row stores it.
-- ⬜ Add the trace ID to hosted `connector_runs` and to every local event row. The join key is explicit, never inferred from timestamps.
-- ⬜ Test ordering across two clocks. Use recorded sequence within a store and the causal span parent across stores. Never order a merged trace by wall-clock time alone.
-- ⬜ Test that the merged output carries no model key, GitHub token, raw patch, source text, or finding rationale beyond the configured redaction level.
-- ⬜ Test a hosted-only trace, a local-only trace, an offline runner that acknowledged late, and a superseded job.
-- ⬜ This task owns the Phase 6 proof gate. Reconstructing one review from its job ID must need no manual database work.
-- ⬜ Run all backend checks.
+- ✅ Write a failing test that a trace assembled from only one store is reported as incomplete, naming which side is missing.
+- ✅ Run `uv run pytest tests/test_trace_join.py -v` and confirm the join cases fail.
+- ✅ Carry one trace ID from webhook receipt through job claim, token issue, GitHub calls, model calls, decisions, and posting. Every hosted and local row stores it.
+- ✅ Add the trace ID to hosted `connector_runs` and to every local event row. The join key is explicit, never inferred from timestamps.
+- ✅ Test ordering across two clocks. Use recorded sequence within a store and the causal span parent across stores. Never order a merged trace by wall-clock time alone.
+- ✅ Test that the merged output carries no model key, GitHub token, raw patch, source text, or finding rationale beyond the configured redaction level.
+- ✅ Test a hosted-only trace, a local-only trace, an offline runner that acknowledged late, and a superseded job.
+- ✅ This task owns the Phase 6 proof gate. Reconstructing one review from its job ID must need no manual database work.
+- ✅ Run all backend checks.
 
 ### Task 6 - ⬜ Container runtime contract and explicit runtime modes
 
