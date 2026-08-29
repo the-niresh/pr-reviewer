@@ -30,6 +30,7 @@ from typing import Any, Literal
 from pr_reviewer.contracts.finding import Finding
 from pr_reviewer.contracts.runner import JobAcknowledgement, JobBudget, JobEnvelope
 from pr_reviewer.github.pull_request import PullRequestFile, PullRequestSnapshot
+from pr_reviewer.observability.trace import LocalTrace, LocalTraceEvent
 
 MIGRATIONS_DIRECTORY = Path(__file__).with_name("migrations")
 
@@ -322,6 +323,16 @@ class LocalEventStore:
         rows = self._connection.execute("select * from local_events order by sequence").fetchall()
         return [_row_to_event(row) for row in rows]
 
+    def list_for_trace(self, trace_id: str) -> list[LocalEvent]:
+        """The local half of Runtime Task 5A's trace join. trace_id, not job_id, is the filter:
+        every local_events row carries trace_id, but job_id is nullable, so trace_id is the one
+        column guaranteed to scope every event this store could ever hold for a given trace.
+        """
+        rows = self._connection.execute(
+            "select * from local_events where trace_id = ? order by sequence", (trace_id,)
+        ).fetchall()
+        return [_row_to_event(row) for row in rows]
+
 
 def _row_to_event(row: sqlite3.Row) -> LocalEvent:
     return LocalEvent(
@@ -398,6 +409,29 @@ class LocalStore:
 
     def close(self) -> None:
         self._connection.close()
+
+    def fetch_trace(self, job_id: str) -> LocalTrace | None:
+        """None means this store has no local_jobs row for job_id -- distinct from a LocalTrace
+        with zero events, which means the job was claimed here but nothing has been recorded for
+        it yet. Looking job_id up first, rather than requiring a caller-supplied trace_id, keeps
+        job_id the one join key a caller of this module needs to know at all.
+        """
+        job = self.jobs.get(job_id)
+        if job is None:
+            return None
+        events = self.events.list_for_trace(job.trace_id)
+        return LocalTrace(
+            trace_id=job.trace_id,
+            events=tuple(
+                LocalTraceEvent(
+                    sequence=event.sequence,
+                    kind=event.event_type,
+                    payload=event.payload,
+                    created_at=event.created_at,
+                )
+                for event in events
+            ),
+        )
 
 
 def open_local_store(path: str | Path) -> LocalStore:

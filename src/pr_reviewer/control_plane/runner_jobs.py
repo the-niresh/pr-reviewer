@@ -33,6 +33,7 @@ from pr_reviewer.control_plane.token_broker import issue_job_token
 from pr_reviewer.db.client import connection
 from pr_reviewer.events.record_event import JsonObject, serialize_json_object
 from pr_reviewer.jobs.claim_review_job import REVIEW_JOB_LEASE_INTERVAL
+from pr_reviewer.observability.trace import HostedTrace, HostedTraceEvent
 
 router = APIRouter(prefix="/api/runner", tags=["runner-jobs"])
 
@@ -278,3 +279,49 @@ def acknowledge_job(
                 serialize_json_object(payload),
             ),
         )
+
+
+def fetch_hosted_trace(job_id: str) -> HostedTrace | None:
+    """The hosted half of Runtime Task 5A's trace join.
+
+    review_jobs.id (the job_id every hosted and local row this job touches is scoped by) and
+    review_jobs.trace_id are 1:1 -- enqueue_review_job mints a fresh row and a fresh trace_id
+    every time, including when it supersedes an older one -- so agent_events needs no trace_id
+    column of its own; review_job_id = job_id already scopes it correctly, and trace_id is read
+    once from review_jobs for display and for TraceIntegrityError's cross-store check.
+
+    None means review_jobs has no row for job_id, or that row has never been given a trace_id (the
+    minimal insert path for a webhook with no identifiable pull request). It is distinct from a
+    HostedTrace with zero events, which means the job exists but nothing has been recorded for it
+    yet. A connectivity or query failure is never converted to None here -- only genuine absence
+    of the job is; reconstruct_trace's "which side is missing" report must not be able to mean
+    "the database was briefly unreachable" by accident.
+    """
+    with connection() as conn:
+        job_row = conn.execute(
+            "select trace_id from review_jobs where id = %s", (job_id,)
+        ).fetchone()
+        if job_row is None or job_row["trace_id"] is None:
+            return None
+        trace_id = str(job_row["trace_id"])
+
+        rows = conn.execute(
+            """
+            select sequence, event_type, payload, created_at
+            from agent_events
+            where review_job_id = %s
+            order by sequence asc
+            """,
+            (job_id,),
+        ).fetchall()
+
+    events = tuple(
+        HostedTraceEvent(
+            sequence=int(row["sequence"]),
+            kind=str(row["event_type"]),
+            payload=row["payload"],
+            created_at=row["created_at"],
+        )
+        for row in rows
+    )
+    return HostedTrace(trace_id=trace_id, events=events)
