@@ -10,8 +10,6 @@ coverage/
 .DS_Store
 data/
 .superpowers/
-docs/superpowers/
-docs/specs/
 .venv/
 __pycache__/
 .mypy_cache/
