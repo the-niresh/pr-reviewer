@@ -1,4 +1,4 @@
-"""Tests that the hosted schema cannot physically store private review data (Runtime Task 1A).
+"""Tests that the hosted schema cannot physically store private review data (Runtime Task 1A/1B).
 
 Migration 0001 was written when this was a single hosted service. It created findings, code_chunks,
 human_decisions and pull_requests on the hosted plane, which the approved data boundary
@@ -8,9 +8,10 @@ rationale, sandbox logs, or embeddings. Convention is not a boundary, so these t
 schema itself cannot hold that data, on a real schema read, and make it impossible to add it back
 by accident.
 
-agent_events and model_calls are not touched here. They have live writers and no local store to
-move to until Task 5, so Task 1B re-scopes them later. HOSTED_EXEMPTIONS names them explicitly so
-that exemption cannot silently grow.
+agent_events and model_calls used to be exempted here (HOSTED_EXEMPTIONS): both had live writers
+and no local store to move detail to until Task 5 existed. Runtime Task 1B re-scoped both -- see
+202608291930_rescope_hosted_events.sql and tests/test_hosted_event_rescope.py -- and emptied
+HOSTED_EXEMPTIONS for good. test_hosted_exemptions_is_empty below pins it there.
 """
 
 from __future__ import annotations
@@ -77,13 +78,14 @@ def test_inserting_into_a_retired_table_is_rejected_by_the_database() -> None:
         conn.execute("insert into findings (id) values ('boundary-probe')")
 
 
-def test_hosted_exemptions_is_exactly_agent_events_and_model_calls() -> None:
+def test_hosted_exemptions_is_empty() -> None:
     from pr_reviewer.control_plane.boundary import HOSTED_EXEMPTIONS
 
-    assert frozenset({"agent_events", "model_calls"}) == HOSTED_EXEMPTIONS, (
-        "HOSTED_EXEMPTIONS must contain exactly agent_events and model_calls until Task 1B empties "
-        "it. Adding a new exemption here must fail this test, the same way "
-        "EXPECTED_EXISTING_PACKAGES works in test_package_boundaries.py."
+    assert not HOSTED_EXEMPTIONS, (
+        "HOSTED_EXEMPTIONS must stay empty. Runtime Task 1B re-scoped agent_events and "
+        "model_calls to fit the boundary column by column, like every other hosted table; "
+        "adding a table back here is a regression, not a shortcut. Same idea as "
+        "EXPECTED_EXISTING_PACKAGES in test_package_boundaries.py."
     )
 
 

@@ -24,11 +24,15 @@ AUTO_PERMIT_TYPES = frozenset(
     {"uuid", "timestamp with time zone", "integer", "bigint", "boolean", "numeric"}
 )
 
-# Tables that may keep a shape this module would otherwise reject. They have live writers today
-# and no local store exists until Task 5, so Task 1B removes both entries once local_store/ lands
-# and the writers move their detail there. This set must not grow silently:
-# tests/test_hosted_boundary_enforcement.py pins it to exactly these two names.
-HOSTED_EXEMPTIONS = frozenset({"agent_events", "model_calls"})
+# Tables that may keep a shape this module would otherwise reject. Runtime Task 1B emptied this:
+# agent_events and model_calls used to hold free-form jsonb (a caller-supplied event payload, and
+# a request_metadata/response_metadata blob nobody constrained) with nowhere local to point the
+# detail until local_store/ existed (Runtime Task 5). Both are now allowlisted narrowly, column by
+# column, like every other hosted table -- see agent_events.payload and
+# model_calls.provider/model_name below. Staying empty is itself part of the boundary:
+# tests/test_hosted_boundary_enforcement.py's test_hosted_exemptions_is_empty fails the moment
+# anything is added back.
+HOSTED_EXEMPTIONS: frozenset[str] = frozenset()
 
 
 class HostedSchemaViolation(RuntimeError):
@@ -38,6 +42,17 @@ class HostedSchemaViolation(RuntimeError):
 # (table, column) -> reason. Every entry here becomes a row in the hosted half of
 # docs/DATA_BOUNDARIES.md; regenerate that file after editing this list so the two cannot drift.
 ALLOWLIST: dict[tuple[str, str], str] = {
+    ("agent_events", "event_type"): (
+        "Lifecycle event name from a fixed, code-controlled set (e.g. review_job_failed, "
+        "model_call.recorded), never derived from repository or review content."
+    ),
+    ("agent_events", "payload"): (
+        "Redacted lifecycle event detail only: identifiers, enums, and aggregate token/cost "
+        "numbers. agent_events_payload_is_flat (migration "
+        "202608291930_rescope_hosted_events.sql) rejects a nested object or array at the "
+        "database layer, and record_event.serialize_json_object rejects one at the application "
+        "layer, so this column cannot hold a findings list, a diff, or a sandbox log."
+    ),
     ("github_deliveries", "id"): "GitHub's own delivery id: an opaque identifier, not content.",
     ("github_deliveries", "event_name"): (
         "GitHub webhook event name, a fixed enum (e.g. pull_request)."
@@ -74,6 +89,14 @@ ALLOWLIST: dict[tuple[str, str], str] = {
         "Our own repositories.id values selected at approval, an array of opaque identifiers, "
         "not repository content."
     ),
+    ("model_calls", "provider"): (
+        "Fixed enum ('openai', 'anthropic'), an identifier for which model API served the call, "
+        "not review content."
+    ),
+    ("model_calls", "model_name"): (
+        "Model name from our own configured model list (e.g. gpt-5-mini), an identifier, not "
+        "review content."
+    ),
     ("prompt_versions", "name"): "Name of one of our own prompt templates, not customer content.",
     ("prompt_versions", "version"): "Version label for one of our own prompt templates.",
     ("prompt_versions", "content"): (
@@ -88,8 +111,9 @@ ALLOWLIST: dict[tuple[str, str], str] = {
     ),
     ("review_jobs", "locked_by"): "Worker id holding the current lease, an operational identifier.",
     ("review_jobs", "last_error"): (
-        "Short operator-facing error string for worker logs and status APIs. Must stay a message "
-        "or exception class name, never a diff, stack trace, or file content."
+        "One of ReviewJobErrorClass's fixed values (contracts/errors.py), never a caller-supplied "
+        "string: fail_review_job rejects anything else before it reaches this column, so it can "
+        "never hold a diff, a stack trace, or file content."
     ),
     ("review_jobs", "base_sha"): ("GitHub base commit SHA: an identifier, not repository content."),
     ("review_jobs", "head_sha"): ("GitHub head commit SHA: an identifier, not repository content."),

@@ -5,6 +5,7 @@ from datetime import UTC, datetime
 
 import pytest
 
+from pr_reviewer.contracts.errors import ReviewJobErrorClass
 from pr_reviewer.jobs import ReviewJob
 from pr_reviewer.worker.main import JobStore, run_worker
 
@@ -33,7 +34,7 @@ def test_worker_completes_claimed_job() -> None:
     store = JobStore(
         claim=lambda worker_id: job if not completed else None,
         complete=lambda job_id, worker_id: completed.append(job_id),
-        fail=lambda job_id, worker_id, error: pytest.fail(error),
+        fail=lambda job_id, worker_id, error: pytest.fail(error.value),
         renew=lambda job_id, worker_id: None,
     )
 
@@ -44,7 +45,7 @@ def test_worker_completes_claimed_job() -> None:
 
 def test_worker_fails_job_when_run_job_raises() -> None:
     job = make_job()
-    failures: list[str] = []
+    failures: list[ReviewJobErrorClass] = []
 
     store = JobStore(
         claim=lambda worker_id: job,
@@ -64,4 +65,4 @@ def test_worker_fails_job_when_run_job_raises() -> None:
         worker_id="worker-1",
     )
 
-    assert failures == ["boom"]
+    assert failures == [ReviewJobErrorClass.WORKER_CRASHED]

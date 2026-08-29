@@ -34,11 +34,17 @@ def render_table() -> str:
         reason = ALLOWLIST[(table, column)]
         lines.append(f"| `{table}` | `{column}` | {reason} |")
     lines.append("")
+    if HOSTED_EXEMPTIONS:
+        tail = (
+            " or belongs to a table in `HOSTED_EXEMPTIONS` "
+            f"(`{', '.join(sorted(HOSTED_EXEMPTIONS))}`, see below)."
+        )
+    else:
+        tail = ". `HOSTED_EXEMPTIONS` is empty: every hosted table's columns are covered above."
     lines.append(
         "Every other hosted column is either `uuid`, `timestamptz`, `integer`, `bigint`, "
         "`boolean`, or `numeric` (auto-permitted; none of those types can hold source, a diff, "
-        "or a rationale), or belongs to a table in `HOSTED_EXEMPTIONS` "
-        f"(`{', '.join(sorted(HOSTED_EXEMPTIONS))}`, see below)."
+        f"or a rationale){tail}"
     )
     return "\n".join(lines)
 

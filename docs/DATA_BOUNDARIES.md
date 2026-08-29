@@ -14,16 +14,21 @@ Those must never exist on that machine.
 
 ## Hosted (control plane, Neon)
 
-Every column on every hosted table is one of three things: an auto-permitted scalar type that
-cannot hold free text, an allowlisted column with a documented reason, or a column on a table in
-`HOSTED_EXEMPTIONS`. Anything else fails `assert_no_private_columns`.
+Every column on every hosted table is one of two things: an auto-permitted scalar type that
+cannot hold free text, or an allowlisted column with a documented reason. Anything else fails
+`assert_no_private_columns`. `HOSTED_EXEMPTIONS` (a third, table-level escape hatch) is empty and
+must stay that way -- see Exemptions below.
 
 <!-- BEGIN GENERATED HOSTED ALLOWLIST -->
 | Table | Column | Reason |
 |---|---|---|
+| `agent_events` | `event_type` | Lifecycle event name from a fixed, code-controlled set (e.g. review_job_failed, model_call.recorded), never derived from repository or review content. |
+| `agent_events` | `payload` | Redacted lifecycle event detail only: identifiers, enums, and aggregate token/cost numbers. agent_events_payload_is_flat (migration 202608291930_rescope_hosted_events.sql) rejects a nested object or array at the database layer, and record_event.serialize_json_object rejects one at the application layer, so this column cannot hold a findings list, a diff, or a sandbox log. |
 | `github_deliveries` | `event_name` | GitHub webhook event name, a fixed enum (e.g. pull_request). |
 | `github_deliveries` | `id` | GitHub's own delivery id: an opaque identifier, not content. |
 | `installations` | `account_login` | GitHub account or org login: a public identifier GitHub itself shows on every page of the installation, not review content. |
+| `model_calls` | `model_name` | Model name from our own configured model list (e.g. gpt-5-mini), an identifier, not review content. |
+| `model_calls` | `provider` | Fixed enum ('openai', 'anthropic'), an identifier for which model API served the call, not review content. |
 | `oauth_states` | `binding_hash` | A one-way hash of the per-attempt binding secret. The secret itself is never stored, so this column cannot be reversed back into it. |
 | `oauth_states` | `return_to` | One of our own fixed, allowlisted control-plane paths (see github_oauth.ALLOWED_RETURN_TO_PATHS), validated before this row is ever written. Never a caller-supplied URL, never review content. |
 | `oauth_states` | `state_hash` | A one-way hash of the OAuth state value. The state itself is never stored, so this column cannot be reversed back into it. |
@@ -38,7 +43,7 @@ cannot hold free text, an allowlisted column with a documented reason, or a colu
 | `review_jobs` | `base_sha` | GitHub base commit SHA: an identifier, not repository content. |
 | `review_jobs` | `delivery_id` | References github_deliveries.id, an opaque identifier. |
 | `review_jobs` | `head_sha` | GitHub head commit SHA: an identifier, not repository content. |
-| `review_jobs` | `last_error` | Short operator-facing error string for worker logs and status APIs. Must stay a message or exception class name, never a diff, stack trace, or file content. |
+| `review_jobs` | `last_error` | One of ReviewJobErrorClass's fixed values (contracts/errors.py), never a caller-supplied string: fail_review_job rejects anything else before it reaches this column, so it can never hold a diff, a stack trace, or file content. |
 | `review_jobs` | `lease_token_hash` | A one-way hash of the job lease token. The token itself is never stored, so this column cannot be reversed back into it. |
 | `review_jobs` | `locked_by` | Worker id holding the current lease, an operational identifier. |
 | `review_jobs` | `policy_version` | Our own policy version label applied to the job, operational config, not review content. |
@@ -51,18 +56,21 @@ cannot hold free text, an allowlisted column with a documented reason, or a colu
 | `schema_migrations` | `checksum` | sha256 hex digest of a migration file, an opaque hash. |
 | `schema_migrations` | `filename` | Our own migration filename: code structure metadata, not review content. |
 
-Every other hosted column is either `uuid`, `timestamptz`, `integer`, `bigint`, `boolean`, or `numeric` (auto-permitted; none of those types can hold source, a diff, or a rationale), or belongs to a table in `HOSTED_EXEMPTIONS` (`agent_events, model_calls`, see below).
+Every other hosted column is either `uuid`, `timestamptz`, `integer`, `bigint`, `boolean`, or `numeric` (auto-permitted; none of those types can hold source, a diff, or a rationale). `HOSTED_EXEMPTIONS` is empty: every hosted table's columns are covered above.
 <!-- END GENERATED HOSTED ALLOWLIST -->
 
 ### Exemptions
 
-`HOSTED_EXEMPTIONS = {"agent_events", "model_calls"}`, exactly, pinned by
-`tests/test_hosted_boundary_enforcement.py`. Both tables hold jsonb payloads that today can carry
-more than the boundary allows (`agent_events.payload`, `model_calls.request_metadata`,
-`model_calls.response_metadata`), because both have live writers and there is nowhere local to
-point them until `local_store/` exists (Runtime Task 5). Runtime Task 1B removes both entries once
-that writer move happens and re-scopes the hosted shape to redacted lifecycle events and aggregate
-cost only. The exemption set must never grow past these two names, and it must end **empty**.
+`HOSTED_EXEMPTIONS = frozenset()`, exactly, pinned by
+`tests/test_hosted_boundary_enforcement.py::test_hosted_exemptions_is_empty`. `agent_events` and
+`model_calls` used to be exempted here: both held jsonb payloads that could carry more than the
+boundary allows, because both had live writers and there was nowhere local to point the detail
+until `local_store/` existed (Runtime Task 5). Runtime Task 1B (`202608291930_rescope_hosted_
+events.sql`) re-scoped both instead of exempting them: `model_calls.request_metadata` and
+`response_metadata` are dropped outright, and `agent_events.payload` is now a flat object of
+scalar values only, enforced both by the `agent_events_payload_is_flat` CHECK constraint and by
+`record_event.serialize_json_object`. Both tables are allowlisted column by column above, the same
+as every other hosted table. The set must stay empty; adding a table back here is a regression.
 
 ## Local (runner's own machine, `local_store/`, built in Runtime Task 5)
 
@@ -76,9 +84,11 @@ Everything the hosted plane must never see lives here instead, once Task 5 exist
   hosted-side by this task).
 - **Sandbox logs** - verification output that may echo source or diff content.
 - **Model API keys** - held in the OS keyring, never transmitted to the control plane.
-- **Detailed agent events and per-call model detail** - once Runtime Task 1B re-scopes the hosted
-  writers, the free-form event payload and prompt/output detail move here; the hosted plane keeps
-  only a redacted lifecycle event and aggregate token/cost numbers.
+- **Detailed agent events and per-call model detail** - Runtime Task 1B closed the hosted plane's
+  free-form event payload and `model_calls.request_metadata`/`response_metadata` columns; nothing
+  had ever written real prompt or output detail through them, so there was no existing detail to
+  relocate. Any future prompt/output logging belongs here, in `local_store/`, never on the hosted
+  plane, which keeps only a redacted lifecycle event and aggregate token/cost numbers.
 
 ## Retired hosted tables (Runtime Task 1A)
 

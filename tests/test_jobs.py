@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+from pr_reviewer.contracts.errors import ReviewJobErrorClass
 from pr_reviewer.db.client import connection
 from pr_reviewer.jobs import (
     claim_review_job,
@@ -52,7 +53,7 @@ def test_fail_job_schedules_retry_and_records_event() -> None:
     job = claim_review_job("worker-1")
 
     assert job is not None
-    fail_review_job(job.id, "worker-1", "boom")
+    fail_review_job(job.id, "worker-1", ReviewJobErrorClass.WORKER_CRASHED)
 
     with connection() as conn:
         row = conn.execute(
@@ -66,6 +67,6 @@ def test_fail_job_schedules_retry_and_records_event() -> None:
 
     assert row is not None
     assert row["status"] == "pending"
-    assert row["last_error"] == "boom"
+    assert row["last_error"] == ReviewJobErrorClass.WORKER_CRASHED.value
     assert event is not None
     assert event["event_type"] == "review_job_retry_scheduled"

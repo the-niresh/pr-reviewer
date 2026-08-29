@@ -7,6 +7,7 @@ import time
 from collections.abc import Callable
 from dataclasses import dataclass
 
+from pr_reviewer.contracts.errors import ReviewJobErrorClass
 from pr_reviewer.db.client import close_pool
 from pr_reviewer.jobs import (
     ReviewJob,
@@ -27,7 +28,7 @@ RunReviewJob = Callable[[ReviewJob, threading.Event], None]
 class JobStore:
     claim: Callable[[str], ReviewJob | None] = claim_review_job
     complete: Callable[[str, str], None] = complete_review_job
-    fail: Callable[[str, str, str], None] = fail_review_job
+    fail: Callable[[str, str, ReviewJobErrorClass], None] = fail_review_job
     renew: Callable[[str, str], None] = renew_review_job_lease
 
 
@@ -82,14 +83,14 @@ def run_worker(
                 job_stop_event=job_stop,
                 shutdown_timeout_seconds=shutdown_timeout_seconds,
             )
-        except BaseException as error:
-            store.fail(job.id, worker_id, get_error_message(error))
+        except BaseException:
+            store.fail(job.id, worker_id, ReviewJobErrorClass.WORKER_CRASHED)
             continue
         finally:
             renewal.stop()
 
         if stop.is_set():
-            store.fail(job.id, worker_id, "Worker shutdown requested during review")
+            store.fail(job.id, worker_id, ReviewJobErrorClass.SHUTDOWN_REQUESTED)
             return
 
         store.complete(job.id, worker_id)

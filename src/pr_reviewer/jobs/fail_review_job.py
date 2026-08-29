@@ -1,9 +1,15 @@
+"""Runtime Task 1B: review_jobs.last_error takes a closed-set ReviewJobErrorClass, not a caller-
+supplied string, so it cannot hold a diff, a stack trace, or file content. See
+contracts/errors.py's module docstring for why.
+"""
+
 from __future__ import annotations
 
 from typing import Any
 
 from psycopg import Connection
 
+from pr_reviewer.contracts.errors import ReviewJobErrorClass
 from pr_reviewer.db.client import connection
 from pr_reviewer.events.record_event import serialize_json_object
 
@@ -14,9 +20,17 @@ REVIEW_JOB_RETRY_INTERVAL = "1 minute"
 def fail_review_job(
     job_id: str,
     worker_id: str,
-    error: str,
+    error: ReviewJobErrorClass,
     conn: Connection[dict[str, Any]] | None = None,
 ) -> None:
+    if not isinstance(error, ReviewJobErrorClass):
+        # A type hint alone does not stop a caller that ignores it; the closed set has to be a
+        # runtime fact, the same way assert_no_private_columns and COST_USD_PATTERN are.
+        raise TypeError(
+            f"error must be a ReviewJobErrorClass, not {type(error).__name__}; "
+            "review_jobs.last_error is a hosted column and cannot hold free-form prose"
+        )
+
     def run(active_conn: Connection[dict[str, Any]]) -> None:
         with active_conn.transaction():
             cursor = active_conn.execute(
@@ -38,7 +52,7 @@ def fail_review_job(
                     MAX_REVIEW_JOB_ATTEMPTS,
                     MAX_REVIEW_JOB_ATTEMPTS,
                     REVIEW_JOB_RETRY_INTERVAL,
-                    error,
+                    error.value,
                     job_id,
                     worker_id,
                 ),
@@ -57,7 +71,7 @@ def fail_review_job(
                 (
                     job_id,
                     "review_job_failed" if status == "failed" else "review_job_retry_scheduled",
-                    serialize_json_object({"error": error, "status": status}),
+                    serialize_json_object({"error": error.value, "status": status}),
                 ),
             )
 

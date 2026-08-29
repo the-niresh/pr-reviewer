@@ -14,9 +14,9 @@ Self-hosted Postgres is a later option if traffic, cost, or compliance needs jus
 
 `agent_events` is the append-only audit trail for each review job. Writers only insert rows. The database rejects updates and deletes.
 
-Each model request writes one `model_calls` row and one linked `model_call.recorded` event in the same transaction. The model row stores the provider, model name, prompt version id, token counts, `cost_usd` as `numeric(18, 12)`, and checked `latency_ms`. Request metadata is stored in `request_metadata`.
+Each model request writes one `model_calls` row and one linked `model_call.recorded` event in the same transaction. The model row stores the provider, model name, prompt version id, token counts, `cost_usd` as `numeric(18, 12)`, and checked `latency_ms` -- aggregates only. Runtime Task 1B dropped `request_metadata` and `response_metadata`: neither ever held anything but a free-form blob, and the hosted plane must never hold a prompt, an output, or a hash of one.
 
-Each event receives a database-generated monotonic `sequence`. Event readers order by that sequence, not by timestamps or UUIDs.
+Each event receives a database-generated monotonic `sequence`. Event readers order by that sequence, not by timestamps or UUIDs. `agent_events.payload` is a flat object of scalar values only (identifiers, enums, aggregate numbers); `agent_events_payload_is_flat` rejects a nested object or array at the database layer, and `record_event.serialize_json_object` rejects one before that.
 
 ## Local setup
 

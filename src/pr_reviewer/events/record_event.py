@@ -1,8 +1,23 @@
+"""Hosted lifecycle events (Runtime Task 1B).
+
+A hosted event row is a redacted lifecycle event: identifiers, enums, and aggregate numbers,
+never a nested structure. serialize_json_object enforces that here, at the application layer, by
+rejecting any payload value that is itself an object or array -- not a validated string, a flat
+shape with no depth for a findings list, a diff, or a sandbox log to hide in. migration
+202608291930_rescope_hosted_events.sql's agent_events_payload_is_flat CHECK constraint enforces
+the identical rule at the database layer, so a writer that reaches the table through raw SQL
+rather than this function is still stopped.
+
+JsonObject/JsonValue stay fully recursive: they describe whatever a jsonb column can hold in
+general (this file's read path, and other jsonb columns elsewhere), not the narrower flat shape
+this file's write path now enforces.
+"""
+
 from __future__ import annotations
 
 import json
 import math
-from collections.abc import Mapping, Sequence
+from collections.abc import Mapping
 from dataclasses import dataclass
 from datetime import datetime
 
@@ -35,11 +50,24 @@ def record_event(review_job_id: str, event_type: str, payload: JsonObject) -> No
 
 
 def serialize_json_object(value: JsonObject) -> str:
-    assert_json_value(value, "$", set())
+    assert_flat_json_object(value)
     return json.dumps(value, separators=(",", ":"))
 
 
-def assert_json_value(value: object, path: str, ancestors: set[int]) -> None:
+def assert_flat_json_object(value: JsonObject) -> None:
+    """The top-level object's values must be JSON scalars: no nested object, no nested array.
+    A cyclic structure is necessarily a nested object (a dict cannot contain itself as a scalar),
+    so rejecting nesting outright also rejects a cycle, with no need to track visited ids.
+    """
+    if not isinstance(value, Mapping):
+        raise TypeError("Expected a JSON object for a hosted event payload")
+    for key, item in value.items():
+        if not isinstance(key, str):
+            raise TypeError(f"Expected a string key, got {key!r}")
+        assert_json_scalar(item, key)
+
+
+def assert_json_scalar(value: object, key: str) -> None:
     if value is None or isinstance(value, bool | str):
         return
 
@@ -48,30 +76,10 @@ def assert_json_value(value: object, path: str, ancestors: set[int]) -> None:
 
     if isinstance(value, float):
         if not math.isfinite(value):
-            raise TypeError(f"Expected a finite JSON number at {path}")
+            raise TypeError(f"Expected a finite JSON number at {key!r}")
         return
 
-    if isinstance(value, Mapping):
-        assert_acyclic(value, path, ancestors)
-        for key, item in value.items():
-            if not isinstance(key, str):
-                raise TypeError(f"Expected a string key at {path}")
-            assert_json_value(item, f"{path}.{key}", ancestors)
-        ancestors.remove(id(value))
-        return
-
-    if isinstance(value, Sequence) and not isinstance(value, str | bytes | bytearray):
-        assert_acyclic(value, path, ancestors)
-        for index, item in enumerate(value):
-            assert_json_value(item, f"{path}[{index}]", ancestors)
-        ancestors.remove(id(value))
-        return
-
-    raise TypeError(f"Expected a JSON value at {path}")
-
-
-def assert_acyclic(value: object, path: str, ancestors: set[int]) -> None:
-    value_id = id(value)
-    if value_id in ancestors:
-        raise TypeError(f"Expected an acyclic JSON value at {path}")
-    ancestors.add(value_id)
+    raise TypeError(
+        f"Expected a flat JSON scalar (bool, int, float, str, or None) at {key!r}; a hosted "
+        "event payload cannot carry a nested object or array"
+    )

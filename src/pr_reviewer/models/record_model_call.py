@@ -21,7 +21,6 @@ class ModelCallInput:
     output_tokens: int
     cost_usd: str
     latency_ms: int
-    metadata: JsonObject
 
 
 def record_model_call(input_value: ModelCallInput) -> None:
@@ -37,10 +36,9 @@ def record_model_call(input_value: ModelCallInput) -> None:
               input_tokens,
               output_tokens,
               cost_usd,
-              latency_ms,
-              request_metadata
+              latency_ms
             )
-            values (%s, %s, %s, %s, %s, %s, %s::numeric, %s, %s::jsonb)
+            values (%s, %s, %s, %s, %s, %s, %s::numeric, %s)
             returning id
             """,
             (
@@ -52,7 +50,6 @@ def record_model_call(input_value: ModelCallInput) -> None:
                 input_value.output_tokens,
                 input_value.cost_usd,
                 input_value.latency_ms,
-                serialize_json_object(input_value.metadata),
             ),
         )
         row = cursor.fetchone()
@@ -60,6 +57,16 @@ def record_model_call(input_value: ModelCallInput) -> None:
             raise RuntimeError("Model call insert did not return an id")
 
         model_call_id = str(row["id"])
+        payload: JsonObject = {
+            "modelCallId": model_call_id,
+            "provider": input_value.provider,
+            "model": input_value.model,
+            "promptVersionId": input_value.prompt_version_id,
+            "inputTokens": input_value.input_tokens,
+            "outputTokens": input_value.output_tokens,
+            "costUsd": input_value.cost_usd,
+            "latencyMs": input_value.latency_ms,
+        }
         conn.execute(
             """
             insert into agent_events (review_job_id, event_type, payload)
@@ -68,18 +75,7 @@ def record_model_call(input_value: ModelCallInput) -> None:
             (
                 input_value.review_job_id,
                 "model_call.recorded",
-                serialize_json_object(
-                    {
-                        "modelCallId": model_call_id,
-                        "provider": input_value.provider,
-                        "model": input_value.model,
-                        "promptVersionId": input_value.prompt_version_id,
-                        "inputTokens": input_value.input_tokens,
-                        "outputTokens": input_value.output_tokens,
-                        "costUsd": input_value.cost_usd,
-                        "latencyMs": input_value.latency_ms,
-                    }
-                ),
+                serialize_json_object(payload),
             ),
         )
 

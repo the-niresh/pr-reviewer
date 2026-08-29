@@ -75,7 +75,6 @@ def test_record_model_call_writes_model_row_and_event() -> None:
             output_tokens=5,
             cost_usd="0.000000123456",
             latency_ms=42,
-            metadata={"traceId": "trace-1"},
         )
     )
 
@@ -109,6 +108,5 @@ def test_model_call_rejects_bad_cost_precision() -> None:
                 output_tokens=1,
                 cost_usd="0.1234567890123",
                 latency_ms=1,
-                metadata={},
             )
         )

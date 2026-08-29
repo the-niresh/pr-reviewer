@@ -1,3 +1,10 @@
+"""Since Runtime Task 1B, every row this reads back has a flat payload -- a redacted lifecycle
+event with scalar values only, enforced by record_event.serialize_json_object and by
+agent_events_payload_is_flat at the database layer. AgentEvent.payload stays typed as the fully
+recursive JsonObject regardless, because that type describes what a jsonb column can hold in
+general, not a promise this read path re-derives.
+"""
+
 from __future__ import annotations
 
 from typing import cast
