@@ -215,7 +215,7 @@ against a task that cannot build it yet.
 - ⬜ Update `docs/DATA_BOUNDARIES.md` with the retired tables and the new writer targets.
 - ⬜ Run all backend checks.
 
-### Task 1B - ⬜ Re-scope hosted events and move the detailed writers
+### Task 1B - ✅ Re-scope hosted events and move the detailed writers
 
 ⚠️ Runs **after** Task 5, because it needs `local_store/` to exist. Split out of Task 1A, which could
 not move writers to a local store that had not been built yet.
@@ -232,22 +232,22 @@ not move writers to a local store that had not been built yet.
 - Test: `tests/test_hosted_event_rescope.py`
 
 **TDD steps:**
-- ⬜ The data boundary permits **redacted lifecycle events** and **aggregate** token and cost numbers
+- ✅ The data boundary permits **redacted lifecycle events** and **aggregate** token and cost numbers
   on the hosted plane. It forbids detailed events and per-call model detail. So this is a re-scope,
   not a deletion: constrain the hosted shape and move the detail local.
-- ⬜ Write failing tests that a hosted event row cannot carry a free-form payload, and that a hosted
+- ✅ Write failing tests that a hosted event row cannot carry a free-form payload, and that a hosted
   model-call row carries aggregates only, with no prompt, output, or output hash.
-- ⬜ Point the four writers at the local store for detail, and keep a redacted hosted write for
+- ✅ Point the four writers at the local store for detail, and keep a redacted hosted write for
   lifecycle and aggregate cost.
-- ⬜ Constrain `review_jobs.last_error`. `fail_review_job` takes `error: str` and writes it straight to
+- ✅ Constrain `review_jobs.last_error`. `fail_review_job` takes `error: str` and writes it straight to
   a hosted column, so any caller can put a stack trace, a file path, or a diff fragment into Neon.
   The allowlist reason documents the intent and enforces nothing. Replace the free string with a
   typed error class so prose cannot be represented, and update every caller.
 - ⚠️ Found during Task 1A. It is the same defect class the task was built to close: a hosted column
   the allowlist permits, holding whatever a caller happens to pass.
-- ⬜ Remove `agent_events` and `model_calls` from `HOSTED_EXEMPTIONS`. The exemption set must end empty,
+- ✅ Remove `agent_events` and `model_calls` from `HOSTED_EXEMPTIONS`. The exemption set must end empty,
   and the test that guards its size must then assert exactly that.
-- ⬜ Run all backend checks.
+- ✅ Run all backend checks.
 
 ### Task 2 - ✅ One-time runner pairing and GitHub App installation
 
