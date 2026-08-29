@@ -453,7 +453,7 @@ constructor.
 - ✅ This task owns the Phase 6 proof gate. Reconstructing one review from its job ID must need no manual database work.
 - ✅ Run all backend checks.
 
-### Task 6 - ⬜ Container runtime contract and explicit runtime modes
+### Task 6 - ✅ Container runtime contract and explicit runtime modes
 
 **Files:**
 - Create: `src/pr_reviewer/containers/runtime.py`
@@ -471,13 +471,13 @@ constructor.
 - Produces: typed `SandboxSpec` and `SandboxResult` contracts with no shell-string field.
 
 **TDD steps:**
-- ⬜ Write failing doctor tests for missing Docker CLI, stopped daemon, denied socket, failed pull, root container, network access, missing resource limits, and unsupported platform.
-- ⬜ Implement Docker as the only v1 `ContainerRuntime`.
-- ⬜ Full mode is available only after every required Docker isolation check passes.
-- ⬜ Analysis-only mode sets retrieval and executable verification false and forces human approval.
-- ⬜ Never auto-install Docker and never fall back to host command execution.
-- ⬜ Show the exact disabled features before the user confirms analysis-only mode.
-- ⬜ Run all backend checks.
+- ✅ Write failing doctor tests for missing Docker CLI, stopped daemon, denied socket, failed pull, root container, network access, missing resource limits, and unsupported platform.
+- ✅ Implement Docker as the only v1 `ContainerRuntime`.
+- ✅ Full mode is available only after every required Docker isolation check passes.
+- ✅ Analysis-only mode sets retrieval and executable verification false and forces human approval.
+- ✅ Never auto-install Docker and never fall back to host command execution.
+- ✅ Show the exact disabled features before the user confirms analysis-only mode.
+- ✅ Run all backend checks.
 
 ### Task 7 - ⬜ Full-mode local Postgres and pgvector service
 
