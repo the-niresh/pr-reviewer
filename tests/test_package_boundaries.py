@@ -6,19 +6,33 @@ This walks the import graph with `ast`, it never imports the packages it inspect
 would run their module-level code and could pull in the very hosted settings or private key this
 test exists to keep out of the local runner.
 
-Vacuous-pass problem: of the nine packages this test guards, only `contracts` exists today.
-`control_plane`, `runner`, `local_store`, `reviewer`, `retrieval`, `verification`, `containers`, and
-`notifications` do not exist yet. A test that only checks packages it finds on disk would pass
-against nothing, today, and would keep passing the day someone adds `runner/github_access.py` with
-a forbidden import, right up until a human happens to look. That is a green build lying to you.
+Vacuous-pass problem: of the nine packages this test originally guarded, only `contracts` existed
+at first. A test that only checks packages it finds on disk would pass against nothing, today, and
+would keep passing the day someone adds `runner/github_access.py` with a forbidden import, right up
+until a human happens to look. That is a green build lying to you.
 
 The fix is `EXPECTED_EXISTING_PACKAGES` below. It is a hardcoded snapshot of which guarded packages
 exist right now. `test_guarded_package_inventory_matches_snapshot` fails the moment the real
 inventory drifts from that snapshot, in either direction: a new package appears, or one is removed.
 There is no way to add `runner/` without this test breaking first, and the only fix for that
 specific failure is to edit this file: update the snapshot and confirm the new package is wired into
-`test_control_plane_boundary` or `test_runner_and_local_store_boundary` below. The rule can never
-silently keep skipping a package that starts existing.
+an actual assertion below. The rule can never silently keep skipping a package that starts existing.
+
+`observability/` and `cli/` (Runtime Task 5A) shipped before this file's guard list was updated for
+them -- they existed on disk, unguarded, by omission rather than by decision, which is the same
+vacuous-pass problem one level down: a name absent from `GUARDED_PACKAGES` entirely is
+indistinguishable from a name present but never checked. Runtime Task 6 closes that gap and adds
+`containers/` while
+it is at it:
+
+- `observability/` imports nothing of ours except `contracts` (it is pure merge/redaction logic
+  over data its callers already fetched -- see observability/__init__.py).
+- `cli/` (top-level, operator/debug tools such as `reviewer trace`) legitimately needs the hosted
+  database, so no outbound rule applies to it. Its rule is inbound instead: nothing runner-side may
+  import it, folded into `RUNNER_SIDE_FORBIDDEN_MODULES` below, because importing it would grant the
+  same hosted access through a side door.
+- `containers/` (Docker sandbox runtime) is runner-side by the same logic as `runner/` and
+  `local_store/`: it must never reach Neon, so it joins `RUNNER_SIDE_PACKAGES`.
 """
 
 from __future__ import annotations
@@ -28,7 +42,9 @@ from pathlib import Path
 
 SRC_ROOT = Path(__file__).resolve().parent.parent / "src" / "pr_reviewer"
 
-# The full set of packages Phase 1 section 4 assigns a dependency rule to.
+# The full set of packages this file assigns a dependency rule to. contracts through notifications
+# are Phase 1 section 4's original list; observability and cli were added by this file once Runtime
+# Task 6 closed the gap described in the module docstring above.
 GUARDED_PACKAGES = frozenset(
     {
         "contracts",
@@ -40,12 +56,16 @@ GUARDED_PACKAGES = frozenset(
         "verification",
         "containers",
         "notifications",
+        "observability",
+        "cli",
     }
 )
 
 # Snapshot of which guarded packages exist on disk today. Update this set in the same commit that
 # adds one of the packages above, and only after confirming its rule is enforced below.
-EXPECTED_EXISTING_PACKAGES = frozenset({"contracts", "control_plane", "runner", "local_store"})
+EXPECTED_EXISTING_PACKAGES = frozenset(
+    {"contracts", "control_plane", "runner", "local_store", "containers", "observability", "cli"}
+)
 
 # control_plane/* must not reach into any package that can review, retrieve, verify, or run
 # untrusted code. The control plane cannot review (Phase 1, section 4).
@@ -53,12 +73,19 @@ CONTROL_PLANE_FORBIDDEN_TARGETS = frozenset(
     {"runner", "local_store", "reviewer", "retrieval", "verification", "containers"}
 )
 
-# runner/*, local_store/*, and notifications/* must never be able to reach the hosted database
-# client, which is the only current handle onto hosted-only settings (Neon credentials, the
-# webhook secret, and, once it exists, the GitHub App private key).
-RUNNER_SIDE_PACKAGES = frozenset({"runner", "local_store", "notifications"})
+# The package(s) that import nothing of ours except contracts -- the shared vocabulary every
+# package may depend on. contracts itself has its own dedicated test below because it is imported
+# by everything and this loop only handles the "importer" side of that rule.
+IMPORTS_ONLY_CONTRACTS_PACKAGES = frozenset({"observability"})
+
+# runner/*, local_store/*, notifications/*, and containers/* must never be able to reach the
+# hosted database client (the only current handle onto hosted-only settings: Neon credentials, the
+# webhook secret, and, once it exists, the GitHub App private key), the hosted control plane
+# itself, or pr_reviewer.cli -- the operator/debug package that legitimately holds that same
+# database access, so importing it would grant it through a side door.
+RUNNER_SIDE_PACKAGES = frozenset({"runner", "local_store", "notifications", "containers"})
 RUNNER_SIDE_FORBIDDEN_MODULES = frozenset(
-    {"pr_reviewer.db.client", "pr_reviewer.db", "pr_reviewer.control_plane"}
+    {"pr_reviewer.db", "pr_reviewer.control_plane", "pr_reviewer.cli"}
 )
 
 
@@ -106,7 +133,18 @@ def _existing_guarded_packages() -> set[str]:
 
 
 def _imports_targeting(imports: set[str], forbidden_package: str) -> set[str]:
-    prefix = f"pr_reviewer.{forbidden_package}"
+    return _imports_matching_prefix(imports, f"pr_reviewer.{forbidden_package}")
+
+
+def _imports_matching_prefix(imports: set[str], prefix: str) -> set[str]:
+    """`prefix` also forbids every submodule of it. A plain `imports & {prefix}` set intersection
+    (this file's original RUNNER_SIDE_FORBIDDEN_MODULES check) would miss `from
+    pr_reviewer.control_plane.runner_jobs import x`, which resolves to the dotted path
+    "pr_reviewer.control_plane.runner_jobs", not "pr_reviewer.control_plane" -- an exact-string
+    forbidden list is vacuous against that whole style of import. Reusing the same prefix logic
+    CONTROL_PLANE_FORBIDDEN_TARGETS already relied on closes that gap for every forbidden entry,
+    not just the ones added for this task.
+    """
     return {module for module in imports if module == prefix or module.startswith(prefix + ".")}
 
 
@@ -147,7 +185,13 @@ def test_control_plane_boundary() -> None:
         assert not hits, f"control_plane/* must not import {forbidden}/*, found: {sorted(hits)}"
 
 
-def test_runner_and_local_store_boundary() -> None:
+def test_runner_side_packages_boundary() -> None:
+    """Covers runner/, local_store/, notifications/, and containers/: none of them may reach the
+    hosted database, the hosted control plane, or pr_reviewer.cli (the operator package that
+    holds that same hosted access -- see the module docstring). collect_imports walks each
+    package's directory recursively, so a nested subpackage such as runner/cli/ is already
+    covered here with no separate entry needed.
+    """
     existing = [name for name in RUNNER_SIDE_PACKAGES if (SRC_ROOT / name).is_dir()]
     if not existing:
         assert not (RUNNER_SIDE_PACKAGES & EXPECTED_EXISTING_PACKAGES)
@@ -155,7 +199,31 @@ def test_runner_and_local_store_boundary() -> None:
 
     for package_name in existing:
         imports = collect_imports(SRC_ROOT / package_name)
-        hits = imports & RUNNER_SIDE_FORBIDDEN_MODULES
+        hits: set[str] = set()
+        for forbidden in RUNNER_SIDE_FORBIDDEN_MODULES:
+            hits |= _imports_matching_prefix(imports, forbidden)
         assert not hits, (
-            f"{package_name}/* must not import the hosted database client, found: {sorted(hits)}"
+            f"{package_name}/* must not import the hosted database, the control plane, or the "
+            f"operator cli package, found: {sorted(hits)}"
+        )
+
+
+def test_observability_imports_only_contracts() -> None:
+    for package_name in IMPORTS_ONLY_CONTRACTS_PACKAGES:
+        package_dir = SRC_ROOT / package_name
+        if not package_dir.is_dir():
+            # Guarded by test_guarded_package_inventory_matches_snapshot, same pattern as
+            # test_control_plane_boundary above.
+            assert package_name not in EXPECTED_EXISTING_PACKAGES
+            continue
+
+        imports = collect_imports(package_dir)
+        foreign = {
+            module
+            for module in imports
+            if module.startswith("pr_reviewer.") and not module.startswith("pr_reviewer.contracts")
+        }
+        assert not foreign, (
+            f"{package_name}/* must import nothing of ours except contracts, found: "
+            f"{sorted(foreign)}"
         )
