@@ -45,7 +45,7 @@ GUARDED_PACKAGES = frozenset(
 
 # Snapshot of which guarded packages exist on disk today. Update this set in the same commit that
 # adds one of the packages above, and only after confirming its rule is enforced below.
-EXPECTED_EXISTING_PACKAGES = frozenset({"contracts", "control_plane", "runner"})
+EXPECTED_EXISTING_PACKAGES = frozenset({"contracts", "control_plane", "runner", "local_store"})
 
 # control_plane/* must not reach into any package that can review, retrieve, verify, or run
 # untrusted code. The control plane cannot review (Phase 1, section 4).
