@@ -399,7 +399,7 @@ constructor.
 - ✅ Discard the token after the job finishes or the lease is lost.
 - ✅ Run all backend checks.
 
-### Task 5 - ⬜ Local daemon, SQLite state, and secret storage
+### Task 5 - ✅ Local daemon, SQLite state, and secret storage
 
 **Files:**
 - Create: `src/pr_reviewer/runner/daemon.py`
@@ -416,15 +416,15 @@ constructor.
 - Produces: local job, snapshot, finding, event, human-decision, and pending-acknowledgement stores.
 
 **TDD steps:**
-- ⬜ Write failing tests for restart recovery, duplicate local job, lost network after completion, pending acknowledgement replay, graceful stop, and corrupted local state.
-- ⬜ Prefer the operating-system secret store. Test the mode `0600` file fallback separately.
-- ⬜ Test that no secret is ever placed in `os.environ`. Read from the keyring per call and assert the
+- ✅ Write failing tests for restart recovery, duplicate local job, lost network after completion, pending acknowledgement replay, graceful stop, and corrupted local state.
+- ✅ Prefer the operating-system secret store. Test the mode `0600` file fallback separately.
+- ✅ Test that no secret is ever placed in `os.environ`. Read from the keyring per call and assert the
   daemon environment stays clean, including in a spawned subprocess.
-- ⬜ Store a trace ID and a per-store sequence on every local event row so Task 5A can join hosted and local halves.
-- ⬜ Keep runner credential, model keys, GitHub tokens, and Slack secret out of SQLite.
-- ⬜ Redact secrets from logs, tracebacks, crash reports, and support bundles.
-- ⬜ Recover a claimed job after daemon restart only while its control-plane lease remains valid.
-- ⬜ Run all backend checks.
+- ✅ Store a trace ID and a per-store sequence on every local event row so Task 5A can join hosted and local halves.
+- ✅ Keep runner credential, model keys, GitHub tokens, and Slack secret out of SQLite.
+- ✅ Redact secrets from logs, tracebacks, crash reports, and support bundles.
+- ✅ Recover a claimed job after daemon restart only while its control-plane lease remains valid.
+- ✅ Run all backend checks.
 
 ### Task 5A - ⬜ Correlated trace IDs and cross-store trace reconstruction
 
