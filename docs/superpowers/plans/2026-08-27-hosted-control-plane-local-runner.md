@@ -537,7 +537,7 @@ which is not a route that exists.
 - ✅ Preserve the volume on normal uninstall and delete it only after explicit confirmation.
 - ✅ Run all backend checks.
 
-### Task 8 - ⬜ Local onboarding UI and user service
+### Task 8 - ✅ Local onboarding UI and user service
 
 **Files:**
 - Create: `src/pr_reviewer/runner/cli/service.py`
@@ -553,13 +553,13 @@ which is not a route that exists.
 - Produces: systemd-user service on Linux and launchd user agent on macOS.
 
 **TDD steps:**
-- ⬜ Write failing tests for non-loopback binding, missing session secret, CSRF failure, reused pairing code, model-key echo, closed port, and browser-open failure.
-- ⬜ Bind to `127.0.0.1` and use a random local session secret.
-- ⬜ Submit model keys directly to the local daemon. Never send them through the hosted control plane.
-- ⬜ Show full and analysis-only mode differences before confirmation.
-- ⬜ Install a user service without administrator rights and verify restart after login.
-- ⬜ Keep the CLI usable when no graphical browser exists.
-- ⬜ Run backend, Bun, and Playwright checks.
+- ✅ Write failing tests for non-loopback binding, missing session secret, CSRF failure, reused pairing code, model-key echo, closed port, and browser-open failure.
+- ✅ Bind to `127.0.0.1` and use a random local session secret.
+- ✅ Submit model keys directly to the local daemon. Never send them through the hosted control plane.
+- ✅ Show full and analysis-only mode differences before confirmation.
+- ✅ Install a user service without administrator rights and verify restart after login.
+- ✅ Keep the CLI usable when no graphical browser exists.
+- ✅ Run backend, Bun, and Playwright checks.
 
 ### Task 9 - ⬜ Offline behavior, revocation, updates, and uninstall
 

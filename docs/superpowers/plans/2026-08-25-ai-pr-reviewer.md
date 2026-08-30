@@ -743,10 +743,13 @@ mode in Phase 13. It never becomes a default.
 
 ### Task 22 - ⬜ Bun and TypeScript review dashboard
 
+⚠️ The frontend scaffold already exists. Runtime Task 8 created `apps/web/package.json`,
+`bun.lock`, `tsconfig.json`, `next.config.ts`, `playwright.config.ts` and `src/app/` for the
+onboarding UI. This task adds the dashboard on top of that project, it does not create it.
+
 **Files:**
-- Create: `apps/web/package.json`
-- Create: `apps/web/bun.lock`
-- Create: `apps/web/src/app/*`
+- Modify: `apps/web/package.json` (dashboard scripts and any new dependency)
+- Create: `apps/web/src/app/dashboard/*`
 - Create: `apps/web/src/components/*`
 - Create: `apps/web/tests/dashboard.spec.ts`
 
