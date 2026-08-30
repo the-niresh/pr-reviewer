@@ -210,6 +210,19 @@ def heartbeat_job(runner_id: uuid.UUID, job_id: uuid.UUID, lease_token: str) -> 
         )
         if cursor.rowcount == 1:
             return LeaseState(status="active")
+        cancelled = conn.execute(
+            """
+            select id
+            from review_jobs
+            where id = %s
+              and status = 'cancelled'
+              and locked_by = %s
+              and lease_token_hash = %s
+            """,
+            (str(job_id), str(runner_id), token_hash),
+        ).fetchone()
+        if cancelled is not None:
+            return LeaseState(status="cancelled")
         return LeaseState(status=INVALID_OR_EXPIRED)
 
 

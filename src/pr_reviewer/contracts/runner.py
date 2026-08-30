@@ -197,7 +197,7 @@ class NoJob(BaseModel):
 class LeaseState(BaseModel):
     model_config = ConfigDict(frozen=True, extra="forbid")
 
-    status: Literal["active", "invalid_or_expired"]
+    status: Literal["active", "invalid_or_expired", "cancelled"]
 
 
 class JobAcknowledgement(BaseModel):

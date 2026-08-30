@@ -61,6 +61,12 @@ class RunnerClient:
         status = payload.get("status", "invalid_or_expired")
         if status == "active":
             return LeaseState(status="active")
+        if status == "cancelled":
+            return LeaseState(status="cancelled")
+        # invalid_or_expired is the deliberate fallback for an older runner that
+        # does not yet understand a newer hosted lease status. An unrecognised
+        # value must hit this branch on purpose, not via a catch-all that hides
+        # the next Literal addition.
         return LeaseState(status="invalid_or_expired")
 
     def acknowledge(self, job_id: str, lease_token: str, result: JobAcknowledgement) -> None:

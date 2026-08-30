@@ -5,6 +5,7 @@ from typing import Any
 import uvicorn
 from fastapi import FastAPI, Request
 from fastapi.responses import JSONResponse
+from pydantic import ValidationError
 
 from pr_reviewer.config import get_settings
 from pr_reviewer.control_plane.approval_api import router as approval_router
@@ -12,7 +13,9 @@ from pr_reviewer.control_plane.oauth_api import router as oauth_router
 from pr_reviewer.control_plane.pairing_api import router as pairing_router
 from pr_reviewer.control_plane.runner_jobs import router as runner_jobs_router
 from pr_reviewer.github import verify_github_signature
-from pr_reviewer.jobs import enqueue_review_job
+from pr_reviewer.github.delivery import delivery_from_webhook
+from pr_reviewer.github.lifecycle import handle_pull_request_event
+from pr_reviewer.jobs import cancel_review_job, enqueue_review_job
 
 MAX_WEBHOOK_BODY_BYTES = 1024 * 1024
 
@@ -53,8 +56,27 @@ async def github_webhook(request: Request) -> JSONResponse:
     except ValueError:
         return JSONResponse({"error": "malformed json"}, status_code=400)
 
-    result = enqueue_review_job(delivery_id, event_name, payload)
-    return JSONResponse({"result": result}, status_code=202 if result == "enqueued" else 200)
+    if event_name != "pull_request":
+        ignored = enqueue_review_job(delivery_id, event_name, payload)
+        return JSONResponse(
+            {"result": ignored}, status_code=202 if ignored == "enqueued" else 200
+        )
+
+    try:
+        delivery = delivery_from_webhook(delivery_id, event_name, payload)
+    except (ValidationError, ValueError, TypeError, KeyError):
+        return JSONResponse({"error": "incomplete pull_request payload"}, status_code=400)
+
+    decision = handle_pull_request_event(delivery)
+    if decision.kind == "ignore":
+        return JSONResponse({"result": "ignored"}, status_code=200)
+    if decision.kind == "cancel":
+        cancelled = cancel_review_job(delivery)
+        return JSONResponse({"result": cancelled}, status_code=200)
+    enqueued = enqueue_review_job(delivery_id, event_name, payload)
+    return JSONResponse(
+        {"result": enqueued}, status_code=202 if enqueued == "enqueued" else 200
+    )
 
 
 def main() -> None:

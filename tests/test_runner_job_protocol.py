@@ -606,6 +606,30 @@ def test_job_envelope_rejects_unknown_fields_and_command_strings() -> None:
         )
 
 
+def test_runner_client_maps_cancelled_and_handles_unknown_status_on_purpose() -> None:
+    import httpx
+
+    from pr_reviewer.runner.client import RunnerClient
+
+    statuses = ["cancelled"]
+
+    def handler(request: httpx.Request) -> httpx.Response:
+        del request
+        return httpx.Response(200, json={"status": statuses[0]})
+
+    client = RunnerClient("https://control-plane.example", "runner-credential")
+    client._http = httpx.Client(
+        transport=httpx.MockTransport(handler),
+        base_url="https://control-plane.example",
+    )
+    assert client.heartbeat("job-1", "lease-1").status == "cancelled"
+    # invalid_or_expired is the deliberate fallback for an older runner that does
+    # not yet understand a newer hosted lease status. An unrecognised value must
+    # hit this branch on purpose, not via a catch-all that hides the next Literal.
+    statuses[0] = "paused"
+    assert client.heartbeat("job-1", "lease-1").status == "invalid_or_expired"
+
+
 def test_runner_client_polls_outbound_https_and_never_listens() -> None:
     from pr_reviewer.runner import client as runner_client
 
