@@ -561,24 +561,25 @@ which is not a route that exists.
 - ✅ Keep the CLI usable when no graphical browser exists.
 - ✅ Run backend, Bun, and Playwright checks.
 
-### Task 9 - ⬜ Offline behavior, revocation, updates, and uninstall
+### Task 9 - ✅ Offline behavior, revocation, updates, and uninstall
 
 **Files:**
 - Create: `src/pr_reviewer/runner/update.py`
 - Create: `src/pr_reviewer/runner/revocation.py`
-- Modify: `src/pr_reviewer/cli/main.py`
+- Create: `src/pr_reviewer/runner/cli/update.py`
+- Create: `src/pr_reviewer/runner/cli/uninstall.py`
 - Create: `tests/test_runner_offline.py`
 - Create: `tests/test_runner_update.py`
 - Create: `tests/test_runner_uninstall.py`
 
 **TDD steps:**
-- ⬜ Test runner offline before claim, offline during model call, offline after local completion, revoked while running, credential rotation, and control-plane outage.
-- ⬜ Retry redacted acknowledgements without repeating model calls or GitHub posts.
-- ⬜ Stop new work immediately after runner or installation revocation.
-- ⬜ Verify versioned update checksums before replacing files and keep the prior version for rollback.
-- ⬜ Preserve local reviews and container volumes by default on uninstall.
-- ⬜ Require explicit confirmation to remove model keys, runner credentials, SQLite data, and pgvector volumes.
-- ⬜ Run all project checks.
+- ✅ Test runner offline before claim, offline during model call, offline after local completion, revoked while running, credential rotation, and control-plane outage.
+- ✅ Retry redacted acknowledgements without repeating model calls or GitHub posts.
+- ✅ Stop new work immediately after runner or installation revocation.
+- ✅ Verify versioned update checksums before replacing files and keep the prior version for rollback.
+- ✅ Preserve local reviews and container volumes by default on uninstall.
+- ✅ Require explicit confirmation to remove model keys, runner credentials, SQLite data, and pgvector volumes.
+- ✅ Run all project checks.
 
 ### Task 10 - ⬜ End-to-end product proof and release gate
 
