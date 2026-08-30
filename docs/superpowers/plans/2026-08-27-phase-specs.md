@@ -47,7 +47,7 @@ The risk is real. A spec detailed enough for Cursor to one-shot is a spec that t
 
 ---
 
-## Phase 0 - ⬜ Cognitive Design
+## Phase 0 - ✅ Cognitive Design
 
 **Concept.** Before you decide what software to build, describe what a person actually does today. Not the documented process, the real one, including the micro-decisions they make without noticing. Then, for each step, decide what kind of component it is: a trigger, a deterministic tool call, a language-model judgement, or a human checkpoint. Most bad agent systems come from skipping this and letting the model do steps that were never judgement calls. The output of this phase is a map, not code.
 
@@ -77,7 +77,7 @@ The four component types matter. A trigger is an event you react to. A tool is a
 
 ---
 
-## Phase 1 - ⬜ System Architecture
+## Phase 1 - ✅ System Architecture
 
 **Concept.** Turn the map into components with hard edges. For each one, name its trigger, its input, its output, its owner, what it stores, its timeout, its retry rule, and its fallback. The discipline that matters most here is the **trust boundary**: a line across which data changes from trusted to untrusted, or a secret must not cross. Draw those lines before you write code, because retrofitting a boundary into a running system is the hardest refactor there is. You already have proof of that, since migration `0001` is now on the wrong side of one.
 
@@ -107,6 +107,10 @@ The second idea is the **seam**. Where you might swap an implementation later (w
 ---
 
 ## Phase 2 - ⬜ Security and Trust Boundaries
+
+> Design gate **approved** (`docs/phases/phase-2-security-design-gate.md`). This phase stays
+> open because its **test gate** closes only at the end of the build, not because the design
+> work is outstanding.
 
 **Concept.** Threat modelling is four questions: what are the assets, who wants them, how would they get them, and what stops that. For an AI system two threats are unusual. First, **prompt injection**: any text the model reads can try to become instructions, so repository content, diffs, comments and retrieved chunks are all data and never policy. The defence is structural, not persuasive, and it is to route every untrusted string through one wrapper and let no code path bypass it. Telling the model to ignore instructions in the diff is not a defence.
 

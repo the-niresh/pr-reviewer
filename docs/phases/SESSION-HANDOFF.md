@@ -16,9 +16,25 @@ then the phase records, then the plans.
 - ✅ Phase 0 approved. Record: `docs/phases/phase-0-cognitive-design.md`.
 - ✅ Phase 1 approved. Record: `docs/phases/phase-1-system-architecture.md`.
 - ✅ Phase 2 **design gate** approved. Test gate stays open until the end of the build.
-- ✅ Runtime Task 1 and Task 1A shipped on `PR-REVIEWER-3`, not pushed.
-- ⬜ Runtime Task 2 (pairing) is next. Prompt was given, work not started.
-- ⬜ Phase 2 test gate, Phases 3 onward.
+- ✅ Runtime plan complete except Task 10: Tasks 1, 1A, 1B, 2, 2A, 2B, 3, 4, 5, 5A, 6, 7, 8, 9 all
+  shipped. Work is on `main`; the `PR-REVIEWER-*` branches were consolidated and deleted.
+- ✅ Master plan Tasks 1 to 6 shipped. 20 of 44 tasks done overall.
+- ⬜ Runtime Task 10 (end-to-end proof) is blocked: nothing is deployed at `https://niresh.tech`.
+  The domain is fixed by the GitHub App registration; the host is still undecided.
+- ⬜ Next work is master Task 7, then straight to Task 9. Task 9 (evals) must land before Task 11
+  (the first reviewer), so there is a number to beat before there is anything to measure.
+- ⬜ Phase 2 test gate, and the phases behind the remaining 23 master tasks.
+
+## Live environment facts - ✅
+
+- GitHub App registered 2026-08-30. App ID `4771544`. Domain `https://niresh.tech`.
+- The App private key lives at `/srv/claude/secrets/`, mode 0600, **outside the repo**. `.env` holds
+  the PEM content and is mode 0600. `*.pem`, `*.key` and `secrets/` are gitignored.
+- `GITHUB_OAUTH_CLIENT_ID` and `GITHUB_OAUTH_CLIENT_SECRET` are still blank in `.env`.
+- Cursor cannot commit: PID 678903, a Zed-hosted `cursor-agent` running since 20 July, injects a
+  `Co-authored-by: Cursor` trailer that both commit guards correctly reject. It loaded its config
+  five weeks before `attributeCommitsToAgent: false` was written. Fix is `kill 678903`. Until then
+  Claude lands the commits, which works.
 
 ## Decisions made today that are not obvious from the code - ✅
 
