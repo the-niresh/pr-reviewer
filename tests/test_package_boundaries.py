@@ -60,6 +60,7 @@ GUARDED_PACKAGES = frozenset(
         "cli",
         "web",
         "github",
+        "connectors",
     }
 )
 
@@ -76,6 +77,7 @@ EXPECTED_EXISTING_PACKAGES = frozenset(
         "cli",
         "web",
         "github",
+        "connectors",
     }
 )
 
@@ -104,7 +106,7 @@ RUNNER_SIDE_FORBIDDEN_MODULES = frozenset(
 # It is hosted-side: it may import the control plane, and it must not import runner-side packages
 # where the user's model key will live. The same forbidden targets as control_plane, so a new
 # onboarding route cannot grow a back-door import into runner/web/local_auth.
-HOSTED_SIDE_PACKAGES = frozenset({"web"})
+HOSTED_SIDE_PACKAGES = frozenset({"web", "connectors"})
 HOSTED_SIDE_FORBIDDEN_TARGETS = CONTROL_PLANE_FORBIDDEN_TARGETS
 
 
@@ -285,24 +287,6 @@ def test_github_package_is_guarded_and_must_not_import_hosted_or_runner_stores()
     for prefix in forbidden:
         hits |= _imports_matching_prefix(imports, prefix)
     assert not hits, f"github/* must not import hosted or runner stores, found: {sorted(hits)}"
-
-
-def test_connectors_package_is_hosted_and_must_not_import_runner_side() -> None:
-    """connectors/ wraps hosted GitHub App calls and writes connector_runs to Neon.
-
-    It is hosted-side, same outbound rule as web/: no runner, local_store, reviewer,
-    retrieval, verification, or containers. A Protocol in github/ is fine. Clone logic
-    is not.
-    """
-    assert "connectors" in GUARDED_PACKAGES
-    assert "connectors" in EXPECTED_EXISTING_PACKAGES
-    assert "connectors" in HOSTED_SIDE_PACKAGES
-    package_dir = SRC_ROOT / "connectors"
-    assert package_dir.is_dir()
-    imports = collect_imports(package_dir)
-    for forbidden in HOSTED_SIDE_FORBIDDEN_TARGETS:
-        hits = _imports_targeting(imports, forbidden)
-        assert not hits, f"connectors/* must not import {forbidden}/*, found: {sorted(hits)}"
 
 
 def test_connectors_package_is_hosted_and_must_not_import_runner_side() -> None:

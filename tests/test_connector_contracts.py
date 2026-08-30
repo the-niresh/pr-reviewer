@@ -13,15 +13,40 @@ from __future__ import annotations
 import json
 import uuid
 from pathlib import Path
+from typing import TYPE_CHECKING, Any
 
 import pytest
 from pydantic import ValidationError
+
+if TYPE_CHECKING:
+    from pr_reviewer.connectors.audit import ConnectorAudit
 
 from pr_reviewer.db.client import connection
 from pr_reviewer.jobs import enqueue_review_job
 
 _GITHUB_TOKEN_PREFIXES = ("gho_", "ghu_", "ghs_", "github_pat_")
-_PRIVATE_KEY = "-----BEGIN PRIVATE KEY-----"
+_PRIVATE_KEY_BODY = (
+    "MIIEvQIBADANBgkqhkiG9w0BAQEFAASCBKcwggSjAgEAAoIBAQCstolenkeymaterial0001"
+)
+_PRIVATE_KEY = (
+    "-----BEGIN PRIVATE KEY-----\n"
+    f"{_PRIVATE_KEY_BODY}\n"
+    "-----END PRIVATE KEY-----"
+)
+_RSA_KEY_BODY = "MIIEowIBAAKCAQEAstolenrsamaterial0002"
+_RSA_KEY = (
+    "-----BEGIN RSA PRIVATE KEY-----\n"
+    f"{_RSA_KEY_BODY}\n"
+    "-----END RSA PRIVATE KEY-----"
+)
+_OPENSSH_KEY_BODY = "b3BlbnNzaC1rZXktdjEAAAAABstolenopensshmaterial0003"
+_OPENSSH_KEY = (
+    "-----BEGIN OPENSSH PRIVATE KEY-----\n"
+    f"{_OPENSSH_KEY_BODY}\n"
+    "-----END OPENSSH PRIVATE KEY-----"
+)
+_TRUNCATED_KEY_BODY = "MIIEvQstolentruncatedmaterial0004"
+_TRUNCATED_KEY = f"-----BEGIN PRIVATE KEY-----\n{_TRUNCATED_KEY_BODY}"
 _SOURCE_SNIPPET = "def stolen_auth():\n    return secret"
 _CREDENTIAL_URL = "https://x-access-token:gho_leaked@github.com/acme/widgets.git"
 _TRACE_MODULE = (
@@ -56,10 +81,10 @@ def _job_with_trace() -> tuple[str, str]:
     return str(row["id"]), str(row["trace_id"])
 
 
-def _audit(*, trace_id: str, **overrides: object) -> object:
+def _audit(*, trace_id: str, **overrides: Any) -> ConnectorAudit:
     from pr_reviewer.connectors.audit import ConnectorAudit
 
-    fields: dict[str, object] = {
+    fields: dict[str, Any] = {
         "trace_id": uuid.UUID(trace_id),
         "connector": "github",
         "operation": "fetch_pull_request",
@@ -86,7 +111,8 @@ def _walk_for_secrets(value: object) -> None:
     lowered = text.lower()
     for prefix in _GITHUB_TOKEN_PREFIXES:
         assert prefix not in lowered, f"audit carried GitHub token pattern {prefix}"
-    assert _PRIVATE_KEY.lower() not in lowered
+    assert "-----begin private key-----" not in lowered
+    assert _PRIVATE_KEY_BODY.lower() not in lowered
     assert "stolen_auth" not in text
     assert "x-access-token:" not in lowered
     assert "authorization" not in lowered or "bearer" not in lowered
@@ -96,7 +122,7 @@ def test_connector_audit_rejects_raw_headers() -> None:
     from pr_reviewer.connectors.audit import ConnectorAudit
 
     with pytest.raises(ValidationError):
-        ConnectorAudit(
+        ConnectorAudit(  # type: ignore[call-arg]
             trace_id=uuid.uuid4(),
             connector="github",
             operation="fetch_pull_request",
@@ -111,7 +137,7 @@ def test_connector_audit_rejects_raw_headers() -> None:
 def test_connector_audit_rejects_a_request_or_response_dictionary() -> None:
     from pr_reviewer.connectors.audit import ConnectorAudit
 
-    base = {
+    base: dict[str, Any] = {
         "trace_id": uuid.uuid4(),
         "connector": "github",
         "operation": "fetch_pull_request",
@@ -121,15 +147,15 @@ def test_connector_audit_rejects_a_request_or_response_dictionary() -> None:
         "payload_hash": "a" * 64,
     }
     with pytest.raises(ValidationError):
-        ConnectorAudit(**base, request={"url": _CREDENTIAL_URL})
+        ConnectorAudit(**base, request={"url": _CREDENTIAL_URL})  # type: ignore[call-arg]
     with pytest.raises(ValidationError):
-        ConnectorAudit(**base, response={"body": _SOURCE_SNIPPET})
+        ConnectorAudit(**base, response={"body": _SOURCE_SNIPPET})  # type: ignore[call-arg]
 
 
 def test_connector_audit_rejects_body_payload_token_and_private_key_fields() -> None:
     from pr_reviewer.connectors.audit import ConnectorAudit
 
-    base = {
+    base: dict[str, Any] = {
         "trace_id": uuid.uuid4(),
         "connector": "github",
         "operation": "fetch_pull_request",
@@ -156,6 +182,45 @@ def test_connector_audit_rejects_a_token_stuffed_into_a_typed_string_field() -> 
         _audit(trace_id=str(uuid.uuid4()), external_id="gho_must_never_be_an_id")
     with pytest.raises(ValidationError):
         _audit(trace_id=str(uuid.uuid4()), payload_hash=_SOURCE_SNIPPET)
+
+
+def test_connector_audit_rejects_and_redacts_classic_pat_and_refresh_tokens() -> None:
+    from pr_reviewer.connectors.audit import redact_audit_value
+
+    ghp = "ghp_" + "A" * 36
+    ghr = "ghr_" + "B" * 14
+    with pytest.raises(ValidationError):
+        _audit(trace_id=str(uuid.uuid4()), external_id=ghp)
+    with pytest.raises(ValidationError):
+        _audit(trace_id=str(uuid.uuid4()), external_id=ghr)
+    assert "ghp_" not in str(redact_audit_value(ghp)).lower()
+    assert "ghr_" not in str(redact_audit_value(ghr)).lower()
+
+
+def test_connector_audit_rejects_a_github_token_prefix_that_does_not_exist_yet() -> None:
+    """Fails if the defenses revert to an enumerated prefix list."""
+    from pr_reviewer.connectors.audit import redact_audit_value
+
+    future = "ghz_next_year_token"
+    with pytest.raises(ValidationError):
+        _audit(trace_id=str(uuid.uuid4()), external_id=future)
+    assert "ghz_" not in str(redact_audit_value(future)).lower()
+
+
+def test_connector_audit_rejects_rsa_and_openssh_pem_headers() -> None:
+    with pytest.raises(ValidationError):
+        _audit(trace_id=str(uuid.uuid4()), external_id="-----BEGIN RSA PRIVATE KEY-----")
+    with pytest.raises(ValidationError):
+        _audit(trace_id=str(uuid.uuid4()), external_id="-----BEGIN OPENSSH PRIVATE KEY-----")
+
+
+def test_connector_audit_keeps_a_github_request_id() -> None:
+    from pr_reviewer.connectors.audit import redact_audit_value
+
+    request_id = "C7E4:3A2F:1B90:9D11:80C0"
+    audit = _audit(trace_id=str(uuid.uuid4()), external_id=request_id)
+    assert audit.external_id == request_id
+    assert redact_audit_value(request_id) == request_id
 
 
 def test_connector_audit_dump_contains_hash_and_bytes_never_a_body() -> None:
@@ -185,6 +250,21 @@ def test_redaction_is_a_second_defense_and_strips_secrets_from_free_text() -> No
     )
     _walk_for_secrets(redacted)
     assert "gho_leaked" not in str(redact_audit_value("Bearer gho_leaked"))
+
+
+def test_redaction_removes_pem_bodies_not_just_headers() -> None:
+    from pr_reviewer.connectors.audit import redact_audit_value
+
+    for pem, body in (
+        (_PRIVATE_KEY, _PRIVATE_KEY_BODY),
+        (_RSA_KEY, _RSA_KEY_BODY),
+        (_OPENSSH_KEY, _OPENSSH_KEY_BODY),
+        (_TRUNCATED_KEY, _TRUNCATED_KEY_BODY),
+    ):
+        redacted = str(redact_audit_value(pem))
+        assert body not in redacted
+        assert "BEGIN" not in redacted
+        assert "END PRIVATE KEY" not in redacted
 
 
 def test_record_connector_run_stores_the_job_trace_id_and_no_body() -> None:
@@ -275,3 +355,60 @@ def test_connectors_package_is_hosted_and_must_not_import_runner_side() -> None:
     for forbidden in HOSTED_SIDE_FORBIDDEN_TARGETS:
         hits = _imports_targeting(imports, forbidden)
         assert not hits, f"connectors/* must not import {forbidden}/*, found: {sorted(hits)}"
+
+
+def test_connector_result_cannot_be_recorded() -> None:
+    """ConnectorResult is in-process. Only ConnectorAudit is persistable.
+
+    Bounding T would still leak: InstallationToken and PullRequestSnapshot both carry
+    secrets. The persist path must reject the result type itself.
+    """
+    from pr_reviewer.connectors.audit import record_connector_run
+    from pr_reviewer.connectors.base import ConnectorResult
+
+    result = ConnectorResult(
+        connector="github",
+        operation="fetch_pull_request",
+        outcome="success",
+        value={"body": "@@ stolen", "token": "ghs_must_never_be_audited"},
+        error_kind=None,
+        status_code=200,
+        latency_ms=1,
+        request_bytes=1,
+        response_bytes=1,
+    )
+    with connection() as conn, pytest.raises(TypeError, match="in-process"):
+        record_connector_run(conn, result, None)  # type: ignore[arg-type]
+
+
+def test_record_connector_run_parameter_is_audit_not_result() -> None:
+    import ast
+    from pathlib import Path
+
+    source = (
+        Path(__file__).resolve().parent.parent
+        / "src"
+        / "pr_reviewer"
+        / "connectors"
+        / "audit.py"
+    ).read_text(encoding="utf-8")
+    assert "ConnectorResult" not in source
+    assert ".value" not in source
+    tree = ast.parse(source)
+    found = False
+    for node in ast.walk(tree):
+        if isinstance(node, ast.FunctionDef) and node.name == "record_connector_run":
+            found = True
+            audit_arg = node.args.args[1]
+            assert audit_arg.arg == "audit"
+            assert audit_arg.annotation is not None
+            annotation = ast.unparse(audit_arg.annotation)
+            assert annotation == "ConnectorAudit"
+    assert found
+
+
+def test_connector_result_has_no_persist_path() -> None:
+    from pr_reviewer.connectors.base import ConnectorResult
+
+    for name in ("persist", "record", "save", "to_row", "to_audit"):
+        assert not hasattr(ConnectorResult, name)

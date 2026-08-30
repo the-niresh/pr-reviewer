@@ -116,7 +116,7 @@ def test_wrapped_token_mint_records_status_latency_and_no_token() -> None:
     assert result.latency_ms >= 0
     assert result.request_bytes >= 0
     assert result.response_bytes > 0
-    assert result.value.token == "ghs_must_never_be_audited"
+    assert result.value.token == "ghs_must_never_be_audited"  # type: ignore[union-attr]
     with connection() as conn:
         row = conn.execute(
             "select * from connector_runs where trace_id = %s",

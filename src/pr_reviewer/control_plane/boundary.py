@@ -136,6 +136,21 @@ ALLOWLIST: dict[tuple[str, str], str] = {
         "Our own migration filename: code structure metadata, not review content."
     ),
     ("schema_migrations", "checksum"): "sha256 hex digest of a migration file, an opaque hash.",
+    ("connector_runs", "connector"): (
+        "Fixed enum ('github'), the outbound API this row audited, not review content."
+    ),
+    ("connector_runs", "operation"): (
+        "Fixed enum ('create_installation_token', 'fetch_pull_request'), the named call that "
+        "ran, not a request or response body."
+    ),
+    ("connector_runs", "external_id"): (
+        "Opaque GitHub request identifier when one is present. Typed and redacted so it cannot "
+        "hold a token, a header, or a payload."
+    ),
+    ("connector_runs", "payload_hash"): (
+        "sha256 hex of operation, status, and byte counts only. The payload itself is never "
+        "stored; this hash cannot be reversed into a body, a token, or a patch."
+    ),
 }
 
 

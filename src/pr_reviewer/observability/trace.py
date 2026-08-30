@@ -1,17 +1,17 @@
 """Cross-store trace reconstruction (Runtime Task 5A).
 
 The plan this task comes from wrote reconstruct_trace against three inputs: the JobEnvelope
-trace ID (Task 3), hosted connector_runs (master Task 8), and local events (Task 5). Task 8 is
-unstarted -- there is no connector_runs table anywhere in this schema -- so this module joins the
-two stores that exist today, hosted agent_events and local local_events, through
+trace ID (Task 3), hosted connector_runs (master Task 8), and local events (Task 5). Task 8 now
+writes connector_runs with that same trace_id as the join key. reconstruct_trace stays
+two-source for now: hosted agent_events and local local_events, through
 control_plane.runner_jobs.fetch_hosted_trace and local_store.sqlite.LocalStore.fetch_trace.
-reconstruct_trace's signature takes the already-fetched HostedTrace and LocalTrace, not live
-connections, so a third source becomes an added parameter later, not a rewrite of the merge
-itself.
+Joining connector_runs into this merge is Task 8A. reconstruct_trace's signature takes the
+already-fetched HostedTrace and LocalTrace, not live connections, so a third source becomes an
+added parameter later, not a rewrite of the merge itself.
 
-Neither table records a span_id or a parent_span_id -- that requirement targeted connector_runs,
-which does not exist, and no migration is in this task's scope. So this module derives them from
-data each store already, genuinely records:
+Neither agent_events nor local_events records a span_id or a parent_span_id -- that requirement
+targeted connector_runs, which now exists but is not yet read here (Task 8A). So this module
+derives them from data each of the two current stores already, genuinely records:
 
 - span_id is deterministic, not random: f"{origin}:{sequence}", where sequence is that table's own
   monotonic counter (agent_events.sequence, local_events.sequence). Two runs over the same rows
