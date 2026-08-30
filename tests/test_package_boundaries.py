@@ -285,3 +285,39 @@ def test_github_package_is_guarded_and_must_not_import_hosted_or_runner_stores()
     for prefix in forbidden:
         hits |= _imports_matching_prefix(imports, prefix)
     assert not hits, f"github/* must not import hosted or runner stores, found: {sorted(hits)}"
+
+
+def test_connectors_package_is_hosted_and_must_not_import_runner_side() -> None:
+    """connectors/ wraps hosted GitHub App calls and writes connector_runs to Neon.
+
+    It is hosted-side, same outbound rule as web/: no runner, local_store, reviewer,
+    retrieval, verification, or containers. A Protocol in github/ is fine. Clone logic
+    is not.
+    """
+    assert "connectors" in GUARDED_PACKAGES
+    assert "connectors" in EXPECTED_EXISTING_PACKAGES
+    assert "connectors" in HOSTED_SIDE_PACKAGES
+    package_dir = SRC_ROOT / "connectors"
+    assert package_dir.is_dir()
+    imports = collect_imports(package_dir)
+    for forbidden in HOSTED_SIDE_FORBIDDEN_TARGETS:
+        hits = _imports_targeting(imports, forbidden)
+        assert not hits, f"connectors/* must not import {forbidden}/*, found: {sorted(hits)}"
+
+
+def test_connectors_package_is_hosted_and_must_not_import_runner_side() -> None:
+    """connectors/ wraps hosted GitHub App calls and writes connector_runs to Neon.
+
+    It is hosted-side, same outbound rule as web/: no runner, local_store, reviewer,
+    retrieval, verification, or containers. A Protocol in github/ is fine. Clone logic
+    is not.
+    """
+    assert "connectors" in GUARDED_PACKAGES
+    assert "connectors" in EXPECTED_EXISTING_PACKAGES
+    assert "connectors" in HOSTED_SIDE_PACKAGES
+    package_dir = SRC_ROOT / "connectors"
+    assert package_dir.is_dir()
+    imports = collect_imports(package_dir)
+    for forbidden in HOSTED_SIDE_FORBIDDEN_TARGETS:
+        hits = _imports_targeting(imports, forbidden)
+        assert not hits, f"connectors/* must not import {forbidden}/*, found: {sorted(hits)}"
