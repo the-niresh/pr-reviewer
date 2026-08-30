@@ -14,7 +14,12 @@ concurrent completion before it is marked consumed.
 
 from __future__ import annotations
 
+import base64
+import hashlib
+import hmac
+import json
 import secrets
+import time
 from datetime import timedelta
 from typing import Protocol
 
@@ -25,6 +30,7 @@ from pr_reviewer.config import get_settings
 from pr_reviewer.contracts.runner import VerifiedInstallationAccess
 from pr_reviewer.control_plane.github_auth import (
     AccessDenied,
+    LiveInstallationAssertion,
     ReturnToRejected,
     SignInChallenge,
     SignInDenied,
@@ -47,6 +53,7 @@ STATE_TTL_SECONDS = 600
 # unvalidated return_to on an OAuth callback is an open redirect, and an open redirect here is a
 # code-leak path. This list is expected to grow as real post-sign-in destinations are built.
 ALLOWED_RETURN_TO_PATHS = frozenset({"/dashboard"})
+LIVE_SIGN_IN_COOKIE_NAME = "gh_live_sign_in"
 
 
 class HttpClient(Protocol):
@@ -146,47 +153,166 @@ def complete_sign_in(
     )
 
 
-def verify_installation_access(
+def capture_live_assertion(
     user: VerifiedGitHubUser,
-    installation_id: int,
     *,
     http_client: HttpClient | None = None,
-) -> VerifiedInstallationAccess | AccessDenied:
-    """The one construction site for VerifiedInstallationAccess in src/.
+) -> LiveInstallationAssertion:
+    """Call /user/installations once, then drop the token. The returned assertion is the outcome."""
 
-    Control is proven by calling GitHub's /user/installations with the user's own OAuth token,
-    the same call GitHub's own UI relies on, never inferred from anything stored locally: there is
-    deliberately no installation-ownership table, because GitHub is the authoritative source and a
-    local copy would go stale the moment an installation is transferred or removed there.
-    """
     client = http_client or httpx.Client()
     headers = {
         "authorization": f"Bearer {user.access_token.get_secret_value()}",
         "accept": "application/vnd.github+json",
     }
-
     installations_response = client.get(GITHUB_INSTALLATIONS_URL, headers=headers, timeout=10.0)
     installations_response.raise_for_status()
-    controlled_installation_ids = {
-        int(installation["id"])
-        for installation in installations_response.json().get("installations", [])
-    }
-    if installation_id not in controlled_installation_ids:
+    installations: dict[int, dict[int, str]] = {}
+    for installation in installations_response.json().get("installations", []):
+        installation_id = int(installation["id"])
+        repositories_response = client.get(
+            f"{GITHUB_INSTALLATIONS_URL}/{installation_id}/repositories",
+            headers=headers,
+            timeout=10.0,
+        )
+        repositories_response.raise_for_status()
+        installations[installation_id] = {
+            int(repository["id"]): str(repository["name"])
+            for repository in repositories_response.json().get("repositories", [])
+        }
+    return LiveInstallationAssertion(
+        github_user_id=user.github_user_id,
+        installations=installations,
+        expires_at=int(time.time()) + STATE_TTL_SECONDS,
+    )
+
+
+def verify_installation_access(
+    user: VerifiedGitHubUser | None,
+    installation_id: int,
+    *,
+    http_client: HttpClient | None = None,
+    assertion: LiveInstallationAssertion | None = None,
+) -> VerifiedInstallationAccess | AccessDenied:
+    """The one construction site for VerifiedInstallationAccess in src/.
+
+    Control is proven either by a live GitHub /user/installations call with the user's own OAuth
+    token, or by a LiveInstallationAssertion captured from that same call at sign-in. There is
+    deliberately no installation-ownership table, because GitHub is the authoritative source and a
+    local copy would go stale the moment an installation is transferred or removed there.
+    """
+    github_user_id: int
+    repositories: dict[int, str]
+    if assertion is not None:
+        if assertion.expires_at <= int(time.time()):
+            return AccessDenied(reason="installation_not_controlled")
+        matched = assertion.installations.get(installation_id)
+        if matched is None:
+            return AccessDenied(reason="installation_not_controlled")
+        github_user_id = assertion.github_user_id
+        repositories = matched
+    elif user is not None:
+        client = http_client or httpx.Client()
+        headers = {
+            "authorization": f"Bearer {user.access_token.get_secret_value()}",
+            "accept": "application/vnd.github+json",
+        }
+
+        installations_response = client.get(GITHUB_INSTALLATIONS_URL, headers=headers, timeout=10.0)
+        installations_response.raise_for_status()
+        controlled_installation_ids = {
+            int(installation["id"])
+            for installation in installations_response.json().get("installations", [])
+        }
+        if installation_id not in controlled_installation_ids:
+            return AccessDenied(reason="installation_not_controlled")
+
+        repositories_response = client.get(
+            f"{GITHUB_INSTALLATIONS_URL}/{installation_id}/repositories",
+            headers=headers,
+            timeout=10.0,
+        )
+        repositories_response.raise_for_status()
+        github_user_id = user.github_user_id
+        repositories = {
+            int(repository["id"]): str(repository["name"])
+            for repository in repositories_response.json().get("repositories", [])
+        }
+    else:
         return AccessDenied(reason="installation_not_controlled")
 
-    repositories_response = client.get(
-        f"{GITHUB_INSTALLATIONS_URL}/{installation_id}/repositories",
-        headers=headers,
-        timeout=10.0,
-    )
-    repositories_response.raise_for_status()
-    repositories = {
-        int(repository["id"]): str(repository["name"])
-        for repository in repositories_response.json().get("repositories", [])
-    }
-
     return VerifiedInstallationAccess(
-        github_user_id=user.github_user_id,
+        github_user_id=github_user_id,
         installation_id=installation_id,
         repositories=repositories,
     )
+
+
+def issue_live_sign_in(assertion: LiveInstallationAssertion) -> str:
+    """Seal the verified installation map into an HttpOnly cookie value.
+
+    The OAuth token is not in this payload. HMAC proves the control plane signed it; expires_at
+    is the assertion's own freshness, because an HMAC does not expire.
+    """
+    payload = {
+        "github_user_id": assertion.github_user_id,
+        "installations": {
+            str(installation_id): {str(repo_id): name for repo_id, name in repos.items()}
+            for installation_id, repos in assertion.installations.items()
+        },
+        "expires_at": assertion.expires_at,
+    }
+    raw = _b64encode(json.dumps(payload, separators=(",", ":")).encode("utf-8"))
+    digest = hmac.new(_sign_key(), raw.encode("ascii"), hashlib.sha256).hexdigest()
+    return f"{raw}.{digest}"
+
+
+def read_live_sign_in(cookie: str) -> LiveInstallationAssertion | None:
+    if "." not in cookie:
+        return None
+    raw, digest = cookie.rsplit(".", 1)
+    expected = hmac.new(_sign_key(), raw.encode("ascii"), hashlib.sha256).hexdigest()
+    if not hmac.compare_digest(digest, expected):
+        return None
+    try:
+        payload = json.loads(_b64decode(raw).decode("utf-8"))
+        expires_at = int(payload["expires_at"])
+        github_user_id = int(payload["github_user_id"])
+        installations = _installations_from_payload(payload["installations"])
+    except (ValueError, KeyError, TypeError, json.JSONDecodeError):
+        return None
+    if expires_at <= int(time.time()):
+        return None
+    return LiveInstallationAssertion(
+        github_user_id=github_user_id,
+        installations=installations,
+        expires_at=expires_at,
+    )
+
+
+def _installations_from_payload(raw: object) -> dict[int, dict[int, str]]:
+    if not isinstance(raw, dict):
+        raise TypeError("installations must be an object")
+    installations: dict[int, dict[int, str]] = {}
+    for installation_key, repos in raw.items():
+        if not isinstance(repos, dict):
+            raise TypeError("installation repositories must be an object")
+        installations[int(installation_key)] = {
+            int(repo_id): str(name) for repo_id, name in repos.items()
+        }
+    return installations
+
+
+def _sign_key() -> bytes:
+    settings = get_settings()
+    secret = settings.github_oauth_client_secret or settings.github_webhook_secret
+    return secret.encode("utf-8")
+
+
+def _b64encode(data: bytes) -> str:
+    return base64.urlsafe_b64encode(data).decode("ascii").rstrip("=")
+
+
+def _b64decode(text: str) -> bytes:
+    pad = "=" * ((-len(text)) % 4)
+    return base64.urlsafe_b64decode(text + pad)

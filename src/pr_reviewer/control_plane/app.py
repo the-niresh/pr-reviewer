@@ -7,6 +7,7 @@ from fastapi import FastAPI, Request
 from fastapi.responses import JSONResponse
 
 from pr_reviewer.config import get_settings
+from pr_reviewer.control_plane.approval_api import router as approval_router
 from pr_reviewer.control_plane.oauth_api import router as oauth_router
 from pr_reviewer.control_plane.pairing_api import router as pairing_router
 from pr_reviewer.control_plane.runner_jobs import router as runner_jobs_router
@@ -18,6 +19,7 @@ MAX_WEBHOOK_BODY_BYTES = 1024 * 1024
 app = FastAPI(title="PR Reviewer")
 app.include_router(pairing_router)
 app.include_router(oauth_router)
+app.include_router(approval_router)
 app.include_router(runner_jobs_router)
 
 

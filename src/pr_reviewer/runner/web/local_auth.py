@@ -4,8 +4,8 @@ Binds 127.0.0.1 only and signs its own session. The model API key is written to 
 never logged, never put in os.environ, and never returned in a response body.
 
 Pairing exchange and pairing status go through an injectable client. This module does not import
-the hosted pairing or OAuth packages. Status is the Task 8 seam: until runtime Task 2B lands, a
-production client reports pending and that is expected.
+the hosted pairing or OAuth packages. Production status polls the hosted
+/api/runner/pairing-codes/status route with the pairing code and the PKCE challenge.
 
 The one origin crossing is sending the browser to the hosted GitHub sign-in URL. return_to is an
 allowlisted hosted path (/dashboard), not a loopback URL. The local app never receives an OAuth
@@ -59,7 +59,7 @@ class ExchangeBody(BaseModel):
 
 
 class PendingPairingClient:
-    """Production stand-in until Task 2B. exchange talks to hosted HTTP; status stays pending."""
+    """Hosted pairing over HTTPS. exchange and status are both outbound polls."""
 
     def __init__(self, hosted_origin: str) -> None:
         self._hosted_origin = hosted_origin.rstrip("/")
@@ -86,8 +86,23 @@ class PendingPairingClient:
         return RunnerCredential.model_validate(payload)
 
     def status(self, code: str, challenge: str) -> PairingStatus:
-        del code, challenge
-        return "pending"
+        import httpx
+
+        response = httpx.get(
+            f"{self._hosted_origin}/api/runner/pairing-codes/status",
+            params={"code": code, "challenge": challenge},
+            timeout=30.0,
+        )
+        payload = response.json()
+        raw_state = payload.get("state")
+        result: PairingStatus
+        if raw_state == "pending":
+            result = "pending"
+        elif raw_state == "exchangeable":
+            result = "exchangeable"
+        else:
+            result = "invalid_or_expired"
+        return result
 
 
 def create_local_onboarding_app(

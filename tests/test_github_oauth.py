@@ -398,3 +398,135 @@ def test_begin_sign_in_route_rejects_return_to_outside_allowlist() -> None:
     )
 
     assert response.status_code == 400
+
+
+_GITHUB_TOKEN_PREFIXES = ("gho_", "ghu_", "ghs_", "github_pat_")
+
+
+def _decode_live_sign_in_payload(cookie: str) -> dict[str, object]:
+    import base64
+    import json
+
+    raw, _digest = cookie.rsplit(".", 1)
+    pad = "=" * ((-len(raw)) % 4)
+    payload: dict[str, object] = json.loads(base64.urlsafe_b64decode(raw + pad))
+    return payload
+
+
+def _assert_no_github_token_pattern(value: object) -> None:
+    if isinstance(value, dict):
+        for key, nested in value.items():
+            _assert_no_github_token_pattern(key)
+            _assert_no_github_token_pattern(nested)
+        return
+    if isinstance(value, list):
+        for nested in value:
+            _assert_no_github_token_pattern(nested)
+        return
+    text = str(value).lower()
+    for prefix in _GITHUB_TOKEN_PREFIXES:
+        assert prefix not in text, f"cookie field carried a GitHub token pattern {prefix}"
+
+
+def test_live_sign_in_cookie_does_not_carry_a_github_token() -> None:
+    from pr_reviewer.control_plane.github_oauth import (
+        capture_live_assertion,
+        issue_live_sign_in,
+    )
+
+    user = VerifiedGitHubUser(
+        github_user_id=42,
+        login="octocat",
+        access_token=SecretStr("gho_must_never_appear_in_the_cookie"),
+        return_to="/dashboard",
+    )
+    fake_client = FakeGitHubClient(
+        access_token="gho_must_never_appear_in_the_cookie",
+        installation_ids=(9001,),
+        repositories_by_installation={9001: {111: "widgets"}},
+    )
+    cookie = issue_live_sign_in(capture_live_assertion(user, http_client=fake_client))
+    payload = _decode_live_sign_in_payload(cookie)
+    assert "access_token" not in payload
+    _assert_no_github_token_pattern(payload)
+
+
+def test_live_sign_in_assertion_expires_even_when_the_hmac_is_still_valid() -> None:
+    import time
+
+    from pr_reviewer.control_plane.github_auth import LiveInstallationAssertion
+    from pr_reviewer.control_plane.github_oauth import issue_live_sign_in, read_live_sign_in
+
+    assertion = LiveInstallationAssertion(
+        github_user_id=42,
+        installations={9001: {111: "widgets"}},
+        expires_at=int(time.time()) - 1,
+    )
+    cookie = issue_live_sign_in(assertion)
+    assert read_live_sign_in(cookie) is None
+
+
+def test_capture_live_assertion_calls_user_installations_once() -> None:
+    from pr_reviewer.control_plane.github_oauth import (
+        GITHUB_INSTALLATIONS_URL,
+        capture_live_assertion,
+    )
+
+    user = make_verified_github_user()
+    fake_client = FakeGitHubClient(
+        installation_ids=(9001, 9002),
+        repositories_by_installation={
+            9001: {111: "widgets"},
+            9002: {222: "gadgets"},
+        },
+    )
+    assertion = capture_live_assertion(user, http_client=fake_client)
+    installation_list_calls = [
+        method_url
+        for method_url in fake_client.calls
+        if method_url == ("GET", GITHUB_INSTALLATIONS_URL)
+    ]
+    assert len(installation_list_calls) == 1
+    assert assertion.github_user_id == 42
+    assert assertion.installations == {9001: {111: "widgets"}, 9002: {222: "gadgets"}}
+    assert assertion.expires_at > 0
+
+
+def test_read_live_sign_in_returns_the_sealed_installation_map() -> None:
+    import time
+
+    from pr_reviewer.control_plane.github_auth import LiveInstallationAssertion
+    from pr_reviewer.control_plane.github_oauth import issue_live_sign_in, read_live_sign_in
+
+    assertion = LiveInstallationAssertion(
+        github_user_id=42,
+        installations={9001: {111: "widgets"}},
+        expires_at=int(time.time()) + 600,
+    )
+    restored = read_live_sign_in(issue_live_sign_in(assertion))
+    assert restored == assertion
+
+
+def test_verify_installation_access_from_assertion_does_not_call_github() -> None:
+    import time
+
+    from pr_reviewer.contracts.runner import VerifiedInstallationAccess
+    from pr_reviewer.control_plane.github_auth import AccessDenied, LiveInstallationAssertion
+    from pr_reviewer.control_plane.github_oauth import verify_installation_access
+
+    assertion = LiveInstallationAssertion(
+        github_user_id=42,
+        installations={9001: {111: "widgets"}},
+        expires_at=int(time.time()) + 600,
+    )
+    exploding = ExplodingHttpClient()
+    granted = verify_installation_access(
+        None, 9001, http_client=exploding, assertion=assertion
+    )
+    denied = verify_installation_access(
+        None, 9002, http_client=exploding, assertion=assertion
+    )
+    assert isinstance(granted, VerifiedInstallationAccess)
+    assert granted.repositories == {111: "widgets"}
+    assert isinstance(denied, AccessDenied)
+    assert denied.reason == "installation_not_controlled"

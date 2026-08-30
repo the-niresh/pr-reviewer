@@ -1,12 +1,9 @@
-"""HTTP surface for one-time runner pairing (Runtime Task 2).
+"""HTTP surface for one-time runner pairing (Runtime Task 2 and 2B).
 
-Only the steps that need no unverified authorization claim are exposed here: a runner creating a
-pairing code, a runner exchanging one that was approved out-of-band, and a runner rotating its own
-credential. Approving a code needs a real, GitHub-verified VerifiedInstallationAccess, and this
-task does not build the OAuth flow that produces one safely, so there is deliberately no HTTP
-route here for it yet. Adding one before Task 2A wires real OAuth would mean trusting whatever
-installation_id and user_id a client cared to send, which is exactly the class of bug
-docs/phases/phase-2-security-design-gate.md exists to keep out.
+Runner-facing routes only: create a pairing code, poll whether it is exchangeable, exchange it,
+rotate a credential. Approval is not here. It lives on the hosted dashboard under
+control_plane/approval_api.py and consumes a live GitHub sign-in rather than trusting a
+caller-supplied github_user_id and installation_id.
 """
 
 from __future__ import annotations
@@ -15,7 +12,11 @@ from fastapi import APIRouter, Header, HTTPException
 from pydantic import BaseModel
 
 from pr_reviewer.contracts.runner import AssignmentRefused, PairingDenied, RunnerAuthDenied
-from pr_reviewer.control_plane.pairing import create_pairing_code, exchange_pairing_code
+from pr_reviewer.control_plane.pairing import (
+    create_pairing_code,
+    exchange_pairing_code,
+    pairing_status,
+)
 from pr_reviewer.control_plane.runner_auth import authenticate_runner, rotate_runner_credential
 
 router = APIRouter(prefix="/api/runner", tags=["runner-pairing"])
@@ -35,6 +36,11 @@ class ExchangePairingCodeRequest(BaseModel):
 def create_pairing_code_route(body: CreatePairingCodeRequest) -> dict[str, str]:
     challenge = create_pairing_code(body.device_name, body.challenge)
     return {"code": challenge.code, "expires_at": challenge.expires_at.isoformat()}
+
+
+@router.get("/pairing-codes/status")
+def pairing_status_route(code: str, challenge: str) -> dict[str, str]:
+    return {"state": pairing_status(code, challenge)}
 
 
 @router.post("/pairing-codes/exchange")

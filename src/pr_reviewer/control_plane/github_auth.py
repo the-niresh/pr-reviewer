@@ -60,11 +60,12 @@ class VerifiedGitHubUser(BaseModel):
     """The result of a completed GitHub sign-in.
 
     access_token is the user's own OAuth token, live only long enough to call
-    verify_installation_access once. It is never written to the database, never logged, and
-    never sent to a runner: see docs/phases/phase-2-security-design-gate.md section 7, where it
-    is deliberately absent from the secret lifecycle table because it must never live long
-    enough to have one. SecretStr keeps it out of reprs and str() by accident; callers still
-    have to ask for it explicitly with get_secret_value().
+    capture_live_assertion once (one /user/installations round-trip). It is never written to the
+    database, never logged, never sealed into a cookie, and never sent to a runner: see
+    docs/phases/phase-2-security-design-gate.md section 7, where it is deliberately absent from
+    the secret lifecycle table because it must never live long enough to have one. SecretStr
+    keeps it out of reprs and str() by accident; callers still have to ask for it explicitly
+    with get_secret_value().
     """
 
     model_config = ConfigDict(frozen=True)
@@ -73,6 +74,22 @@ class VerifiedGitHubUser(BaseModel):
     login: str = Field(min_length=1)
     access_token: SecretStr
     return_to: str
+
+
+class LiveInstallationAssertion(BaseModel):
+    """Verified GitHub installations captured at sign-in, sealed into the live-sign-in cookie.
+
+    This is the outcome of one /user/installations call, not the OAuth token used to make it.
+    github_user_id and the installation/repository map are data the user already sees on the
+    dashboard. expires_at is the assertion's own expiry: HMAC authenticity is not a substitute
+    for freshness.
+    """
+
+    model_config = ConfigDict(frozen=True)
+
+    github_user_id: int
+    installations: dict[int, dict[int, str]]
+    expires_at: int
 
 
 class SignInDenied(BaseModel):

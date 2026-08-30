@@ -17,9 +17,12 @@ from fastapi.responses import RedirectResponse
 from pr_reviewer.config import get_settings
 from pr_reviewer.control_plane.github_auth import ReturnToRejected, SignInDenied
 from pr_reviewer.control_plane.github_oauth import (
+    LIVE_SIGN_IN_COOKIE_NAME,
     STATE_TTL_SECONDS,
     begin_sign_in,
+    capture_live_assertion,
     complete_sign_in,
+    issue_live_sign_in,
 )
 
 router = APIRouter(prefix="/api/auth/github", tags=["github-oauth"])
@@ -63,6 +66,16 @@ def callback_route(code: str, state: str, request: Request) -> RedirectResponse:
     if isinstance(result, SignInDenied):
         raise HTTPException(status_code=401, detail=result.reason)
 
+    assertion = capture_live_assertion(result)
     response = RedirectResponse(url=result.return_to, status_code=302)
     response.delete_cookie(BINDING_SECRET_COOKIE_NAME, path=CALLBACK_PATH)
+    response.set_cookie(
+        key=LIVE_SIGN_IN_COOKIE_NAME,
+        value=issue_live_sign_in(assertion),
+        max_age=STATE_TTL_SECONDS,
+        path="/",
+        httponly=True,
+        secure=True,
+        samesite="lax",
+    )
     return response

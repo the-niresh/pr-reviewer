@@ -90,8 +90,9 @@ class VerifiedInstallationAccess(BaseModel):
     installation covers.
 
     This has exactly one construction site in src/ (control_plane/github_oauth.py's
-    verify_installation_access, which calls GitHub's /user/installations with the user's own
-    OAuth token), enforced by
+    verify_installation_access). That function either proves control with a live GitHub
+    /user/installations call, or consumes a LiveInstallationAssertion captured from that same
+    call at sign-in. Enforced by
     test_verified_installation_access_construction_site_is_exactly_github_oauth in
     tests/test_github_oauth.py. It cannot be built from three loose values wherever one is
     convenient: approve_pairing takes this object, not a github_user_id and an installation_id

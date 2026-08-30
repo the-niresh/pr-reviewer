@@ -14,6 +14,7 @@ from __future__ import annotations
 import secrets
 import uuid
 from collections.abc import Sequence
+from typing import Literal
 
 from psycopg import Connection
 
@@ -210,3 +211,32 @@ def exchange_pairing_code(
     assert runner_id is not None
     assert credential is not None
     return RunnerCredential(runner_id=runner_id, credential=credential)
+
+
+def pairing_status(
+    code: str, challenge: str
+) -> Literal["pending", "exchangeable", "invalid_or_expired"]:
+    """Whether the runner that holds this code and PKCE challenge may attempt an exchange.
+
+    Both values are required. A lookup on the code alone would tell a guesser pending versus
+    approved versus missing, which is the oracle Task 2's single denial reason exists to prevent.
+    Wrong challenge, unknown code, expiry, and already-exchanged all return invalid_or_expired.
+    This function never writes exchanged_at.
+    """
+    code_hash = hash_runner_credential(code)
+    with connection() as conn:
+        row = conn.execute(
+            """
+            select approved_at, exchanged_at
+            from pairing_codes
+            where code_hash = %s
+              and challenge = %s
+              and created_at > now() - interval '10 minutes'
+            """,
+            (code_hash, challenge),
+        ).fetchone()
+    if row is None or row["exchanged_at"] is not None:
+        return "invalid_or_expired"
+    if row["approved_at"] is not None:
+        return "exchangeable"
+    return "pending"
