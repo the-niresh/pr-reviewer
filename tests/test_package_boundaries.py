@@ -260,3 +260,26 @@ def test_observability_imports_only_contracts() -> None:
             f"{package_name}/* must import nothing of ours except contracts, found: "
             f"{sorted(foreign)}"
         )
+
+
+def test_github_package_is_guarded_and_must_not_import_hosted_or_runner_stores() -> None:
+    """github/ is shared like contracts/: control_plane, runner, and local_store all import it.
+
+    It was missing from every guard set. The rule is: no pr_reviewer.db, db.client,
+    control_plane, runner, or local_store. A Protocol may live here. Clone logic may not.
+    """
+    assert "github" in GUARDED_PACKAGES
+    assert "github" in EXPECTED_EXISTING_PACKAGES
+    package_dir = SRC_ROOT / "github"
+    assert package_dir.is_dir()
+    imports = collect_imports(package_dir)
+    forbidden = (
+        "pr_reviewer.db",
+        "pr_reviewer.control_plane",
+        "pr_reviewer.runner",
+        "pr_reviewer.local_store",
+    )
+    hits: set[str] = set()
+    for prefix in forbidden:
+        hits |= _imports_matching_prefix(imports, prefix)
+    assert not hits, f"github/* must not import hosted or runner stores, found: {sorted(hits)}"
