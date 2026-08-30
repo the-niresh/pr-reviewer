@@ -352,7 +352,7 @@ constructor.
   regenerate `docs/DATA_BOUNDARIES.md`.
 - ✅ Run all backend checks.
 
-### Task 2B - ⬜ Hosted pairing approval and exchangeability status
+### Task 2B - ✅ Hosted pairing approval and exchangeability status
 
 ⚠️ Found during Task 8. Task 2 deferred the approve route until OAuth existed; Task 2A built OAuth
 but its file list did not include the route, and the review did not catch it. Ten hosted routes
@@ -374,19 +374,19 @@ which is not a route that exists.
 - Produces: the `/dashboard` landing path that `ALLOWED_RETURN_TO_PATHS` already permits.
 
 **TDD steps:**
-- ⬜ Write failing tests for approval without a completed sign-in, approval by a user who does not
+- ✅ Write failing tests for approval without a completed sign-in, approval by a user who does not
   control the installation, a repository outside the verified set, and a replayed approval.
-- ⬜ The approve route consumes a live sign-in. It never accepts `github_user_id` and
+- ✅ The approve route consumes a live sign-in. It never accepts `github_user_id` and
   `installation_id` as parameters, and it never constructs `VerifiedInstallationAccess` itself:
   `github_oauth.verify_installation_access` stays the only construction site.
 - ⚠️ The status route must take the code **and** the PKCE challenge. A status call that only needs
   the code is an oracle: a guesser learns pending versus approved versus missing, which is exactly
   what Task 2's single denial reason exists to prevent.
-- ⬜ Status returns only whether an exchange may be attempted. It never returns the installation,
+- ✅ Status returns only whether an exchange may be attempted. It never returns the installation,
   the repository list, the device name, or a timestamp.
-- ⬜ Test that status cannot be used as an exchange. It is idempotent and consumes nothing.
-- ⬜ Keep the runner's outbound-only rule. The runner polls status; the control plane never calls in.
-- ⬜ Run all backend checks.
+- ✅ Test that status cannot be used as an exchange. It is idempotent and consumes nothing.
+- ✅ Keep the runner's outbound-only rule. The runner polls status; the control plane never calls in.
+- ✅ Run all backend checks.
 
 ### Task 3 - ✅ Outbound job claim, heartbeat, and acknowledgement protocol
 
