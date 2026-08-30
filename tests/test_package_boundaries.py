@@ -61,6 +61,8 @@ GUARDED_PACKAGES = frozenset(
         "web",
         "github",
         "connectors",
+        "evals",
+        "models",
     }
 )
 
@@ -78,6 +80,8 @@ EXPECTED_EXISTING_PACKAGES = frozenset(
         "web",
         "github",
         "connectors",
+        "evals",
+        "models",
     }
 )
 
@@ -106,7 +110,7 @@ RUNNER_SIDE_FORBIDDEN_MODULES = frozenset(
 # It is hosted-side: it may import the control plane, and it must not import runner-side packages
 # where the user's model key will live. The same forbidden targets as control_plane, so a new
 # onboarding route cannot grow a back-door import into runner/web/local_auth.
-HOSTED_SIDE_PACKAGES = frozenset({"web", "connectors"})
+HOSTED_SIDE_PACKAGES = frozenset({"web", "connectors", "models"})
 HOSTED_SIDE_FORBIDDEN_TARGETS = CONTROL_PLANE_FORBIDDEN_TARGETS
 
 
@@ -305,3 +309,16 @@ def test_connectors_package_is_hosted_and_must_not_import_runner_side() -> None:
     for forbidden in HOSTED_SIDE_FORBIDDEN_TARGETS:
         hits = _imports_targeting(imports, forbidden)
         assert not hits, f"connectors/* must not import {forbidden}/*, found: {sorted(hits)}"
+
+
+def test_evals_package_must_not_import_hosted_stores() -> None:
+    """evals/ is a local harness. It scores fixtures. It does not write Neon."""
+    assert "evals" in GUARDED_PACKAGES
+    assert "evals" in EXPECTED_EXISTING_PACKAGES
+    assert "evals" not in HOSTED_SIDE_PACKAGES
+    package_dir = SRC_ROOT / "evals"
+    assert package_dir.is_dir()
+    imports = collect_imports(package_dir)
+    for prefix in ("pr_reviewer.models", "pr_reviewer.db", "pr_reviewer.control_plane"):
+        hits = _imports_matching_prefix(imports, prefix)
+        assert not hits, f"evals/* must not import {prefix}, found: {sorted(hits)}"

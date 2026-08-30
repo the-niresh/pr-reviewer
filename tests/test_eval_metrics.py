@@ -9,11 +9,12 @@ from __future__ import annotations
 
 from datetime import date
 from pathlib import Path
+from typing import Any
 
 SRC_ROOT = Path(__file__).resolve().parent.parent / "src" / "pr_reviewer"
 
 
-def _label() -> object:
+def _label() -> Any:
     from pr_reviewer.evals.types import EvalLabel
 
     return EvalLabel(
@@ -25,7 +26,7 @@ def _label() -> object:
     )
 
 
-def _case(*, case_id: str = "case-1") -> object:
+def _case(*, case_id: str = "case-1") -> Any:
     from pr_reviewer.evals.types import EvalCase
 
     return EvalCase(
@@ -39,10 +40,10 @@ def _case(*, case_id: str = "case-1") -> object:
     )
 
 
-def _candidate(**overrides: object) -> object:
+def _candidate(**overrides: Any) -> Any:
     from pr_reviewer.contracts.finding_candidate import FindingCandidate
 
-    fields: dict[str, object] = {
+    fields: dict[str, Any] = {
         "concern": "correctness",
         "severity": "high",
         "category": "null-check",
@@ -65,13 +66,17 @@ def test_metrics_cover_precision_recall_and_cost() -> None:
     matched = match_findings([_label()], [_candidate()])
     extra = match_findings([_label()], [_candidate(file_path="src/other.py")])
     metrics = compute_metrics([matched, extra], reviewed_pr_count=2)
-    assert 0 <= metrics.precision <= 1
-    assert 0 <= metrics.recall <= 1
-    assert metrics.false_findings_per_pr >= 0
-    assert 0 <= metrics.selectivity <= 1
-    assert 0 <= metrics.verified_finding_rate <= 1
-    assert metrics.latency_ms >= 0
-    assert metrics.cost_usd >= 0
+    assert metrics.precision_per_finding == 0.5
+    assert metrics.precision_per_case == 0.5
+    assert metrics.recall_per_finding == 0.5
+    assert metrics.recall_per_case == 0.5
+    assert metrics.false_findings_per_pr == 0.5
+    assert metrics.selectivity == 1.0
+    assert metrics.verified_finding_rate == 0.0
+    assert metrics.latency_ms == 0
+    assert metrics.cost_usd == 0.0
+    assert metrics.needs_human_rate == 0.5
+    assert metrics.reviewed_pr_count == 2
 
 
 def test_rule_adherence_is_scored_on_three_arms() -> None:
@@ -91,17 +96,20 @@ def test_fixture_reviewer_perfect_silent_noisy_and_flaky() -> None:
 
     config = EvalConfig(cases=[_case()], repeats=3)
     perfect = run_eval(config, FixtureReviewer.perfect())
-    assert perfect.metrics.precision == 1.0
-    assert perfect.metrics.recall == 1.0
+    assert perfect.metrics.precision_per_finding == 1.0
+    assert perfect.metrics.precision_per_case == 1.0
+    assert perfect.metrics.recall_per_finding == 1.0
+    assert perfect.metrics.recall_per_case == 1.0
 
     silent = run_eval(config, FixtureReviewer.silent())
-    assert silent.metrics.recall == 0.0
+    assert silent.metrics.recall_per_finding == 0.0
+    assert silent.metrics.recall_per_case == 0.0
 
     noisy = run_eval(config, FixtureReviewer.noisy())
     assert noisy.metrics.false_findings_per_pr > 0
 
-    flaky = FixtureReviewer.flaky()
-    scores = [run_eval(config, flaky).metrics.precision for _ in range(3)]
+    flaky = FixtureReviewer.flaky(seed=1)
+    scores = [run_eval(config, flaky).metrics.precision_per_finding for _ in range(3)]
     assert len(set(scores)) > 1
 
 

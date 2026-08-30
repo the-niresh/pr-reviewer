@@ -9,8 +9,10 @@ Imports of new evals modules stay inside test bodies.
 
 from __future__ import annotations
 
+import subprocess
 from datetime import date
 from pathlib import Path
+from typing import Any
 
 import pytest
 from pydantic import ValidationError
@@ -20,8 +22,8 @@ from pr_reviewer.contracts.finding import Finding
 REPO = Path(__file__).resolve().parent.parent
 
 
-def _finding(**overrides: object) -> Finding:
-    fields: dict[str, object] = {
+def _finding(**overrides: Any) -> Finding:
+    fields: dict[str, Any] = {
         "id": "finding-1",
         "review_job_id": "job-1",
         "concern": "correctness",
@@ -47,7 +49,7 @@ def test_finding_candidate_rejects_verified_true() -> None:
     from pr_reviewer.contracts.finding_candidate import FindingCandidate
 
     with pytest.raises(ValidationError):
-        FindingCandidate(
+        FindingCandidate(  # type: ignore[call-arg]
             concern="correctness",
             severity="high",
             category="null-check",
@@ -68,6 +70,7 @@ def test_finding_is_not_a_finding_candidate() -> None:
     finding = _finding()
     assert not isinstance(finding, FindingCandidate)
     assert FindingCandidate not in Finding.__mro__
+    assert Finding not in FindingCandidate.__mro__
 
 
 def test_finding_and_candidate_forbid_unknown_fields() -> None:
@@ -76,7 +79,7 @@ def test_finding_and_candidate_forbid_unknown_fields() -> None:
     with pytest.raises(ValidationError):
         _finding(unexpected_field=True)
     with pytest.raises(ValidationError):
-        FindingCandidate(
+        FindingCandidate(  # type: ignore[call-arg]
             concern="correctness",
             severity="high",
             category="null-check",
@@ -91,33 +94,53 @@ def test_finding_and_candidate_forbid_unknown_fields() -> None:
         )
 
 
+def _git_repo_with_commit(root: Path, message: str) -> Path:
+    repo = root / "repo"
+    repo.mkdir()
+    (repo / "src").mkdir()
+    (repo / "src" / "widget.py").write_text("value = widget.value\n", encoding="utf-8")
+    subprocess.run(["git", "init"], cwd=repo, check=True, capture_output=True)
+    subprocess.run(
+        ["git", "config", "user.email", "eval@test.example"],
+        cwd=repo,
+        check=True,
+        capture_output=True,
+    )
+    subprocess.run(
+        ["git", "config", "user.name", "Eval Test"],
+        cwd=repo,
+        check=True,
+        capture_output=True,
+    )
+    subprocess.run(["git", "add", "."], cwd=repo, check=True, capture_output=True)
+    subprocess.run(["git", "commit", "-m", message], cwd=repo, check=True, capture_output=True)
+    return repo
+
+
 def test_mining_emits_candidates_not_labels(tmp_path: Path) -> None:
     from pr_reviewer.evals.mine_candidates import mine_eval_candidates
     from pr_reviewer.evals.types import EvalCandidate, EvalLabel
 
-    repo = tmp_path / "repo"
-    repo.mkdir()
-    (repo / "src").mkdir()
-    (repo / "src" / "widget.py").write_text("value = widget.value\n", encoding="utf-8")
+    repo = _git_repo_with_commit(tmp_path, "fix null check")
     mined = mine_eval_candidates(repo, max_cases=10)
     assert mined
     assert all(isinstance(item, EvalCandidate) for item in mined)
     assert not any(isinstance(item, EvalLabel) for item in mined)
-    for item in mined:
-        assert getattr(item, "expected_labels", None) in (None, [])
+    assert "expected_labels" not in EvalCandidate.model_fields
 
 
 def test_commit_message_is_evidence_not_ground_truth(tmp_path: Path) -> None:
     from pr_reviewer.evals.mine_candidates import mine_eval_candidates
+    from pr_reviewer.evals.types import EvalCandidate
 
-    repo = tmp_path / "repo"
-    repo.mkdir()
+    repo = _git_repo_with_commit(tmp_path, "fix null check")
     mined = mine_eval_candidates(repo, max_cases=10)
     assert mined
     for item in mined:
         evidence = " ".join(item.source_evidence).lower()
-        assert "fix null check" in evidence or item.source_evidence
-        assert not getattr(item, "is_label", False)
+        assert "fix null check" in evidence
+        assert "expected_labels" not in EvalCandidate.model_fields
+        assert "is_label" not in EvalCandidate.model_fields
 
 
 def test_holdout_case_without_a_human_auditor_is_rejected() -> None:

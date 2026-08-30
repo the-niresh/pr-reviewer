@@ -7,11 +7,13 @@ set ground truth.
 
 from __future__ import annotations
 
+from typing import Any
 
-def _candidate(**overrides: object) -> object:
+
+def _candidate(**overrides: Any) -> Any:
     from pr_reviewer.contracts.finding_candidate import FindingCandidate
 
-    fields: dict[str, object] = {
+    fields: dict[str, Any] = {
         "concern": "correctness",
         "severity": "high",
         "category": "null-check",
@@ -27,10 +29,10 @@ def _candidate(**overrides: object) -> object:
     return FindingCandidate(**fields)
 
 
-def _label(**overrides: object) -> object:
+def _label(**overrides: Any) -> Any:
     from pr_reviewer.evals.types import EvalLabel
 
-    fields: dict[str, object] = {
+    fields: dict[str, Any] = {
         "concern": "correctness",
         "category": "null-check",
         "file_path": "src/widget.py",

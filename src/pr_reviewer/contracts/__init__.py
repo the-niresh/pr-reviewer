@@ -1,4 +1,5 @@
 from pr_reviewer.contracts.finding import Finding
+from pr_reviewer.contracts.finding_candidate import FindingCandidate
 from pr_reviewer.contracts.github import (
     GitHubDelivery,
     OmissionReason,
@@ -19,6 +20,7 @@ __all__ = [
     "AssignmentRefused",
     "AuthorizationDenied",
     "Finding",
+    "FindingCandidate",
     "GitHubDelivery",
     "OmissionReason",
     "PullRequestRef",
