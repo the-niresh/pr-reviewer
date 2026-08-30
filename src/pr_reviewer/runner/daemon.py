@@ -17,12 +17,11 @@ are not the only evidence a heartbeat call can produce:
   in-progress work the control plane never actually rejected. Neither is safe, so recovery defers
   the decision to a later attempt instead of guessing.
 
-complete_job wires up the TODO in runner/client.py's acknowledge(): a lease rejection or a real
-network failure after a review has finished must not drop the only copy of the result. Both land
-in local_store.pending_acknowledgements before the original exception is re-raised, so the caller
-still learns about the failure but the work is never lost. replay_pending_acknowledgements is the
-best-effort sweep that resends them later; a lease that is genuinely dead forever keeps failing,
-but the record stays queued rather than being dropped.
+complete_job persists a finished result before it is lost. invalid_or_expired is five distinct
+control-plane conditions collapsed into one reason, so retrying the same ack has no correct
+give-up rule. Instead the runner re-claims: a JobEnvelope for that job means the stored result
+can land under a fresh lease; NoJob means stop and mark the stored result terminal. The stored
+result is reused. The model and GitHub are not called again.
 """
 
 from __future__ import annotations
@@ -44,6 +43,7 @@ from pr_reviewer.contracts.runner import (
     RunnerAuthDenied,
 )
 from pr_reviewer.local_store.sqlite import LocalStore, LocalStoreCorrupted, open_local_store
+from pr_reviewer.runner.revocation import RevocationGate
 from pr_reviewer.runner.secrets import SecretStore
 
 logger = logging.getLogger(__name__)
@@ -59,6 +59,11 @@ class RunnerClientProtocol(Protocol):
     def claim(self) -> JobEnvelope | NoJob | RunnerAuthDenied: ...
     def heartbeat(self, job_id: str, lease_token: str) -> LeaseState: ...
     def acknowledge(self, job_id: str, lease_token: str, result: JobAcknowledgement) -> None: ...
+    def set_credential(self, credential: str) -> None: ...
+
+
+class ReviewExecutor(Protocol):
+    def review(self, job: JobEnvelope) -> JobAcknowledgement: ...
 
 
 class RunnerDaemon:
@@ -68,11 +73,15 @@ class RunnerDaemon:
         runner_client: RunnerClientProtocol,
         local_store: LocalStore,
         secret_store: SecretStore | None = None,
+        review: ReviewExecutor | None = None,
+        revocation: RevocationGate | None = None,
         poll_interval_seconds: float = 1.0,
     ) -> None:
         self._runner_client = runner_client
         self._local_store = local_store
         self._secret_store = secret_store
+        self._review = review
+        self._revocation = revocation if revocation is not None else RevocationGate()
         self._poll_interval_seconds = poll_interval_seconds
         self._stop_event = threading.Event()
         self._poll_thread: threading.Thread | None = None
@@ -91,13 +100,41 @@ class RunnerDaemon:
 
     def _poll_loop(self) -> None:
         while not self._stop_event.is_set():
-            try:
-                claimed = self._runner_client.claim()
-            except httpx.TransportError:
-                claimed = None
-            if isinstance(claimed, JobEnvelope):
-                self._local_store.jobs.record_claimed(claimed)
+            self.process_once()
+            if not self._revocation.allow_new_work():
+                break
             self._stop_event.wait(self._poll_interval_seconds)
+
+    def process_once(self) -> None:
+        if not self._revocation.allow_new_work():
+            return
+        self._refresh_credential()
+        try:
+            claimed = self._runner_client.claim()
+        except httpx.TransportError:
+            return
+        if isinstance(claimed, RunnerAuthDenied):
+            if claimed.reason == "revoked_runner":
+                self._revocation.note_runner_revoked()
+            return
+        if isinstance(claimed, NoJob):
+            return
+        self._run_claimed_job(claimed)
+
+    def _refresh_credential(self) -> None:
+        if self._secret_store is None:
+            return
+        credential = self._secret_store.get("runner_credential")
+        if credential is None:
+            return
+        self._runner_client.set_credential(credential)
+
+    def _run_claimed_job(self, claimed: JobEnvelope) -> None:
+        self._local_store.jobs.record_claimed(claimed)
+        if self._review is None:
+            return
+        result = self._review.review(claimed)
+        self.complete_job(str(claimed.job_id), claimed.lease_token, result)
 
     def recover(self) -> None:
         for job in self._local_store.jobs.list_claimed():
@@ -118,7 +155,8 @@ class RunnerDaemon:
             self._local_store.pending_acknowledgements.record(
                 job_id, lease_token, result, reason="invalid_or_expired"
             )
-            raise
+            self._land_pending_result(job_id, result)
+            return
         except httpx.TransportError:
             self._local_store.pending_acknowledgements.record(
                 job_id, lease_token, result, reason="network_unreachable"
@@ -129,6 +167,9 @@ class RunnerDaemon:
 
     def replay_pending_acknowledgements(self) -> None:
         for entry in self._local_store.pending_acknowledgements.list_pending():
+            if entry.reason == "invalid_or_expired":
+                self._land_pending_result(entry.job_id, entry.result)
+                continue
             try:
                 self._runner_client.acknowledge(entry.job_id, entry.lease_token, entry.result)
             except _RETRYABLE_ACKNOWLEDGE_ERRORS:
@@ -136,6 +177,34 @@ class RunnerDaemon:
                 continue
             self._local_store.pending_acknowledgements.resolve(entry.id)
             self._local_store.jobs.mark_completed(entry.job_id)
+
+    def _land_pending_result(self, job_id: str, result: JobAcknowledgement) -> None:
+        self._refresh_credential()
+        try:
+            claimed = self._runner_client.claim()
+        except httpx.TransportError:
+            return
+        if isinstance(claimed, RunnerAuthDenied):
+            if claimed.reason == "revoked_runner":
+                self._revocation.note_runner_revoked()
+            self._mark_pending_terminal(job_id)
+            return
+        if isinstance(claimed, JobEnvelope) and str(claimed.job_id) == job_id:
+            try:
+                self._runner_client.acknowledge(str(claimed.job_id), claimed.lease_token, result)
+            except _RETRYABLE_ACKNOWLEDGE_ERRORS:
+                return
+            self._mark_pending_terminal(job_id)
+            return
+        if isinstance(claimed, JobEnvelope):
+            self._local_store.jobs.record_claimed(claimed)
+        self._mark_pending_terminal(job_id)
+
+    def _mark_pending_terminal(self, job_id: str) -> None:
+        self._local_store.jobs.mark_completed(job_id)
+        for entry in self._local_store.pending_acknowledgements.list_pending():
+            if entry.job_id == job_id:
+                self._local_store.pending_acknowledgements.resolve(entry.id)
 
 
 def open_or_recover_local_store(path: str | Path) -> LocalStore:

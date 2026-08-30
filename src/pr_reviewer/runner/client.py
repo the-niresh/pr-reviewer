@@ -36,6 +36,9 @@ class RunnerClient:
     def _auth_headers(self) -> dict[str, str]:
         return {"authorization": f"Bearer {self._credential}"}
 
+    def set_credential(self, credential: str) -> None:
+        self._credential = credential
+
     def claim(self) -> JobEnvelope | NoJob | RunnerAuthDenied:
         response = self._http.post("/api/runner/jobs/claim", headers=self._auth_headers())
         if response.status_code == 401:
@@ -67,10 +70,6 @@ class RunnerClient:
             json={"lease_token": lease_token, "result": result.model_dump(mode="json")},
         )
         if response.status_code == 409 or _detail_reason(response) == "invalid_or_expired":
-            # TODO Task 9: persist this acknowledgement in local_store so completed local work is
-            # not lost when the control plane rejects the lease as invalid_or_expired (expired,
-            # reclaimed, or already finished by another runner). Swallowing the rejection here
-            # would drop the only copy of the result.
             raise JobProtocolDenied(reason="invalid_or_expired")
         response.raise_for_status()
 

@@ -369,6 +369,41 @@ def test_concurrent_claims_of_one_job_exactly_one_wins(
     assert envelopes[0].lease_token
 
 
+def test_concurrent_reclaims_of_one_expired_job_exactly_one_wins(
+    make_verified_installation_access: VerifiedAccessFactory,
+) -> None:
+    from pr_reviewer.contracts.runner import JobEnvelope, NoJob
+    from pr_reviewer.control_plane.runner_jobs import claim_job
+
+    installation_id = 7013
+    github_repository_id = 81014
+    insert_installation(installation_id)
+    credential = pair_runner_assigned_to_repo(
+        installation_id, github_repository_id, make_verified_installation_access
+    )
+    enqueue_pull_request_job("delivery-concurrent-expired", installation_id, github_repository_id)
+    runner = authenticate(credential.credential)
+
+    held = claim_job(runner)
+    assert isinstance(held, JobEnvelope)
+    with connection() as conn, conn.transaction():
+        conn.execute(
+            "update review_jobs set locked_until = now() - interval '1 second' where id = %s",
+            (str(held.job_id),),
+        )
+
+    with ThreadPoolExecutor(max_workers=2) as pool:
+        futures = [pool.submit(claim_job, runner) for _ in range(2)]
+        results = [future.result() for future in futures]
+
+    envelopes = [item for item in results if isinstance(item, JobEnvelope)]
+    none = [item for item in results if isinstance(item, NoJob)]
+    assert len(envelopes) == 1, f"expected exactly one winner, got: {results}"
+    assert len(none) == 1
+    assert envelopes[0].lease_token
+    assert envelopes[0].lease_token != held.lease_token
+
+
 def test_claim_job_uses_skip_locked_and_binds_the_lease_to_the_runner() -> None:
     from pr_reviewer.control_plane import runner_jobs
 

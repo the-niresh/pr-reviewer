@@ -124,8 +124,10 @@ def claim_job(runner: AuthenticatedRunner) -> JobEnvelope | NoJob:
             with next_job as (
               select id
               from review_jobs
-              where status = 'pending'
-                and available_at <= now()
+              where (
+                      (status = 'pending' and available_at <= now())
+                      or (status = 'running' and locked_until <= now())
+                    )
                 and installation_id is not null
                 and github_repository_id is not null
                 and pull_request_number is not null

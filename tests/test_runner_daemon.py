@@ -13,11 +13,9 @@ must leave an unreachable job's local status untouched, because neither resuming
 already be re-claimed by another runner) nor abandoning it (the control plane never actually said
 so) is safe on unreachable-network evidence alone.
 
-`RunnerClient.acknowledge` (src/pr_reviewer/runner/client.py) raises JobProtocolDenied with a TODO
-naming this task: swallowing that rejection would drop the only copy of a finished review. These
-tests prove the fix: RunnerDaemon.complete_job catches both a rejected lease and a real network
-failure and persists the acknowledgement to local_store.pending_acknowledgements before
-re-raising, so the caller is still told about the failure but the result is never lost.
+`RunnerClient.acknowledge` raises JobProtocolDenied when the control plane rejects a lease.
+complete_job persists the result, then re-claims. NoJob marks that stored result terminal.
+A network failure still persists a pending acknowledgement and re-raises.
 """
 
 from __future__ import annotations
@@ -93,6 +91,10 @@ class FakeRunnerClient:
         self.heartbeat_calls: list[tuple[str, str]] = []
         self.acknowledge_calls: list[tuple[str, str, JobAcknowledgement]] = []
         self.claim_calls = 0
+        self._credential = "runner-credential"
+
+    def set_credential(self, credential: str) -> None:
+        self._credential = credential
 
     def claim(self) -> NoJob:
         self.claim_calls += 1
@@ -182,11 +184,11 @@ def test_recover_leaves_a_claimed_job_untouched_when_the_control_plane_is_unreac
     assert remaining[0].status == "claimed"
 
 
-def test_completing_a_job_rejected_by_the_control_plane_persists_a_pending_acknowledgement(
+def test_completing_a_job_rejected_by_the_control_plane_persists_then_reclaims(
     tmp_path: Path,
 ) -> None:
-    """Wires up the TODO in runner/client.py's acknowledge(): a rejected lease must not drop the
-    only copy of a finished review's result.
+    """invalid_or_expired is not retried on the same lease. The result is stored, then claim
+    decides: NoJob means the stored result is terminal.
     """
     from pr_reviewer.runner.daemon import RunnerDaemon
 
@@ -197,18 +199,12 @@ def test_completing_a_job_rejected_by_the_control_plane_persists_a_pending_ackno
     daemon = RunnerDaemon(runner_client=client, local_store=store)
     result = _acknowledgement()
 
-    try:
-        daemon.complete_job(str(envelope.job_id), envelope.lease_token, result)
-    except JobProtocolDenied:
-        pass
-    else:
-        raise AssertionError("expected JobProtocolDenied to still surface to the caller")
+    daemon.complete_job(str(envelope.job_id), envelope.lease_token, result)
 
-    pending = store.pending_acknowledgements.list_pending()
-    assert len(pending) == 1
-    assert pending[0].job_id == str(envelope.job_id)
-    assert pending[0].reason == "invalid_or_expired"
-    assert pending[0].result.local_result_hash == result.local_result_hash
+    assert store.pending_acknowledgements.list_pending() == []
+    row = store.jobs.get(str(envelope.job_id))
+    assert row is not None
+    assert row.status == "completed"
 
 
 def test_completing_a_job_during_a_network_outage_persists_a_pending_acknowledgement(
@@ -278,11 +274,11 @@ def test_replaying_pending_acknowledgements_resolves_them_once_the_control_plane
     assert client.acknowledge_calls == [(str(envelope.job_id), envelope.lease_token, result)]
 
 
-def test_replaying_pending_acknowledgements_leaves_a_still_invalid_lease_pending(
+def test_replaying_invalid_or_expired_pending_acks_reclaims_instead_of_retrying_the_same_lease(
     tmp_path: Path,
 ) -> None:
-    """Replay is a best-effort sweep, not a guarantee: a lease that is genuinely dead forever
-    keeps failing, but the record must stay in the queue rather than being dropped either way.
+    """Replay of an invalid_or_expired ack must not present the dead lease again. claim_job
+    decides: NoJob means mark the stored result terminal.
     """
     from pr_reviewer.runner.daemon import RunnerDaemon
 
@@ -296,11 +292,13 @@ def test_replaying_pending_acknowledgements_leaves_a_still_invalid_lease_pending
     client = FakeRunnerClient(ack_outcome="invalid_or_expired")
     daemon = RunnerDaemon(runner_client=client, local_store=store)
 
-    daemon.replay_pending_acknowledgements()  # must not raise
+    daemon.replay_pending_acknowledgements()
 
-    pending = store.pending_acknowledgements.list_pending()
-    assert len(pending) == 1
-    assert pending[0].attempts == 1
+    assert store.pending_acknowledgements.list_pending() == []
+    row = store.jobs.get(str(envelope.job_id))
+    assert row is not None
+    assert row.status == "completed"
+    assert client.acknowledge_calls == []
 
 
 def test_start_then_stop_is_cooperative_and_returns_well_within_the_deadline(
