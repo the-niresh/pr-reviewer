@@ -226,7 +226,7 @@ not move writers to a local store that had not been built yet.
 - Modify: `src/pr_reviewer/events/list_events_for_job.py`
 - Modify: `src/pr_reviewer/models/record_model_call.py`
 - Modify: `src/pr_reviewer/jobs/fail_review_job.py`
-- Modify: `src/pr_reviewer/contracts/errors.py` (new typed error class for `last_error`)
+- Modify: `src/pr_reviewer/contracts/errors.py`
 - Modify: `src/pr_reviewer/control_plane/boundary.py`
 - Modify: `docs/DATA_BOUNDARIES.md`
 - Test: `tests/test_hosted_event_rescope.py`
@@ -441,7 +441,7 @@ which is not a route that exists.
 - Create: `src/pr_reviewer/runner/daemon.py`
 - Create: `src/pr_reviewer/runner/secrets.py`
 - Create: `src/pr_reviewer/local_store/sqlite.py`
-- Create: local SQLite migration `<timestamp>_local_state.sql`
+- Create: `src/pr_reviewer/local_store/migrations/<timestamp>_local_state.sql`
 - Create: `tests/test_runner_daemon.py`
 - Create: `tests/test_local_store.py`
 - Create: `tests/test_secret_store.py`
@@ -495,7 +495,7 @@ which is not a route that exists.
 - Create: `src/pr_reviewer/containers/runtime.py`
 - Create: `src/pr_reviewer/containers/docker.py`
 - Create: `src/pr_reviewer/runner/modes.py`
-- Create: `src/pr_reviewer/cli/doctor.py`
+- Create: `src/pr_reviewer/runner/cli/doctor.py`
 - Create: `tests/test_container_runtime.py`
 - Create: `tests/test_runner_modes.py`
 - Create: `tests/test_doctor_docker.py`
@@ -540,8 +540,8 @@ which is not a route that exists.
 ### Task 8 - ⬜ Local onboarding UI and user service
 
 **Files:**
-- Create: `src/pr_reviewer/cli/service.py`
-- Create: `src/pr_reviewer/web/local_auth.py`
+- Create: `src/pr_reviewer/runner/cli/service.py`
+- Create: `src/pr_reviewer/runner/web/local_auth.py`
 - Create: `apps/web/src/app/onboarding/*`
 - Create: `apps/web/tests/onboarding.spec.ts`
 - Create: `tests/test_user_service.py`

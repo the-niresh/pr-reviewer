@@ -39,10 +39,17 @@ def declared_paths(body: str) -> list[tuple[str, str]]:
 
 
 def resolve(path: str) -> tuple[bool, str]:
+    # A path written with a <timestamp> placeholder is a pattern. Resolve it by globbing rather
+    # than depending on the surrounding prose, so "migration `<timestamp>_x.sql`" and a real path
+    # like "src/.../migrations/<timestamp>_x.sql" both work.
+    if "<timestamp>" in path:
+        pattern = path.replace("<timestamp>", "*")
+        hits = list(ROOT.glob(pattern))
+        return bool(hits), (hits[0].relative_to(ROOT).as_posix() if hits else pattern)
     if path.startswith("@migration:"):
         stem = path.split(":", 1)[1]
         for d in (ROOT / "src/pr_reviewer/db/migrations",
-                  ROOT / "src/pr_reviewer/local_store/sqlite_migrations",
+                  ROOT / "src/pr_reviewer/local_store/migrations",
                   ROOT / "src/pr_reviewer/local_store/postgres_migrations"):
             if d.is_dir() and any(stem in p.name for p in d.iterdir()):
                 hit = next(p.name for p in d.iterdir() if stem in p.name)
