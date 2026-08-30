@@ -58,13 +58,23 @@ GUARDED_PACKAGES = frozenset(
         "notifications",
         "observability",
         "cli",
+        "web",
     }
 )
 
 # Snapshot of which guarded packages exist on disk today. Update this set in the same commit that
 # adds one of the packages above, and only after confirming its rule is enforced below.
 EXPECTED_EXISTING_PACKAGES = frozenset(
-    {"contracts", "control_plane", "runner", "local_store", "containers", "observability", "cli"}
+    {
+        "contracts",
+        "control_plane",
+        "runner",
+        "local_store",
+        "containers",
+        "observability",
+        "cli",
+        "web",
+    }
 )
 
 # control_plane/* must not reach into any package that can review, retrieve, verify, or run
@@ -87,6 +97,13 @@ RUNNER_SIDE_PACKAGES = frozenset({"runner", "local_store", "notifications", "con
 RUNNER_SIDE_FORBIDDEN_MODULES = frozenset(
     {"pr_reviewer.db", "pr_reviewer.control_plane", "pr_reviewer.cli"}
 )
+
+# web/ is the hosted FastAPI re-export (web/app.py is two lines pointing at control_plane.app).
+# It is hosted-side: it may import the control plane, and it must not import runner-side packages
+# where the user's model key will live. The same forbidden targets as control_plane, so a new
+# onboarding route cannot grow a back-door import into runner/web/local_auth.
+HOSTED_SIDE_PACKAGES = frozenset({"web"})
+HOSTED_SIDE_FORBIDDEN_TARGETS = CONTROL_PLANE_FORBIDDEN_TARGETS
 
 
 def _module_name_for_file(file_path: Path) -> str:
@@ -206,6 +223,22 @@ def test_runner_side_packages_boundary() -> None:
             f"{package_name}/* must not import the hosted database, the control plane, or the "
             f"operator cli package, found: {sorted(hits)}"
         )
+
+
+def test_hosted_side_packages_boundary() -> None:
+    """Covers web/: the hosted API surface. Same outbound rule as control_plane/."""
+    existing = [name for name in HOSTED_SIDE_PACKAGES if (SRC_ROOT / name).is_dir()]
+    if not existing:
+        assert not (HOSTED_SIDE_PACKAGES & EXPECTED_EXISTING_PACKAGES)
+        return
+
+    for package_name in existing:
+        imports = collect_imports(SRC_ROOT / package_name)
+        for forbidden in HOSTED_SIDE_FORBIDDEN_TARGETS:
+            hits = _imports_targeting(imports, forbidden)
+            assert not hits, (
+                f"{package_name}/* must not import {forbidden}/*, found: {sorted(hits)}"
+            )
 
 
 def test_observability_imports_only_contracts() -> None:
