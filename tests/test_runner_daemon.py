@@ -106,6 +106,8 @@ class FakeRunnerClient:
             raise httpx.ConnectError("connection refused")
         if self.heartbeat_outcome == "invalid_or_expired":
             return LeaseState(status="invalid_or_expired")
+        if self.heartbeat_outcome == "cancelled":
+            return LeaseState(status="cancelled")
         return LeaseState(status="active")
 
     def acknowledge(self, job_id: str, lease_token: str, result: JobAcknowledgement) -> None:
@@ -159,6 +161,34 @@ def test_recover_abandons_a_claimed_job_once_its_lease_is_invalid_or_expired(
     row = store.jobs.get(str(envelope.job_id))
     assert row is not None
     assert row.status == "abandoned"
+
+
+def test_recover_abandons_a_cancelled_job_and_does_not_reclaim_it_on_a_second_recover(
+    tmp_path: Path,
+) -> None:
+    """heartbeat_job returns cancelled forever. recover() must abandon once so a restart
+    does not keep re-heartbeating a job the control plane will never give back.
+    """
+    from pr_reviewer.runner.daemon import RunnerDaemon
+
+    store = _store(tmp_path)
+    envelope = _job_envelope()
+    store.jobs.record_claimed(envelope)
+    client = FakeRunnerClient(heartbeat_outcome="cancelled")
+    daemon = RunnerDaemon(runner_client=client, local_store=store)
+
+    daemon.recover()
+
+    assert store.jobs.list_claimed() == []
+    row = store.jobs.get(str(envelope.job_id))
+    assert row is not None
+    assert row.status == "abandoned"
+    assert client.heartbeat_calls == [(str(envelope.job_id), envelope.lease_token)]
+
+    daemon.recover()
+
+    assert store.jobs.list_claimed() == []
+    assert client.heartbeat_calls == [(str(envelope.job_id), envelope.lease_token)]
 
 
 def test_recover_leaves_a_claimed_job_untouched_when_the_control_plane_is_unreachable(

@@ -5,12 +5,16 @@ the control plane could not previously accept, and starts a background poll loop
 cooperative: it signals the loop and waits up to deadline_seconds for it to notice, rather than
 killing anything.
 
-Recovery has three outcomes, not two, because "lease is active" and "lease is invalid_or_expired"
-are not the only evidence a heartbeat call can produce:
+Recovery has four outcomes, because "lease is active" and "lease is invalid_or_expired" are not
+the only evidence a heartbeat call can produce:
 
 - active: still ours, leave it claimed.
 - invalid_or_expired: Task 3's path -- another runner may already own this job, so this run stops
   treating it as its own without resuming it.
+- cancelled: the hosted job was cancelled (closed PR or converted to draft). heartbeat_job
+  returns cancelled forever, so recovery must abandon once or every restart re-heartbeats it.
+  Local store shares the same abandoned status as invalid_or_expired: both mean this runner no
+  longer owns the work. The hosted review_jobs row already holds the real reason.
 - unreachable (a network failure talking to the control plane, not a lease response at all):
   leave the row exactly as it is. Resuming on unreachable evidence risks duplicating a review
   another runner may already own; abandoning on unreachable evidence risks discarding real
@@ -145,7 +149,7 @@ class RunnerDaemon:
                     "control plane unreachable recovering job %s; deferring", job.job_id
                 )
                 continue
-            if lease.status == "invalid_or_expired":
+            if lease.status == "invalid_or_expired" or lease.status == "cancelled":
                 self._local_store.jobs.mark_abandoned(job.job_id)
 
     def complete_job(self, job_id: str, lease_token: str, result: JobAcknowledgement) -> None:
