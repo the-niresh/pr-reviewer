@@ -1,0 +1,29 @@
+services:
+  pgvector:
+    image: pgvector/pgvector@sha256:ccc6e83d6e35e931dc7c5def2022729d5a6c370318d099181995567ff1fb4d6b
+    user: "${PR_REVIEWER_PG_UID}:${PR_REVIEWER_PG_GID}"
+    ports:
+      - "127.0.0.1:${PR_REVIEWER_PG_PORT:-54331}:5432"
+    environment:
+      POSTGRES_USER: pr_reviewer
+      POSTGRES_DB: pr_reviewer
+      POSTGRES_PASSWORD_FILE: /run/secrets/pg_password
+    volumes:
+      - type: volume
+        source: pr_reviewer_pgvector
+        target: /var/lib/postgresql/data
+      - type: bind
+        source: ${PR_REVIEWER_PG_PASSWORD_FILE}
+        target: /run/secrets/pg_password
+        read_only: true
+    tmpfs:
+      - /var/run/postgresql:uid=${PR_REVIEWER_PG_UID},gid=${PR_REVIEWER_PG_GID},mode=0755
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U pr_reviewer -d pr_reviewer"]
+      interval: 2s
+      timeout: 5s
+      retries: 30
+      start_period: 5s
+
+volumes:
+  pr_reviewer_pgvector:
