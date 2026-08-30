@@ -59,6 +59,7 @@ GUARDED_PACKAGES = frozenset(
         "observability",
         "cli",
         "web",
+        "github",
     }
 )
 
@@ -74,6 +75,7 @@ EXPECTED_EXISTING_PACKAGES = frozenset(
         "observability",
         "cli",
         "web",
+        "github",
     }
 )
 

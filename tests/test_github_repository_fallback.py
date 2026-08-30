@@ -15,13 +15,14 @@ from pathlib import Path
 
 import pytest
 
+from pr_reviewer.contracts.github import RepositoryIdentity
+from pr_reviewer.github.pull_request import PullRequestFile, PullRequestSnapshot
+
 BASE_SHA = "a" * 40
 HEAD_SHA = "b" * 40
 
 
-def _identity():
-    from pr_reviewer.contracts.github import RepositoryIdentity
-
+def _identity() -> RepositoryIdentity:
     return RepositoryIdentity(
         installation_id=7202,
         repository_id=82002,
@@ -30,9 +31,7 @@ def _identity():
     )
 
 
-def _snapshot(files: list[object]) -> object:
-    from pr_reviewer.github.pull_request import PullRequestSnapshot
-
+def _snapshot(files: list[PullRequestFile]) -> PullRequestSnapshot:
     identity = _identity()
     return PullRequestSnapshot(
         identity=identity,
@@ -62,7 +61,7 @@ def test_omission_reason_is_a_closed_set_not_free_text() -> None:
 
 
 def test_null_patch_is_recorded_as_omitted_not_as_an_empty_file() -> None:
-    from pr_reviewer.contracts.github import OmissionReason, RepositoryIdentity
+    from pr_reviewer.contracts.github import OmissionReason
     from pr_reviewer.github.pull_request import PullRequestFile, ensure_complete_diff
 
     class EmptyFetcher:
@@ -86,7 +85,7 @@ def test_null_patch_is_recorded_as_omitted_not_as_an_empty_file() -> None:
 
 
 def test_truncated_patch_keeps_a_distinct_omission_reason() -> None:
-    from pr_reviewer.contracts.github import OmissionReason, RepositoryIdentity
+    from pr_reviewer.contracts.github import OmissionReason
     from pr_reviewer.github.pull_request import PullRequestFile, ensure_complete_diff
 
     class EmptyFetcher:
@@ -116,7 +115,7 @@ def test_truncated_patch_keeps_a_distinct_omission_reason() -> None:
 
 
 def test_binary_file_is_omitted_as_binary_not_as_unchanged() -> None:
-    from pr_reviewer.contracts.github import OmissionReason, RepositoryIdentity
+    from pr_reviewer.contracts.github import OmissionReason
     from pr_reviewer.github.pull_request import PullRequestFile, ensure_complete_diff
 
     class EmptyFetcher:

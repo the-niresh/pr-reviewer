@@ -6,7 +6,7 @@ from typing import Any, Literal, Protocol, TypedDict, cast
 import httpx
 from pydantic import BaseModel, ConfigDict, Field
 
-from pr_reviewer.contracts import PullRequestRef
+from pr_reviewer.contracts.github import OmissionReason, PullRequestRef, RepositoryIdentity
 
 GitHubFileStatus = Literal["added", "modified", "removed", "renamed"]
 
@@ -42,8 +42,11 @@ class PullRequestFile(BaseModel):
 
     path: str = Field(min_length=1)
     status: GitHubFileStatus
-    patch: str
+    patch: str | None = None
     previous_path: str | None = None
+    truncated: bool = False
+    binary: bool = False
+    omission_reason: OmissionReason | None = None
 
 
 class PullRequestSnapshot(BaseModel):
@@ -57,6 +60,19 @@ class PullRequestSnapshot(BaseModel):
     title: str
     body: str
     files: list[PullRequestFile]
+    identity: RepositoryIdentity | None = None
+    draft: bool = False
+
+
+class RepositoryFetcher(Protocol):
+    def recover_patch(
+        self,
+        identity: RepositoryIdentity,
+        path: str,
+        *,
+        base_sha: str,
+        head_sha: str,
+    ) -> str | None: ...
 
 
 class HttpClient(Protocol):
@@ -89,7 +105,7 @@ def normalize_github_pull_request(
             PullRequestFile(
                 path=file.filename,
                 status=normalize_file_status(file.status),
-                patch=file.patch or "",
+                patch=file.patch,
                 previous_path=file.previous_filename,
             )
             for file in response.files
@@ -101,6 +117,72 @@ def normalize_file_status(status: str) -> GitHubFileStatus:
     if status in {"added", "modified", "removed", "renamed"}:
         return cast(GitHubFileStatus, status)
     raise ValueError(f"Unsupported GitHub file status: {status}")
+
+
+def ensure_complete_diff(
+    snapshot: PullRequestSnapshot,
+    fetcher: RepositoryFetcher,
+) -> PullRequestSnapshot:
+    """Fill omitted patches via fetcher, or record a closed-set OmissionReason.
+
+    A missing GitHub patch is never an unchanged file. A clone bound (timeout or
+    size) is recorded as an omission so the rest of the review can continue.
+    """
+    completed: list[PullRequestFile] = []
+    for file in snapshot.files:
+        completed.append(_complete_file(snapshot, file, fetcher))
+    return snapshot.model_copy(update={"files": completed})
+
+
+def _complete_file(
+    snapshot: PullRequestSnapshot,
+    file: PullRequestFile,
+    fetcher: RepositoryFetcher,
+) -> PullRequestFile:
+    if file.binary:
+        return file.model_copy(update={"omission_reason": OmissionReason.BINARY, "patch": None})
+    if file.truncated:
+        return file.model_copy(update={"omission_reason": OmissionReason.PATCH_TRUNCATED_BY_GITHUB})
+    if file.patch:
+        return file
+    recovered = _recover_or_omit(snapshot, file, fetcher)
+    if recovered is None:
+        return file.model_copy(
+            update={"patch": None, "omission_reason": OmissionReason.PATCH_OMITTED_BY_GITHUB}
+        )
+    if isinstance(recovered, OmissionReason):
+        return file.model_copy(update={"patch": None, "omission_reason": recovered})
+    return file.model_copy(update={"patch": recovered, "omission_reason": None})
+
+
+def _recover_or_omit(
+    snapshot: PullRequestSnapshot,
+    file: PullRequestFile,
+    fetcher: RepositoryFetcher,
+) -> str | OmissionReason | None:
+    if snapshot.identity is None:
+        return None
+    try:
+        return fetcher.recover_patch(
+            snapshot.identity,
+            file.path,
+            base_sha=snapshot.base_sha,
+            head_sha=snapshot.head_sha,
+        )
+    except Exception as error:
+        reason = _omission_for_fetcher_error(error)
+        if reason is not None:
+            return reason
+        raise
+
+
+def _omission_for_fetcher_error(error: BaseException) -> OmissionReason | None:
+    name = type(error).__name__
+    if name == "CloneTimeout":
+        return OmissionReason.CLONE_TIMEOUT
+    if name == "CloneSizeLimit":
+        return OmissionReason.FILE_SIZE_LIMIT
+    return None
 
 
 def fetch_pull_request(
@@ -197,7 +279,7 @@ def normalize_github_pull_request_by_repository_id(
             PullRequestFile(
                 path=file.filename,
                 status=normalize_file_status(file.status),
-                patch=file.patch or "",
+                patch=file.patch,
                 previous_path=file.previous_filename,
             )
             for file in files

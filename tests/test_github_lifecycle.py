@@ -11,6 +11,7 @@ of interrupting collection.
 
 from __future__ import annotations
 
+from pr_reviewer.contracts.github import GitHubDelivery, PullRequestRef, RepositoryIdentity
 from pr_reviewer.db.client import connection
 from pr_reviewer.jobs import enqueue_review_job
 
@@ -19,9 +20,7 @@ HEAD_SHA = "b" * 40
 NEWER_HEAD_SHA = "c" * 40
 
 
-def _identity():
-    from pr_reviewer.contracts.github import RepositoryIdentity
-
+def _identity() -> RepositoryIdentity:
     return RepositoryIdentity(
         installation_id=7201,
         repository_id=82001,
@@ -36,9 +35,7 @@ def _delivery(
     draft: bool = False,
     head_sha: str = HEAD_SHA,
     delivery_id: str = "delivery-lifecycle-1",
-):
-    from pr_reviewer.contracts.github import GitHubDelivery, PullRequestRef
-
+) -> GitHubDelivery:
     identity = _identity()
     return GitHubDelivery(
         delivery_id=delivery_id,
