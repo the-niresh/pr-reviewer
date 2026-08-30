@@ -18,7 +18,7 @@ from __future__ import annotations
 import sys
 from collections.abc import Sequence
 
-_USAGE = "usage: reviewer <doctor|trace> [args...]"
+_USAGE = "usage: reviewer <doctor|trace|start|stop|status|open> [args...]"
 
 
 def main(argv: Sequence[str] | None = None) -> int:
@@ -38,6 +38,11 @@ def main(argv: Sequence[str] | None = None) -> int:
         from pr_reviewer.cli.trace import main as trace_main
 
         return trace_main(rest)
+
+    if subcommand in {"start", "stop", "status", "open"}:
+        from pr_reviewer.runner.cli.service import main as service_main
+
+        return service_main([subcommand, *rest])
 
     print(f"reviewer: unknown subcommand {subcommand!r}\n{_USAGE}", file=sys.stderr)
     return 1

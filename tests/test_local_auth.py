@@ -12,13 +12,16 @@ instead of interrupting collection.
 
 from __future__ import annotations
 
+import json
 import os
 import subprocess
 import sys
 import uuid
 from pathlib import Path
+from typing import Literal
 
 import pytest
+from fastapi import FastAPI
 from fastapi.testclient import TestClient
 
 from pr_reviewer.containers.runtime import ContainerProbe
@@ -30,6 +33,7 @@ REPO_ROOT = Path(__file__).resolve().parent.parent
 SRC_ROOT = REPO_ROOT / "src" / "pr_reviewer"
 LOCAL_AUTH = SRC_ROOT / "runner" / "web" / "local_auth.py"
 MODEL_KEY_MARKER_PREFIX = "sk-onboarding-must-not-echo-"
+PairingStatus = Literal["pending", "exchangeable", "invalid_or_expired"]
 
 
 def _probe(*, ready: bool, failures: tuple[str, ...] = ()) -> ContainerProbe:
@@ -48,12 +52,14 @@ def _probe(*, ready: bool, failures: tuple[str, ...] = ()) -> ContainerProbe:
 
 class _OneUsePairingClient:
     """Stand-in for the hosted exchange over HTTPS. First use succeeds; replay returns Task 2's
-    denial. local_auth must not import control_plane.pairing to get this behaviour.
+    denial. status() is the Task 8 seam: hosted Task 2B will be the real implementation later.
+    local_auth must not import control_plane.pairing to get this behaviour.
     """
 
     def __init__(self) -> None:
         self._used = False
         self.calls: list[tuple[str, str]] = []
+        self.status_state: PairingStatus = "pending"
 
     def exchange(self, code: str, proof: str) -> RunnerCredential | PairingDenied:
         self.calls.append((code, proof))
@@ -61,6 +67,10 @@ class _OneUsePairingClient:
             return PairingDenied(reason="invalid_or_expired_code")
         self._used = True
         return RunnerCredential(runner_id=uuid.uuid4(), credential="runner-cred-test")
+
+    def status(self, code: str, challenge: str) -> PairingStatus:
+        del code, challenge
+        return self.status_state
 
 
 def _app(
@@ -70,7 +80,7 @@ def _app(
     session_secret: str = "session-secret-for-tests-not-a-model-key",
     pairing: _OneUsePairingClient | None = None,
     probe: ContainerProbe | None = None,
-):
+) -> FastAPI:
     from pr_reviewer.runner.web.local_auth import create_local_onboarding_app
 
     return create_local_onboarding_app(
@@ -80,6 +90,7 @@ def _app(
         pairing_client=pairing if pairing is not None else _OneUsePairingClient(),
         probe=probe if probe is not None else _probe(ready=True),
         requested_mode="full",
+        hosted_origin="https://control.example.test",
     )
 
 
@@ -172,6 +183,7 @@ def test_model_key_is_stored_in_the_secret_store_and_never_echoed(tmp_path: Path
         pairing_client=_OneUsePairingClient(),
         probe=_probe(ready=True),
         requested_mode="full",
+        hosted_origin="https://control.example.test",
     )
     client = TestClient(app)
     token = _csrf_token(client)
@@ -205,6 +217,7 @@ def test_model_key_never_appears_in_os_environ_or_a_spawned_childs_environment(
         pairing_client=_OneUsePairingClient(),
         probe=_probe(ready=True),
         requested_mode="full",
+        hosted_origin="https://control.example.test",
     )
     client = TestClient(app)
     token = _csrf_token(client)
@@ -229,6 +242,24 @@ def test_model_key_never_appears_in_os_environ_or_a_spawned_childs_environment(
     assert key not in child.stdout, "model key leaked into a spawned child's environment"
 
 
+def test_loopback_ui_origin_is_allowed_for_cors(tmp_path: Path) -> None:
+    client = TestClient(_app(tmp_path))
+    origin = "http://127.0.0.1:3000"
+    response = client.get("/onboarding/mode", headers={"Origin": origin})
+    assert response.status_code == 200
+    assert response.headers.get("access-control-allow-origin") == origin
+
+
+def test_non_loopback_origin_is_not_granted_cors(tmp_path: Path) -> None:
+    client = TestClient(_app(tmp_path))
+    response = client.get(
+        "/onboarding/mode",
+        headers={"Origin": "http://192.168.1.10:3000"},
+    )
+    assert response.status_code == 200
+    assert response.headers.get("access-control-allow-origin") != "http://192.168.1.10:3000"
+
+
 def test_mode_preview_uses_select_runtime_mode_not_a_second_decision(tmp_path: Path) -> None:
     probe = _probe(ready=False, failures=("docker CLI not found on PATH",))
     expected = select_runtime_mode(probe, "full")
@@ -241,6 +272,84 @@ def test_mode_preview_uses_select_runtime_mode_not_a_second_decision(tmp_path: P
     assert body["downgraded"] is True
     assert tuple(body["disabled_features"]) == expected.disabled_features
     assert expected.disabled_features != ()
+
+
+def _assert_no_oauth_or_installation_proof(body: object) -> None:
+    blob = json.dumps(body).lower()
+    for needle in (
+        "access_token",
+        "gho_",
+        "verifiedinstallationaccess",
+        "verified_installation_access",
+        "github_user_id",
+        "installation_id",
+        "binding_secret",
+    ):
+        assert needle not in blob
+
+
+def test_sign_in_url_is_hosted_with_an_allowlisted_return_path(tmp_path: Path) -> None:
+    client = TestClient(_app(tmp_path))
+    response = client.get("/onboarding/pairing/sign-in")
+    assert response.status_code == 200
+    body = response.json()
+    url = body["url"]
+    assert url.startswith("https://control.example.test/api/auth/github/sign-in")
+    assert "return_to=/dashboard" in url or "return_to=%2Fdashboard" in url
+    assert "127.0.0.1" not in url
+    _assert_no_oauth_or_installation_proof(body)
+
+
+def test_pairing_status_stays_pending_until_the_client_reports_exchangeable(
+    tmp_path: Path,
+) -> None:
+    pairing = _OneUsePairingClient()
+    client = TestClient(_app(tmp_path, pairing=pairing))
+
+    pending = client.get(
+        "/onboarding/pairing/status",
+        params={"code": "PAIR-1", "challenge": "pkce-challenge"},
+    )
+    assert pending.status_code == 200
+    assert pending.json()["state"] == "pending"
+    _assert_no_oauth_or_installation_proof(pending.json())
+
+    pairing.status_state = "exchangeable"
+    ready = client.get(
+        "/onboarding/pairing/status",
+        params={"code": "PAIR-1", "challenge": "pkce-challenge"},
+    )
+    assert ready.status_code == 200
+    assert ready.json()["state"] == "exchangeable"
+    _assert_no_oauth_or_installation_proof(ready.json())
+
+
+def test_local_responses_never_include_an_oauth_token_or_installation_proof(
+    tmp_path: Path,
+) -> None:
+    client = TestClient(_app(tmp_path))
+    token = _csrf_token(client)
+    bodies = [
+        client.get("/onboarding/session").json(),
+        client.get("/onboarding/pairing/sign-in").json(),
+        client.get(
+            "/onboarding/pairing/status",
+            params={"code": "PAIR-1", "challenge": "ch"},
+        ).json(),
+        client.get("/onboarding/mode").json(),
+        client.post(
+            "/onboarding/model-key",
+            json={"provider": "openai", "key": MODEL_KEY_MARKER_PREFIX + "x"},
+            headers={"x-csrf-token": token},
+        ).json(),
+        client.post(
+            "/onboarding/pairing/exchange",
+            json={"code": "PAIR-1", "proof": "verifier"},
+            headers={"x-csrf-token": token},
+        ).json(),
+    ]
+    for body in bodies:
+        _assert_no_oauth_or_installation_proof(body)
 
 
 def test_hosted_packages_cannot_import_the_module_that_holds_the_model_key() -> None:

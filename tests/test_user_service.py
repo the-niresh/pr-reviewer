@@ -11,9 +11,14 @@ of interrupting collection.
 
 from __future__ import annotations
 
+import os
 import socket
+import subprocess
+import sys
+import time
 from pathlib import Path
 
+import httpx
 import pytest
 
 REPO_ROOT = Path(__file__).resolve().parent.parent
@@ -96,6 +101,122 @@ def test_reviewer_usage_lists_the_user_service_commands(
     err = capsys.readouterr().err
     for name in ("start", "stop", "status", "open"):
         assert name in err
+
+
+def test_start_refuses_a_non_loopback_host(capsys: pytest.CaptureFixture[str]) -> None:
+    from pr_reviewer.runner.cli.service import main as service_main
+
+    exit_code = service_main(["start", "--host", "0.0.0.0"])
+    assert exit_code == 1
+    err = capsys.readouterr().err
+    assert "not wired" not in err
+    assert "0.0.0.0" in err
+    assert "127.0.0.1" in err
+
+
+def test_start_hands_the_loopback_app_to_uvicorn(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    from pr_reviewer.containers.runtime import ContainerProbe
+    from pr_reviewer.runner.cli import service
+    from pr_reviewer.runner.secrets import FileSecretStore
+
+    recorded: dict[str, object] = {}
+
+    def fake_run(app: object, *, host: str, port: int, **kwargs: object) -> None:
+        del kwargs
+        recorded["app"] = app
+        recorded["host"] = host
+        recorded["port"] = port
+
+    monkeypatch.setenv("PR_REVIEWER_HOSTED_ORIGIN", "https://control.example.test")
+    monkeypatch.setenv("HOME", str(tmp_path))
+    monkeypatch.setenv("XDG_DATA_HOME", str(tmp_path / "share"))
+
+    probe = ContainerProbe(
+        docker_cli_found=False,
+        daemon_running=False,
+        socket_accessible=False,
+        image_pull_succeeded=False,
+        runs_as_non_root=False,
+        network_isolated=False,
+        resource_limits_enforced=False,
+        platform_supported=True,
+        failures=("docker CLI not found on PATH",),
+    )
+    secrets = FileSecretStore(tmp_path / "secrets")
+    service.start_local_onboarding(
+        host="127.0.0.1",
+        port=8741,
+        hosted_origin="https://control.example.test",
+        probe=probe,
+        secrets=secrets,
+        run_server=fake_run,
+    )
+    assert recorded["host"] == "127.0.0.1"
+    assert recorded["port"] == 8741
+    from fastapi import FastAPI
+    from fastapi.testclient import TestClient
+
+    app = recorded["app"]
+    assert isinstance(app, FastAPI)
+    client = TestClient(app)
+    mode = client.get("/onboarding/mode")
+    assert mode.status_code == 200
+    assert "disabled_features" in mode.json()
+
+
+def test_start_serves_onboarding_on_loopback_until_stopped(
+    tmp_path: Path,
+) -> None:
+    port = _closed_loopback_port()
+    env = os.environ.copy()
+    env["HOME"] = str(tmp_path)
+    env["XDG_DATA_HOME"] = str(tmp_path / "share")
+    env["PR_REVIEWER_HOSTED_ORIGIN"] = "https://control.example.test"
+    env["PYTHONPATH"] = str(REPO_ROOT / "src") + os.pathsep + env.get("PYTHONPATH", "")
+    proc = subprocess.Popen(
+        [
+            sys.executable,
+            "-m",
+            "pr_reviewer.reviewer",
+            "start",
+            "--host",
+            "127.0.0.1",
+            "--port",
+            str(port),
+        ],
+        cwd=REPO_ROOT,
+        env=env,
+        stdout=subprocess.PIPE,
+        stderr=subprocess.PIPE,
+        text=True,
+    )
+    deadline = time.monotonic() + 90
+    try:
+        while time.monotonic() < deadline:
+            if proc.poll() is not None:
+                stdout, stderr = proc.communicate()
+                raise AssertionError(f"start exited {proc.returncode}: {stderr or stdout}")
+            try:
+                response = httpx.get(f"http://127.0.0.1:{port}/onboarding/mode", timeout=0.5)
+            except httpx.HTTPError:
+                time.sleep(0.1)
+                continue
+            assert response.status_code == 200
+            assert "disabled_features" in response.json()
+            break
+        else:
+            proc.kill()
+            raise AssertionError("start did not serve /onboarding/mode before the deadline")
+    finally:
+        proc.terminate()
+        try:
+            proc.wait(timeout=10)
+        except subprocess.TimeoutExpired:
+            proc.kill()
+            proc.wait(timeout=5)
 
 
 def test_service_module_never_imports_the_hosted_database_or_control_plane() -> None:
