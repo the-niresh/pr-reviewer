@@ -641,4 +641,7 @@ which is not a route that exists.
 
 - ❓ Which operating systems ship in v1: Linux only, or Linux and macOS?
 - ❓ Which operating-system secret-store library will be supported in v1?
-- ❓ Which host and public HTTPS domain will run the shared control plane?
+- ✅ The public HTTPS domain is `https://niresh.tech`. Decided 2026-08-30 when the GitHub App
+  was registered: callback `https://niresh.tech/api/auth/github/callback`, webhook
+  `https://niresh.tech/api/github/webhook`. Which host serves it is still open, but the
+  domain is now fixed because it is baked into the App registration.
