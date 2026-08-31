@@ -32,6 +32,7 @@ from __future__ import annotations
 
 import logging
 import threading
+import uuid
 from datetime import UTC, datetime
 from pathlib import Path
 from typing import Protocol
@@ -46,7 +47,12 @@ from pr_reviewer.contracts.runner import (
     NoJob,
     RunnerAuthDenied,
 )
-from pr_reviewer.local_store.sqlite import LocalStore, LocalStoreCorrupted, open_local_store
+from pr_reviewer.local_store.sqlite import (
+    LocalJob,
+    LocalStore,
+    LocalStoreCorrupted,
+    open_local_store,
+)
 from pr_reviewer.runner.revocation import RevocationGate
 from pr_reviewer.runner.secrets import SecretStore
 
@@ -151,6 +157,11 @@ class RunnerDaemon:
                 continue
             if lease.status == "invalid_or_expired" or lease.status == "cancelled":
                 self._local_store.jobs.mark_abandoned(job.job_id)
+                continue
+            if lease.status == "active" and self._review is not None:
+                envelope = _envelope_from_local_job(job)
+                result = self._review.review(envelope)
+                self.complete_job(str(envelope.job_id), envelope.lease_token, result)
 
     def complete_job(self, job_id: str, lease_token: str, result: JobAcknowledgement) -> None:
         try:
@@ -209,6 +220,21 @@ class RunnerDaemon:
         for entry in self._local_store.pending_acknowledgements.list_pending():
             if entry.job_id == job_id:
                 self._local_store.pending_acknowledgements.resolve(entry.id)
+
+
+def _envelope_from_local_job(job: LocalJob) -> JobEnvelope:
+    return JobEnvelope(
+        job_id=uuid.UUID(job.job_id),
+        installation_id=job.installation_id,
+        repository_id=job.repository_id,
+        pull_request_number=job.pull_request_number,
+        base_sha=job.base_sha,
+        head_sha=job.head_sha,
+        policy_version=job.policy_version,
+        budget=job.budget,
+        trace_id=uuid.UUID(job.trace_id),
+        lease_token=job.lease_token,
+    )
 
 
 def open_or_recover_local_store(path: str | Path) -> LocalStore:

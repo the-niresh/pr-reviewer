@@ -421,6 +421,10 @@ class LocalStore:
         self.events = LocalEventStore(connection)
         self.pending_acknowledgements = PendingAcknowledgementStore(connection)
 
+    @property
+    def connection(self) -> sqlite3.Connection:
+        return self._connection
+
     def close(self) -> None:
         self._connection.close()
 

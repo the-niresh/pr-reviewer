@@ -67,6 +67,7 @@ GUARDED_PACKAGES = frozenset(
         "models",
         "prompts",
         "security",
+        "workflow",
     }
 )
 
@@ -92,6 +93,7 @@ EXPECTED_EXISTING_PACKAGES = frozenset(
         "retrieval",
         "verification",
         "notifications",
+        "workflow",
     }
 )
 
@@ -107,6 +109,7 @@ CONTROL_PLANE_FORBIDDEN_TARGETS = frozenset(
         "verification",
         "containers",
         "notifications",
+        "workflow",
     }
 )
 
@@ -132,6 +135,7 @@ RUNNER_SIDE_PACKAGES = frozenset(
         "notifications",
         "containers",
         "reviewer",
+        "workflow",
     }
 )
 RUNNER_SIDE_FORBIDDEN_MODULES = frozenset(
