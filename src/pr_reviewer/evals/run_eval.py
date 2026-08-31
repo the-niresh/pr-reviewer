@@ -61,3 +61,23 @@ def run_retrieval_comparison(
         )
     config = EvalConfig(cases=list(holdout), repeats=repeats)
     return run_eval(config, without_retrieval), run_eval(config, with_retrieval)
+
+
+def run_context_source_comparison(
+    cases: Sequence[EvalCase],
+    profile_only: ReviewerCallable,
+    graph_only: ReviewerCallable,
+    profile_plus_graph: ReviewerCallable,
+    repeats: int = 3,
+) -> tuple[EvalRun, EvalRun, EvalRun]:
+    holdout = [case for case in cases if case.split == "holdout"]
+    if not holdout:
+        raise BaselineBlocked(
+            "holdout is empty; refusing to report a context-source comparison"
+        )
+    config = EvalConfig(cases=list(holdout), repeats=repeats)
+    return (
+        run_eval(config, profile_only),
+        run_eval(config, graph_only),
+        run_eval(config, profile_plus_graph),
+    )
