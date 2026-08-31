@@ -18,6 +18,7 @@ from pr_reviewer.contracts.review_context import (
 )
 from pr_reviewer.github.pull_request import PullRequestFile, PullRequestSnapshot
 from pr_reviewer.reviewer.hunk_format import render_hunks
+from pr_reviewer.security.prompt_boundaries import UntrustedText, wrap_untrusted
 
 TokenCounter = Callable[[str], int]
 _NEW_LINE = re.compile(r"^(\d+)\| ")
@@ -94,7 +95,9 @@ def change_size(patch: str | None) -> int:
 
 def omission_prompt_section(packed: PackedDiff) -> str:
     lines = ["Omitted files:"]
-    lines.extend(f"{item.path}: {item.reason.value}" for item in packed.omitted_files)
+    for item in packed.omitted_files:
+        path = wrap_untrusted("omitted_path", UntrustedText(item.path))
+        lines.append(f"{path}: {item.reason.value}")
     return "\n".join(lines)
 
 

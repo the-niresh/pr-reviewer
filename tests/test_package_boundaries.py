@@ -64,6 +64,7 @@ GUARDED_PACKAGES = frozenset(
         "evals",
         "models",
         "prompts",
+        "security",
     }
 )
 
@@ -85,6 +86,7 @@ EXPECTED_EXISTING_PACKAGES = frozenset(
         "models",
         "prompts",
         "reviewer",
+        "security",
     }
 )
 
@@ -377,3 +379,22 @@ def test_reviewer_packer_modules_must_not_import_hosted_stores() -> None:
         for prefix in forbidden:
             hits |= _imports_matching_prefix(imports, prefix)
         assert not hits, f"reviewer/{filename} must not import hosted stores, found: {sorted(hits)}"
+
+
+def test_security_package_is_shared_and_must_not_import_hosted_or_runner_stores() -> None:
+    """security/ is shared like github/: wrap_untrusted and instruction loading are pure."""
+    assert "security" in GUARDED_PACKAGES
+    assert "security" in EXPECTED_EXISTING_PACKAGES
+    package_dir = SRC_ROOT / "security"
+    assert package_dir.is_dir()
+    imports = collect_imports(package_dir)
+    forbidden = (
+        "pr_reviewer.db",
+        "pr_reviewer.control_plane",
+        "pr_reviewer.runner",
+        "pr_reviewer.local_store",
+    )
+    hits: set[str] = set()
+    for prefix in forbidden:
+        hits |= _imports_matching_prefix(imports, prefix)
+    assert not hits, f"security/* must not import hosted or runner stores, found: {sorted(hits)}"

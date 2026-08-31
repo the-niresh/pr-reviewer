@@ -15,11 +15,9 @@ import httpx
 from pydantic import BaseModel, ConfigDict, Field, ValidationError
 
 from pr_reviewer.contracts.finding_candidate import FindingCandidate
+from pr_reviewer.security.prompt_boundaries import UntrustedText, wrap_untrusted
 
 ModelVendor = Literal["openai", "anthropic"]
-
-UNTRUSTED_BEGIN = "-----BEGIN UNTRUSTED INPUT-----"
-UNTRUSTED_END = "-----END UNTRUSTED INPUT-----"
 
 # USD per million tokens (input, output). Unknown models fail closed so cost cannot go uncounted.
 _PRICE_PER_MILLION: dict[tuple[str, str], tuple[Decimal, Decimal]] = {
@@ -93,7 +91,7 @@ class ModelProvider(Protocol):
 
 
 def quote_untrusted(block: UntrustedInput) -> str:
-    return f"{UNTRUSTED_BEGIN}\nname: {block.name}\n{block.content}\n{UNTRUSTED_END}"
+    return wrap_untrusted(block.name, UntrustedText(block.content))
 
 
 def render_untrusted_user_message(request: ModelRequest) -> str:
