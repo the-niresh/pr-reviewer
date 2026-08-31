@@ -2,9 +2,29 @@
 
 from __future__ import annotations
 
+from collections.abc import Sequence
+from pathlib import Path
+
 from pr_reviewer.evals.match_findings import MatchResult, match_findings
 from pr_reviewer.evals.metrics import compute_metrics
-from pr_reviewer.evals.types import EvalConfig, EvalRun, ReviewerCallable
+from pr_reviewer.evals.types import EvalCase, EvalConfig, EvalRun, ReviewerCallable
+
+_PUBLIC_CASES = (
+    Path(__file__).resolve().parents[3] / "datasets" / "public" / "eval_cases.jsonl"
+)
+
+
+class BaselineBlocked(Exception):
+    """Holdout is empty. Refusing to publish a baseline number."""
+
+
+def load_public_eval_cases(path: Path | None = None) -> list[EvalCase]:
+    target = path or _PUBLIC_CASES
+    cases: list[EvalCase] = []
+    for line in target.read_text(encoding="utf-8").splitlines():
+        if line.strip():
+            cases.append(EvalCase.model_validate_json(line))
+    return cases
 
 
 def run_eval(config: EvalConfig, reviewer: ReviewerCallable) -> EvalRun:
@@ -15,3 +35,14 @@ def run_eval(config: EvalConfig, reviewer: ReviewerCallable) -> EvalRun:
             results.append(match_findings(case.expected_labels, actual))
     metrics = compute_metrics(results, reviewed_pr_count=len(results))
     return EvalRun(metrics=metrics)
+
+
+def run_diff_only_baseline(
+    cases: Sequence[EvalCase],
+    reviewer: ReviewerCallable,
+    repeats: int = 3,
+) -> EvalRun:
+    holdout = [case for case in cases if case.split == "holdout"]
+    if not holdout:
+        raise BaselineBlocked("holdout is empty; refusing to report a baseline")
+    return run_eval(EvalConfig(cases=list(holdout), repeats=repeats), reviewer)

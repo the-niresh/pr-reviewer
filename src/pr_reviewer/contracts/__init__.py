@@ -1,5 +1,5 @@
 from pr_reviewer.contracts.finding import Finding
-from pr_reviewer.contracts.finding_candidate import FindingCandidate
+from pr_reviewer.contracts.finding_candidate import FindingCandidate, FindingDraft
 from pr_reviewer.contracts.github import (
     GitHubDelivery,
     OmissionReason,
@@ -13,6 +13,7 @@ from pr_reviewer.contracts.review_context import (
     OmittedFile,
     PackedDiff,
     ReviewContextItem,
+    ReviewOutcome,
     ReviewResult,
 )
 from pr_reviewer.contracts.runner import (
@@ -32,6 +33,7 @@ __all__ = [
     "ContextBudget",
     "FilePatch",
     "FindingCandidate",
+    "FindingDraft",
     "GitHubDelivery",
     "OmissionReason",
     "OmittedFile",
@@ -40,6 +42,7 @@ __all__ = [
     "PullRequestRef",
     "RepositoryIdentity",
     "ReviewContextItem",
+    "ReviewOutcome",
     "ReviewResult",
     "RepositoryAuthorization",
     "RunnerCapabilities",

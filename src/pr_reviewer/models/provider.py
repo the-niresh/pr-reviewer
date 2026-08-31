@@ -145,12 +145,17 @@ def finish_completion(
         raise InvalidModelJson() from exc
     if not isinstance(parsed, dict):
         raise InvalidModelJson()
-    if request.schema_name != "FindingCandidate":
+    if request.schema_name == "FindingCandidate":
+        try:
+            FindingCandidate.model_validate(parsed)
+        except ValidationError as exc:
+            raise ModelSchemaMismatch() from exc
+    elif request.schema_name == "ReviewFindingsDraft":
+        findings = parsed.get("findings")
+        if not isinstance(findings, list):
+            raise ModelSchemaMismatch()
+    else:
         raise ModelSchemaMismatch()
-    try:
-        FindingCandidate.model_validate(parsed)
-    except ValidationError as exc:
-        raise ModelSchemaMismatch() from exc
     canonical = json.dumps(parsed, sort_keys=True, separators=(",", ":"))
     digest = hashlib.sha256(canonical.encode("utf-8")).hexdigest()
     return ModelResponse(

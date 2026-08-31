@@ -6,6 +6,7 @@ from typing import Literal, Self
 
 from pydantic import BaseModel, ConfigDict, Field, model_validator
 
+from pr_reviewer.contracts.finding_candidate import FindingCandidate
 from pr_reviewer.contracts.github import OmissionReason
 
 PACKING_STRATEGY_VERSION = "v1-sensitivity-desc-change-size-desc-path-asc"
@@ -75,3 +76,16 @@ class ReviewResult(BaseModel):
 
     omitted_files: tuple[OmittedFile, ...]
     covers_all_changed_files: bool
+
+
+class ReviewOutcome(BaseModel):
+    model_config = ConfigDict(frozen=True, extra="forbid")
+
+    candidates: tuple[FindingCandidate, ...]
+    packing_strategy_version: str = Field(min_length=1)
+    covers_all_changed_files: bool
+    omitted_files: tuple[OmittedFile, ...]
+    cancelled: bool = False
+
+    def is_complete(self) -> bool:
+        return not self.cancelled and self.covers_all_changed_files

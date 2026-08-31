@@ -129,6 +129,43 @@ def test_mining_emits_candidates_not_labels(tmp_path: Path) -> None:
     assert "expected_labels" not in EvalCandidate.model_fields
 
 
+def test_mining_survives_a_non_utf8_byte_in_the_repo(tmp_path: Path) -> None:
+    from pr_reviewer.evals.mine_candidates import mine_eval_candidates
+
+    repo = tmp_path / "repo"
+    repo.mkdir()
+    subprocess.run(["git", "init"], cwd=repo, check=True, capture_output=True)
+    subprocess.run(
+        ["git", "config", "user.email", "eval@test.example"],
+        cwd=repo,
+        check=True,
+        capture_output=True,
+    )
+    subprocess.run(
+        ["git", "config", "user.name", "Eval Test"],
+        cwd=repo,
+        check=True,
+        capture_output=True,
+    )
+    (repo / "notes.txt").write_bytes(b"ascii prefix \xff suffix\n")
+    subprocess.run(["git", "add", "."], cwd=repo, check=True, capture_output=True)
+    subprocess.run(
+        ["git", "commit", "-m", "add notes"],
+        cwd=repo,
+        check=True,
+        capture_output=True,
+    )
+    patch = subprocess.run(
+        ["git", "-C", str(repo), "log", "-p", "--pretty=format:"],
+        check=True,
+        capture_output=True,
+    )
+    assert b"\xff" in patch.stdout
+    mined = mine_eval_candidates(repo, max_cases=10)
+    assert mined
+    assert "\ufffd" in mined[0].diff or "suffix" in mined[0].diff
+
+
 def test_commit_message_is_evidence_not_ground_truth(tmp_path: Path) -> None:
     from pr_reviewer.evals.mine_candidates import mine_eval_candidates
     from pr_reviewer.evals.types import EvalCandidate
