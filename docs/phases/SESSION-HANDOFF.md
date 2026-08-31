@@ -19,7 +19,10 @@ then the phase records, then the plans.
 - ✅ Runtime plan complete except Task 10: Tasks 1, 1A, 1B, 2, 2A, 2B, 3, 4, 5, 5A, 6, 7, 8, 9 all
   shipped. Work is on `main`; the `PR-REVIEWER-*` branches were consolidated and deleted.
 - ✅ Master plan Tasks 1 to 6 shipped. 20 of 44 tasks done overall.
-- ⬜ Runtime Task 10 (end-to-end proof) is blocked: nothing is deployed at `https://niresh.tech`.
+- ⬜ Runtime Task 10 (end-to-end proof) is blocked: nothing is deployed at
+  `https://reviewer.niresh.tech`. The subdomain does not exist yet and has to be created:
+  DNS record, TLS certificate, and a reverse proxy to the control plane. Corrected 2026-09-01;
+  it is a dedicated subdomain, never the apex `niresh.tech`.
   The domain is fixed by the GitHub App registration; the host is still undecided.
 - ⬜ Next work is master Task 7, then straight to Task 9. Task 9 (evals) must land before Task 11
   (the first reviewer), so there is a number to beat before there is anything to measure.
@@ -27,7 +30,10 @@ then the phase records, then the plans.
 
 ## Live environment facts - ✅
 
-- GitHub App registered 2026-08-30. App ID `4771544`. Domain `https://niresh.tech`.
+- GitHub App registered 2026-08-30. App ID `4771544`. Domain `https://reviewer.niresh.tech`.
+  ⚠️ The App was registered against the apex `niresh.tech`, so its **homepage URL, callback URL
+  and webhook URL all still point at the wrong host** and must be updated in GitHub App settings
+  before any live delivery works.
 - The App private key lives at `/srv/claude/secrets/`, mode 0600, **outside the repo**. `.env` holds
   the PEM content and is mode 0600. `*.pem`, `*.key` and `secrets/` are gitignored.
 - `GITHUB_OAUTH_CLIENT_ID` and `GITHUB_OAUTH_CLIENT_SECRET` are still blank in `.env`.
