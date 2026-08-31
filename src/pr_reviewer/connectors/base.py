@@ -12,7 +12,9 @@ from typing import Literal
 from pydantic import BaseModel, ConfigDict, Field
 
 ConnectorName = Literal["github"]
-ConnectorOperation = Literal["create_installation_token", "fetch_pull_request"]
+ConnectorOperation = Literal[
+    "create_installation_token", "fetch_pull_request", "create_pull_request_review"
+]
 ConnectorOutcome = Literal["success", "error"]
 ConnectorErrorKind = Literal["timeout", "http_error"]
 

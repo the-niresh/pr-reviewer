@@ -26,7 +26,7 @@ must stay that way -- see Exemptions below.
 | `agent_events` | `payload` | Redacted lifecycle event detail only: identifiers, enums, and aggregate token/cost numbers. agent_events_payload_is_flat (migration 202608291930_rescope_hosted_events.sql) rejects a nested object or array at the database layer, and record_event.serialize_json_object rejects one at the application layer, so this column cannot hold a findings list, a diff, or a sandbox log. |
 | `connector_runs` | `connector` | Fixed enum ('github'), the outbound API this row audited, not review content. |
 | `connector_runs` | `external_id` | Opaque GitHub request identifier when one is present. Typed and redacted so it cannot hold a token, a header, or a payload. |
-| `connector_runs` | `operation` | Fixed enum ('create_installation_token', 'fetch_pull_request'), the named call that ran, not a request or response body. |
+| `connector_runs` | `operation` | Fixed enum ('create_installation_token', 'fetch_pull_request', 'create_pull_request_review'), the named call that ran, not a request or response body. |
 | `connector_runs` | `payload_hash` | sha256 hex of operation, status, and byte counts only. The payload itself is never stored; this hash cannot be reversed into a body, a token, or a patch. |
 | `github_deliveries` | `event_name` | GitHub webhook event name, a fixed enum (e.g. pull_request). |
 | `github_deliveries` | `id` | GitHub's own delivery id: an opaque identifier, not content. |

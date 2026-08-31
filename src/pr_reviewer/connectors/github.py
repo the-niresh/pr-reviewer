@@ -16,6 +16,7 @@ from pr_reviewer.connectors.base import ConnectorResult
 from pr_reviewer.contracts import PullRequestRef
 from pr_reviewer.db.client import Row, connection
 from pr_reviewer.github.app_client import GitHubAppClient, InstallationToken
+from pr_reviewer.github.post_review import PostedReview, ReviewSubmission
 from pr_reviewer.github.pull_request import (
     HttpClient,
     InstallationTokenProvider,
@@ -261,6 +262,125 @@ def fetch_pull_request(
     )
 
 
+def create_pull_request_review(
+    submission: ReviewSubmission,
+    *,
+    ref: PullRequestRef,
+    token: str,
+    client: httpx.Client | None = None,
+    api_base_url: str = "https://api.github.com",
+    timeout_seconds: float = 10.0,
+    trace_id: uuid.UUID | None = None,
+    review_job_id: str | None = None,
+    record: RecordConnectorRun | None = None,
+) -> ConnectorResult[PostedReview]:
+    """Post a review that is already public-shaped. Finding objects are not accepted."""
+    payload = {
+        "commit_id": submission.commit_id,
+        "event": "COMMENT",
+        "body": submission.body,
+        "comments": [
+            {
+                "path": comment.path,
+                "line": comment.line,
+                "side": comment.side,
+                "body": comment.body,
+            }
+            for comment in submission.comments
+        ],
+    }
+    request_bytes = _json_bytes(payload)
+    started = time.perf_counter()
+    http_client = client or httpx.Client()
+    try:
+        response = http_client.post(
+            f"{api_base_url}/repos/{ref.owner}/{ref.repository}/pulls/{ref.number}/reviews",
+            headers={
+                "accept": "application/vnd.github+json",
+                "authorization": f"Bearer {token}",
+                "x-github-api-version": "2022-11-28",
+            },
+            json=payload,
+            timeout=timeout_seconds,
+        )
+        response.raise_for_status()
+    except httpx.TimeoutException:
+        latency_ms = max(0, int((time.perf_counter() - started) * 1000))
+        _record_post(
+            trace_id=trace_id,
+            review_job_id=review_job_id,
+            record=record,
+            request_bytes=request_bytes,
+            response_bytes=0,
+            status_code=None,
+        )
+        return ConnectorResult(
+            connector="github",
+            operation="create_pull_request_review",
+            outcome="error",
+            value=None,
+            error_kind="timeout",
+            status_code=None,
+            latency_ms=latency_ms,
+            request_bytes=request_bytes,
+            response_bytes=0,
+        )
+    except httpx.HTTPStatusError as error:
+        latency_ms = max(0, int((time.perf_counter() - started) * 1000))
+        status_code = error.response.status_code
+        response_bytes = len(error.response.content)
+        _record_post(
+            trace_id=trace_id,
+            review_job_id=review_job_id,
+            record=record,
+            request_bytes=request_bytes,
+            response_bytes=response_bytes,
+            status_code=status_code,
+        )
+        return ConnectorResult(
+            connector="github",
+            operation="create_pull_request_review",
+            outcome="error",
+            value=None,
+            error_kind="http_error",
+            status_code=status_code,
+            latency_ms=latency_ms,
+            request_bytes=request_bytes,
+            response_bytes=response_bytes,
+        )
+    latency_ms = max(0, int((time.perf_counter() - started) * 1000))
+    body = response.json()
+    review_id = str(body.get("id", ""))
+    comment_ids = tuple(str(item.get("id", "")) for item in body.get("comments") or ())
+    status_code = response.status_code
+    response_bytes = _json_bytes({"id": review_id, "comment_count": len(comment_ids)})
+    _record_post(
+        trace_id=trace_id,
+        review_job_id=review_job_id,
+        record=record,
+        request_bytes=request_bytes,
+        response_bytes=response_bytes,
+        status_code=status_code,
+    )
+    return ConnectorResult(
+        connector="github",
+        operation="create_pull_request_review",
+        outcome="success",
+        value=PostedReview(
+            github_review_id=review_id,
+            comment_ids=comment_ids,
+            response_status=status_code,
+            body=submission.body,
+            comments=submission.comments,
+        ),
+        error_kind=None,
+        status_code=status_code,
+        latency_ms=latency_ms,
+        request_bytes=request_bytes,
+        response_bytes=response_bytes,
+    )
+
+
 def _record_fetch(
     *,
     trace_id: uuid.UUID | None,
@@ -280,6 +400,33 @@ def _record_fetch(
         response_bytes=response_bytes,
         payload_hash=_payload_hash(
             operation="fetch_pull_request",
+            status_code=status_code,
+            request_bytes=request_bytes,
+            response_bytes=response_bytes,
+        ),
+    )
+    _maybe_record(record, audit, review_job_id)
+
+
+def _record_post(
+    *,
+    trace_id: uuid.UUID | None,
+    review_job_id: str | None,
+    record: RecordConnectorRun | None,
+    request_bytes: int,
+    response_bytes: int,
+    status_code: int | None,
+) -> None:
+    if record is None or trace_id is None:
+        return
+    audit = ConnectorAudit(
+        trace_id=trace_id,
+        connector="github",
+        operation="create_pull_request_review",
+        request_bytes=request_bytes,
+        response_bytes=response_bytes,
+        payload_hash=_payload_hash(
+            operation="create_pull_request_review",
             status_code=status_code,
             request_bytes=request_bytes,
             response_bytes=response_bytes,

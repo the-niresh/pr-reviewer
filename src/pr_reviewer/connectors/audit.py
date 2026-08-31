@@ -43,7 +43,9 @@ class ConnectorAudit(BaseModel):
 
     trace_id: uuid.UUID
     connector: Literal["github"]
-    operation: Literal["create_installation_token", "fetch_pull_request"]
+    operation: Literal[
+        "create_installation_token", "fetch_pull_request", "create_pull_request_review"
+    ]
     external_id: str | None = None
     request_bytes: int = Field(ge=0)
     response_bytes: int = Field(ge=0)

@@ -18,6 +18,13 @@ _ENQUEUE_ACTIONS = frozenset({"opened", "reopened", "ready_for_review", "synchro
 _CANCEL_ACTIONS = frozenset({"closed", "converted_to_draft"})
 
 
+def reviewed_head_is_current(reviewed_head_sha: str, live_head_sha: str) -> bool:
+    """True only when the SHA we reviewed is still the PR head. Call this
+    immediately before the posting API, not at the start of the review.
+    """
+    return reviewed_head_sha == live_head_sha
+
+
 @dataclass(frozen=True)
 class LifecycleDecision:
     kind: LifecycleKind
