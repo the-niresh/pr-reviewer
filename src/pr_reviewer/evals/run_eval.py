@@ -46,3 +46,18 @@ def run_diff_only_baseline(
     if not holdout:
         raise BaselineBlocked("holdout is empty; refusing to report a baseline")
     return run_eval(EvalConfig(cases=list(holdout), repeats=repeats), reviewer)
+
+
+def run_retrieval_comparison(
+    cases: Sequence[EvalCase],
+    without_retrieval: ReviewerCallable,
+    with_retrieval: ReviewerCallable,
+    repeats: int = 3,
+) -> tuple[EvalRun, EvalRun]:
+    holdout = [case for case in cases if case.split == "holdout"]
+    if not holdout:
+        raise BaselineBlocked(
+            "holdout is empty; refusing to report a retrieval comparison"
+        )
+    config = EvalConfig(cases=list(holdout), repeats=repeats)
+    return run_eval(config, without_retrieval), run_eval(config, with_retrieval)
