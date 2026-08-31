@@ -225,7 +225,7 @@ def test_mining_emits_one_candidate_per_commit(tmp_path: Path) -> None:
 
 
 def test_oversized_commit_is_skipped_with_a_recorded_reason(tmp_path: Path) -> None:
-    from pr_reviewer.config import context_budget_for_model
+    from pr_reviewer.context_budget import context_budget_for_model
     from pr_reviewer.evals.mine_candidates import estimate_diff_tokens, mine_eval_candidates
 
     budget = context_budget_for_model("gpt-4o-mini")

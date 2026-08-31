@@ -135,6 +135,7 @@ def test_run_eval_and_evals_package_import_nothing_from_models() -> None:
     assert not _imports_matching_prefix(evals_imports, "pr_reviewer.models")
     assert not _imports_matching_prefix(evals_imports, "pr_reviewer.db")
     assert not _imports_matching_prefix(evals_imports, "pr_reviewer.control_plane")
+    assert not _imports_matching_prefix(evals_imports, "pr_reviewer.config")
 
     models_imports = collect_imports(SRC_ROOT / "models")
     assert not _imports_matching_prefix(models_imports, "pr_reviewer.runner")

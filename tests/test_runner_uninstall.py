@@ -106,7 +106,7 @@ def test_uninstall_deletes_secrets_sqlite_and_volumes_only_when_confirmed(
 def test_reviewer_cli_routes_update_and_uninstall_through_runner_cli_not_operator_cli() -> None:
     from pathlib import Path as PathType
 
-    import pr_reviewer.reviewer as reviewer_mod
+    import pr_reviewer.reviewer_entry as reviewer_mod
 
     source = PathType(reviewer_mod.__file__).read_text(encoding="utf-8")
     assert "pr_reviewer.runner.cli" in source
@@ -120,7 +120,7 @@ def test_reviewer_cli_routes_update_and_uninstall_through_runner_cli_not_operato
 def test_reviewer_uninstall_without_confirm_delete_does_not_remove_data(
     tmp_path: Path, capsys: pytest.CaptureFixture[str], monkeypatch: pytest.MonkeyPatch
 ) -> None:
-    from pr_reviewer.reviewer import main as reviewer_main
+    from pr_reviewer.reviewer_entry import main as reviewer_main
 
     data_dir = tmp_path / "data"
     data_dir.mkdir()

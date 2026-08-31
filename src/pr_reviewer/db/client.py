@@ -3,8 +3,10 @@ from __future__ import annotations
 from collections.abc import Iterator, Sequence
 from contextlib import contextmanager
 from typing import Any
+from urllib.parse import urlsplit, urlunsplit
 
-from psycopg import Connection
+import psycopg
+from psycopg import Connection, sql
 from psycopg.rows import dict_row
 from psycopg_pool import ConnectionPool
 
@@ -12,15 +14,42 @@ from pr_reviewer.config import get_settings
 
 QueryParams = Sequence[Any] | dict[str, Any] | None
 Row = dict[str, Any]
+_LOCAL_HOSTS = frozenset({"localhost", "127.0.0.1"})
 
 _pool: ConnectionPool[Connection[Row]] | None = None
+
+
+def ensure_database_exists(database_url: str) -> None:
+    parts = urlsplit(database_url)
+    if parts.hostname not in _LOCAL_HOSTS:
+        return
+    dbname = parts.path.lstrip("/")
+    if not dbname:
+        return
+    admin_url = urlunsplit((parts.scheme, parts.netloc, "/postgres", parts.query, parts.fragment))
+    with psycopg.connect(admin_url, autocommit=True) as conn:
+        exists = conn.execute(
+            "select 1 from pg_database where datname = %s",
+            (dbname,),
+        ).fetchone()
+        if exists is not None:
+            return
+        owner = parts.username or "pr_reviewer"
+        conn.execute(
+            sql.SQL("create database {} owner {}").format(
+                sql.Identifier(dbname),
+                sql.Identifier(owner),
+            )
+        )
 
 
 def get_pool() -> ConnectionPool[Connection[Row]]:
     global _pool
     if _pool is None:
+        database_url = get_settings().database_url
+        ensure_database_exists(database_url)
         _pool = ConnectionPool(
-            get_settings().database_url,
+            database_url,
             kwargs={"row_factory": dict_row},
             min_size=1,
             max_size=10,

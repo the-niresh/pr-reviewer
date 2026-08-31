@@ -408,7 +408,7 @@ def test_doctor_on_ready_probe_enables_full_mode_without_confirm(
 
 
 def test_unified_reviewer_entry_dispatches_doctor_without_loading_operator_cli() -> None:
-    source = (SRC_ROOT / "reviewer" / "__init__.py").read_text(encoding="utf-8")
+    source = (SRC_ROOT / "reviewer_entry.py").read_text(encoding="utf-8")
     tree = ast.parse(source)
     top_level_imports: set[str] = set()
     for node in tree.body:
@@ -428,17 +428,17 @@ def test_unified_reviewer_entry_dispatches_doctor_without_loading_operator_cli()
         or name.startswith("pr_reviewer.control_plane.")
     }
     assert not hosted, (
-        f"reviewer/__init__.py loaded operator/hosted imports at module scope: {sorted(hosted)}"
+        f"reviewer_entry.py loaded operator/hosted imports at module scope: {sorted(hosted)}"
     )
 
 
 def test_pyproject_registers_the_unified_reviewer_script() -> None:
     text = (Path(__file__).resolve().parent.parent / "pyproject.toml").read_text(encoding="utf-8")
-    assert 'reviewer = "pr_reviewer.reviewer:main"' in text
+    assert 'reviewer = "pr_reviewer.reviewer_entry:main"' in text
 
 
 def test_reviewer_unknown_subcommand_is_nonzero(capsys: pytest.CaptureFixture[str]) -> None:
-    from pr_reviewer.reviewer import main as reviewer_main
+    from pr_reviewer.reviewer_entry import main as reviewer_main
 
     exit_code = reviewer_main(["not-a-command"])
     assert exit_code == 1

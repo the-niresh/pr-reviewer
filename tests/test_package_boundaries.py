@@ -121,6 +121,7 @@ RUNNER_SIDE_PACKAGES = frozenset(
         "verification",
         "notifications",
         "containers",
+        "reviewer",
     }
 )
 RUNNER_SIDE_FORBIDDEN_MODULES = frozenset(
@@ -347,7 +348,12 @@ def live_transitive_forbidden_paths(
             reachable_forbidden_paths(
                 graph,
                 _modules_in_package(graph, "evals"),
-                ("pr_reviewer.models", "pr_reviewer.db", "pr_reviewer.control_plane"),
+                (
+                    "pr_reviewer.models",
+                    "pr_reviewer.db",
+                    "pr_reviewer.control_plane",
+                    "pr_reviewer.config",
+                ),
             )
         )
 
@@ -551,7 +557,12 @@ def test_evals_package_must_not_import_hosted_stores() -> None:
     package_dir = SRC_ROOT / "evals"
     assert package_dir.is_dir()
     imports = collect_imports(package_dir)
-    for prefix in ("pr_reviewer.models", "pr_reviewer.db", "pr_reviewer.control_plane"):
+    for prefix in (
+        "pr_reviewer.models",
+        "pr_reviewer.db",
+        "pr_reviewer.control_plane",
+        "pr_reviewer.config",
+    ):
         hits = _imports_matching_prefix(imports, prefix)
         assert not hits, f"evals/* must not import {prefix}, found: {sorted(hits)}"
 

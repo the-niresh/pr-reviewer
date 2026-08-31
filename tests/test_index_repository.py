@@ -17,15 +17,13 @@ import psycopg
 import pytest
 from psycopg.rows import dict_row
 
+from pr_reviewer.config import database_name_for_root, default_database_url
 from pr_reviewer.db.client import connection as hosted_connection
 
 REPO = Path(__file__).resolve().parent.parent
 MIGRATIONS = REPO / "src" / "pr_reviewer" / "local_store" / "postgres_migrations"
-HOSTED_URL = os.environ.get(
-    "DATABASE_URL",
-    "postgresql://pr_reviewer:pr_reviewer@localhost:54329/pr_reviewer",
-)
-LOCAL_DB_NAME = "pr_reviewer_retrieval_test"
+HOSTED_URL = os.environ.get("DATABASE_URL", default_database_url(REPO))
+LOCAL_DB_NAME = f"{database_name_for_root(REPO)}_retrieval_test"
 V1_DIM = 1536
 
 

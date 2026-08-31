@@ -5,14 +5,16 @@ from collections.abc import Callable, Iterator
 
 import pytest
 
-os.environ.setdefault(
-    "DATABASE_URL",
-    "postgresql://pr_reviewer:pr_reviewer@localhost:54329/pr_reviewer",
-)
+from pr_reviewer.config import default_database_url
+
+os.environ.setdefault("DATABASE_URL", default_database_url())
 os.environ.setdefault("GITHUB_WEBHOOK_SECRET", "test-secret")
 
 from pr_reviewer.contracts.runner import VerifiedInstallationAccess  # noqa: E402
 from pr_reviewer.db.client import close_pool, connection  # noqa: E402
+from pr_reviewer.db.migrate import migrate  # noqa: E402
+
+migrate()
 
 
 @pytest.fixture

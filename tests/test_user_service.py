@@ -94,7 +94,7 @@ def test_open_prints_the_url_when_the_browser_cannot_open(
 def test_reviewer_usage_lists_the_user_service_commands(
     capsys: pytest.CaptureFixture[str],
 ) -> None:
-    from pr_reviewer.reviewer import main as reviewer_main
+    from pr_reviewer.reviewer_entry import main as reviewer_main
 
     exit_code = reviewer_main([])
     assert exit_code == 1
@@ -180,7 +180,7 @@ def test_start_serves_onboarding_on_loopback_until_stopped(
         [
             sys.executable,
             "-m",
-            "pr_reviewer.reviewer",
+            "pr_reviewer.reviewer_entry",
             "start",
             "--host",
             "127.0.0.1",

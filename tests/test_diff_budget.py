@@ -289,8 +289,8 @@ def test_output_allowance_is_reserved_off_the_top() -> None:
     assert packed.items == ()
 
 
-def test_default_context_budget_per_model_lives_in_config() -> None:
-    from pr_reviewer.config import context_budget_for_model
+def test_default_context_budget_per_model() -> None:
+    from pr_reviewer.context_budget import context_budget_for_model
     from pr_reviewer.contracts.review_context import ContextBudget
 
     mini = context_budget_for_model("gpt-4o-mini")

@@ -5,7 +5,7 @@ from __future__ import annotations
 import subprocess
 from pathlib import Path
 
-from pr_reviewer.config import context_budget_for_model
+from pr_reviewer.context_budget import context_budget_for_model
 from pr_reviewer.evals.types import EvalCandidate, MineResult, SkippedMineCommit
 
 
