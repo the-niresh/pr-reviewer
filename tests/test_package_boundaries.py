@@ -87,6 +87,7 @@ EXPECTED_EXISTING_PACKAGES = frozenset(
         "prompts",
         "reviewer",
         "security",
+        "retrieval",
     }
 )
 
@@ -102,13 +103,14 @@ CONTROL_PLANE_FORBIDDEN_TARGETS = frozenset(
 IMPORTS_ONLY_CONTRACTS_PACKAGES = frozenset({"observability"})
 
 # runner/*, models/ (adapters that hold the user's model key), local_store/*,
-# notifications/*, and containers/* must never be able to reach the
-# hosted database client (the only current handle onto hosted-only settings: Neon credentials, the
-# webhook secret, and, once it exists, the GitHub App private key), the hosted control plane
-# itself, or pr_reviewer.cli -- the operator/debug package that legitimately holds that same
+# retrieval/* (indexes the user's source into local pgvector), notifications/*,
+# and containers/* must never be able to reach the hosted database client (the only
+# current handle onto hosted-only settings: Neon credentials, the webhook secret, and,
+# once it exists, the GitHub App private key), the hosted control plane itself, or
+# pr_reviewer.cli -- the operator/debug package that legitimately holds that same
 # database access, so importing it would grant it through a side door.
 RUNNER_SIDE_PACKAGES = frozenset(
-    {"runner", "models", "local_store", "notifications", "containers"}
+    {"runner", "models", "local_store", "retrieval", "notifications", "containers"}
 )
 RUNNER_SIDE_FORBIDDEN_MODULES = frozenset(
     {"pr_reviewer.db", "pr_reviewer.control_plane", "pr_reviewer.cli"}
@@ -398,3 +400,26 @@ def test_security_package_is_shared_and_must_not_import_hosted_or_runner_stores(
     for prefix in forbidden:
         hits |= _imports_matching_prefix(imports, prefix)
     assert not hits, f"security/* must not import hosted or runner stores, found: {sorted(hits)}"
+def test_retrieval_package_is_runner_side_because_it_indexes_private_source() -> None:
+    """retrieval/ reads the user's source tree and writes embeddings to local pgvector.
+
+    That is the same privacy boundary as local_store/ and runner/: a hosted import
+    would put source chunks and vectors on Neon. CONTROL_PLANE_FORBIDDEN_TARGETS
+    already names retrieval so the control plane cannot pull it in the other way.
+    Expect a merge conflict here against Task 10B; keep both new entries.
+    """
+    assert "retrieval" in GUARDED_PACKAGES
+    assert "retrieval" in EXPECTED_EXISTING_PACKAGES
+    assert "retrieval" in RUNNER_SIDE_PACKAGES
+    assert "retrieval" in CONTROL_PLANE_FORBIDDEN_TARGETS
+    assert "retrieval" not in HOSTED_SIDE_PACKAGES
+    package_dir = SRC_ROOT / "retrieval"
+    assert package_dir.is_dir()
+    imports = collect_imports(package_dir)
+    hits: set[str] = set()
+    for forbidden in RUNNER_SIDE_FORBIDDEN_MODULES:
+        hits |= _imports_matching_prefix(imports, forbidden)
+    assert not hits, (
+        "retrieval/* must not import the hosted database, the control plane, or the "
+        f"operator cli package, found: {sorted(hits)}"
+    )
