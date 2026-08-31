@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import hashlib
 from collections.abc import Sequence
+from dataclasses import dataclass
 from typing import Literal, Protocol
 
 from pydantic import BaseModel, ConfigDict, Field
@@ -14,6 +15,15 @@ ALLOWED_INSTRUCTION_PATHS: tuple[str, ...] = ("CLAUDE.md", "AGENTS.md", ".pr-rev
 MAX_INSTRUCTION_FILES = 2
 MAX_INSTRUCTION_BYTES = 4096
 INSTRUCTION_TRUNCATION_MARKER = "\n[truncated]\n"
+INSTRUCTION_BLOCK_WEIGHT: Literal["asserted"] = "asserted"
+
+
+@dataclass(frozen=True)
+class PromptBlock:
+    """One prompt block. Instruction files are asserted; profiles are inferred."""
+
+    weight: Literal["asserted", "inferred"]
+    texts: tuple[str, ...]
 
 
 class ReviewPolicy(BaseModel):
@@ -88,6 +98,13 @@ def load_repository_instructions(
 
 def apply_instructions(policy: ReviewPolicy, texts: Sequence[str]) -> InstructionApplication:
     return InstructionApplication(policy=policy, focus_text="\n\n".join(texts))
+
+
+def instruction_prompt_block(sources: Sequence[InstructionSource]) -> PromptBlock:
+    return PromptBlock(
+        weight=INSTRUCTION_BLOCK_WEIGHT,
+        texts=tuple(source.content for source in sources),
+    )
 
 
 def instruction_event_payloads(
