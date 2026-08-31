@@ -88,6 +88,7 @@ EXPECTED_EXISTING_PACKAGES = frozenset(
         "reviewer",
         "security",
         "retrieval",
+        "verification",
     }
 )
 
@@ -110,7 +111,15 @@ IMPORTS_ONLY_CONTRACTS_PACKAGES = frozenset({"observability"})
 # pr_reviewer.cli -- the operator/debug package that legitimately holds that same
 # database access, so importing it would grant it through a side door.
 RUNNER_SIDE_PACKAGES = frozenset(
-    {"runner", "models", "local_store", "retrieval", "notifications", "containers"}
+    {
+        "runner",
+        "models",
+        "local_store",
+        "retrieval",
+        "verification",
+        "notifications",
+        "containers",
+    }
 )
 RUNNER_SIDE_FORBIDDEN_MODULES = frozenset(
     {"pr_reviewer.db", "pr_reviewer.control_plane", "pr_reviewer.cli"}
