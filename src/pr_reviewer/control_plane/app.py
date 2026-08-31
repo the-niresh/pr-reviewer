@@ -10,6 +10,7 @@ from pydantic import ValidationError
 from pr_reviewer.config import get_settings
 from pr_reviewer.control_plane.approval_api import router as approval_router
 from pr_reviewer.control_plane.oauth_api import router as oauth_router
+from pr_reviewer.control_plane.ops import router as ops_router
 from pr_reviewer.control_plane.pairing_api import router as pairing_router
 from pr_reviewer.control_plane.runner_jobs import router as runner_jobs_router
 from pr_reviewer.github import verify_github_signature
@@ -20,6 +21,7 @@ from pr_reviewer.jobs import cancel_review_job, enqueue_review_job
 MAX_WEBHOOK_BODY_BYTES = 1024 * 1024
 
 app = FastAPI(title="PR Reviewer")
+app.include_router(ops_router)
 app.include_router(pairing_router)
 app.include_router(oauth_router)
 app.include_router(approval_router)

@@ -55,6 +55,9 @@ def clean_database() -> Iterator[None]:
         conn.execute(
             """
             truncate
+              repository_budget_reservations,
+              repository_budgets,
+              connector_circuits,
               notification_channels,
               connector_runs,
               model_calls,

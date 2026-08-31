@@ -144,6 +144,40 @@ class LocalJobStore:
         )
         self._connection.commit()
 
+    def purge_repository(self, repository_id: int) -> None:
+        rows = self._connection.execute(
+            "select job_id from local_jobs where repository_id = ?",
+            (repository_id,),
+        ).fetchall()
+        for row in rows:
+            job_id = str(row["job_id"])
+            self._connection.execute(
+                "delete from local_pending_acknowledgements where job_id = ?", (job_id,)
+            )
+            self._connection.execute(
+                """
+                delete from local_human_decisions
+                where finding_id in (select id from local_findings where job_id = ?)
+                """,
+                (job_id,),
+            )
+            self._connection.execute(
+                "delete from local_findings where job_id = ?", (job_id,)
+            )
+            self._connection.execute(
+                "delete from local_snapshots where job_id = ?", (job_id,)
+            )
+            self._connection.execute(
+                "delete from local_events where job_id = ?", (job_id,)
+            )
+            self._connection.execute(
+                "delete from local_job_budgets where job_id = ?", (job_id,)
+            )
+            self._connection.execute(
+                "delete from local_jobs where job_id = ?", (job_id,)
+            )
+        self._connection.commit()
+
 
 def _row_to_local_job(row: sqlite3.Row) -> LocalJob:
     return LocalJob(

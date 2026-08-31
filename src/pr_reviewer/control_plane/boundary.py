@@ -171,6 +171,22 @@ ALLOWLIST: dict[tuple[str, str], str] = {
         "A one-way hash of the webhook URL. The URL itself is never stored, so this column "
         "cannot be reversed back into it."
     ),
+    ("repository_budget_reservations", "status"): (
+        "Fixed enum ('held', 'released', 'committed'), whether one job still holds a slice of "
+        "the repository budget. Not review content."
+    ),
+    ("connector_circuits", "connector"): (
+        "Connector name from a fixed set (e.g. github), an operational identifier, not review "
+        "content."
+    ),
+    ("connector_circuits", "state"): (
+        "Fixed enum ('closed', 'open', 'half_open'), the circuit breaker state. Unknown reads "
+        "are treated as open in application code."
+    ),
+    ("connector_circuits", "last_error_kind"): (
+        "Closed-set error class name for the last failure that opened the circuit, never a "
+        "stack trace or response body."
+    ),
 }
 
 

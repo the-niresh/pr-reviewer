@@ -68,6 +68,7 @@ GUARDED_PACKAGES = frozenset(
         "prompts",
         "security",
         "workflow",
+        "reliability",
     }
 )
 
@@ -94,6 +95,7 @@ EXPECTED_EXISTING_PACKAGES = frozenset(
         "verification",
         "notifications",
         "workflow",
+        "reliability",
     }
 )
 
@@ -543,6 +545,30 @@ def test_github_package_is_guarded_and_must_not_import_hosted_or_runner_stores()
     for prefix in forbidden:
         hits |= _imports_matching_prefix(imports, prefix)
     assert not hits, f"github/* must not import hosted or runner stores, found: {sorted(hits)}"
+
+
+def test_reliability_package_is_shared_and_must_not_import_hosted_or_runner_stores() -> None:
+    """reliability/ is shared like github/: retry and circuit have no store; budget policy
+    is shared. Hosted aggregate reservation lives in control_plane.budget. Per-job
+    reservation lives in local_store.budget.
+    """
+    assert "reliability" in GUARDED_PACKAGES
+    assert "reliability" in EXPECTED_EXISTING_PACKAGES
+    package_dir = SRC_ROOT / "reliability"
+    assert package_dir.is_dir()
+    imports = collect_imports(package_dir)
+    forbidden = (
+        "pr_reviewer.db",
+        "pr_reviewer.control_plane",
+        "pr_reviewer.runner",
+        "pr_reviewer.local_store",
+    )
+    hits: set[str] = set()
+    for prefix in forbidden:
+        hits |= _imports_matching_prefix(imports, prefix)
+    assert not hits, (
+        f"reliability/* must not import hosted or runner stores, found: {sorted(hits)}"
+    )
 
 
 def test_connectors_package_is_hosted_and_must_not_import_runner_side() -> None:

@@ -24,6 +24,9 @@ must stay that way -- see Exemptions below.
 |---|---|---|
 | `agent_events` | `event_type` | Lifecycle event name from a fixed, code-controlled set (e.g. review_job_failed, model_call.recorded), never derived from repository or review content. |
 | `agent_events` | `payload` | Redacted lifecycle event detail only: identifiers, enums, and aggregate token/cost numbers. agent_events_payload_is_flat (migration 202608291930_rescope_hosted_events.sql) rejects a nested object or array at the database layer, and record_event.serialize_json_object rejects one at the application layer, so this column cannot hold a findings list, a diff, or a sandbox log. |
+| `connector_circuits` | `connector` | Connector name from a fixed set (e.g. github), an operational identifier, not review content. |
+| `connector_circuits` | `last_error_kind` | Closed-set error class name for the last failure that opened the circuit, never a stack trace or response body. |
+| `connector_circuits` | `state` | Fixed enum ('closed', 'open', 'half_open'), the circuit breaker state. Unknown reads are treated as open in application code. |
 | `connector_runs` | `connector` | Fixed enum ('github'), the outbound API this row audited, not review content. |
 | `connector_runs` | `external_id` | Opaque GitHub request identifier when one is present. Typed and redacted so it cannot hold a token, a header, or a payload. |
 | `connector_runs` | `operation` | Fixed enum ('create_installation_token', 'fetch_pull_request', 'create_pull_request_review'), the named call that ran, not a request or response body. |
@@ -49,6 +52,7 @@ must stay that way -- see Exemptions below.
 | `prompt_versions` | `name` | Name of one of our own prompt templates, not customer content. |
 | `prompt_versions` | `version` | Version label for one of our own prompt templates. |
 | `repositories` | `name` | GitHub repository name: an identifier, not repository content. |
+| `repository_budget_reservations` | `status` | Fixed enum ('held', 'released', 'committed'), whether one job still holds a slice of the repository budget. Not review content. |
 | `review_jobs` | `base_sha` | GitHub base commit SHA: an identifier, not repository content. |
 | `review_jobs` | `delivery_id` | References github_deliveries.id, an opaque identifier. |
 | `review_jobs` | `head_sha` | GitHub head commit SHA: an identifier, not repository content. |
