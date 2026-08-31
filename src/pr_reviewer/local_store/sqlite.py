@@ -66,6 +66,8 @@ class LocalHumanDecision:
     decided_by: str
     note: str | None
     created_at: str
+    original_hash: str = ""
+    edited_hash: str = ""
 
 
 @dataclass(frozen=True)
@@ -274,11 +276,21 @@ class LocalHumanDecisionStore:
     def __init__(self, connection: sqlite3.Connection) -> None:
         self._connection = connection
 
-    def record(self, finding_id: str, decision: str, decided_by: str, note: str | None) -> None:
+    def record(
+        self,
+        finding_id: str,
+        decision: str,
+        decided_by: str,
+        note: str | None,
+        *,
+        original_hash: str = "",
+        edited_hash: str = "",
+    ) -> None:
         self._connection.execute(
-            "insert into local_human_decisions (finding_id, decision, decided_by, note) "
-            "values (?, ?, ?, ?)",
-            (finding_id, decision, decided_by, note),
+            "insert into local_human_decisions "
+            "(finding_id, decision, decided_by, note, original_hash, edited_hash) "
+            "values (?, ?, ?, ?, ?, ?)",
+            (finding_id, decision, decided_by, note, original_hash, edited_hash),
         )
         self._connection.commit()
 
@@ -295,6 +307,8 @@ class LocalHumanDecisionStore:
                 decided_by=str(row["decided_by"]),
                 note=row["note"],
                 created_at=str(row["created_at"]),
+                original_hash=str(row["original_hash"]),
+                edited_hash=str(row["edited_hash"]),
             )
             for row in rows
         ]

@@ -91,13 +91,23 @@ EXPECTED_EXISTING_PACKAGES = frozenset(
         "security",
         "retrieval",
         "verification",
+        "notifications",
     }
 )
 
 # control_plane/* must not reach into any package that can review, retrieve, verify, or run
 # untrusted code. The control plane cannot review (Phase 1, section 4).
 CONTROL_PLANE_FORBIDDEN_TARGETS = frozenset(
-    {"runner", "models", "local_store", "reviewer", "retrieval", "verification", "containers"}
+    {
+        "runner",
+        "models",
+        "local_store",
+        "reviewer",
+        "retrieval",
+        "verification",
+        "containers",
+        "notifications",
+    }
 )
 
 # The package(s) that import nothing of ours except contracts -- the shared vocabulary every

@@ -152,6 +152,25 @@ ALLOWLIST: dict[tuple[str, str], str] = {
         "sha256 hex of operation, status, and byte counts only. The payload itself is never "
         "stored; this hash cannot be reversed into a body, a token, or a patch."
     ),
+    ("notification_channels", "name"): (
+        "Operator-chosen label for a notification destination, not review content."
+    ),
+    ("notification_channels", "transport"): (
+        "Fixed enum ('slack', 'telegram', 'discord'), the outbound transport, not a webhook URL "
+        "and not review content."
+    ),
+    ("notification_channels", "confidentiality"): (
+        "Fixed enum ('restricted', 'ordinary') declared by the operator. Default is restricted. "
+        "Never inferred from the transport, never a finding title."
+    ),
+    ("notification_channels", "purpose"): (
+        "Fixed enum ('security_alert', 'review_ping'), which job this channel may carry, not "
+        "review content."
+    ),
+    ("notification_channels", "endpoint_hash"): (
+        "A one-way hash of the webhook URL. The URL itself is never stored, so this column "
+        "cannot be reversed back into it."
+    ),
 }
 
 

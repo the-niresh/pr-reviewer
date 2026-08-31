@@ -55,6 +55,7 @@ def clean_database() -> Iterator[None]:
         conn.execute(
             """
             truncate
+              notification_channels,
               connector_runs,
               model_calls,
               agent_events,
