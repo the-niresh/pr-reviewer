@@ -7,14 +7,14 @@ from typing import Literal
 from pr_reviewer.db.client import connection
 from pr_reviewer.events.record_event import JsonObject, serialize_json_object
 
-ModelProvider = Literal["openai", "anthropic"]
+ModelProviderName = Literal["openai", "anthropic"]
 COST_USD_PATTERN = re.compile(r"^(?:0|[1-9]\d{0,5})(?:\.\d{1,12})?$")
 
 
 @dataclass(frozen=True)
 class ModelCallInput:
     review_job_id: str
-    provider: ModelProvider
+    provider: ModelProviderName
     model: str
     prompt_version_id: str
     input_tokens: int

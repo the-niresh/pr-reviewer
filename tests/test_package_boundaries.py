@@ -63,6 +63,7 @@ GUARDED_PACKAGES = frozenset(
         "connectors",
         "evals",
         "models",
+        "prompts",
     }
 )
 
@@ -82,13 +83,14 @@ EXPECTED_EXISTING_PACKAGES = frozenset(
         "connectors",
         "evals",
         "models",
+        "prompts",
     }
 )
 
 # control_plane/* must not reach into any package that can review, retrieve, verify, or run
 # untrusted code. The control plane cannot review (Phase 1, section 4).
 CONTROL_PLANE_FORBIDDEN_TARGETS = frozenset(
-    {"runner", "local_store", "reviewer", "retrieval", "verification", "containers"}
+    {"runner", "models", "local_store", "reviewer", "retrieval", "verification", "containers"}
 )
 
 # The package(s) that import nothing of ours except contracts -- the shared vocabulary every
@@ -96,12 +98,15 @@ CONTROL_PLANE_FORBIDDEN_TARGETS = frozenset(
 # by everything and this loop only handles the "importer" side of that rule.
 IMPORTS_ONLY_CONTRACTS_PACKAGES = frozenset({"observability"})
 
-# runner/*, local_store/*, notifications/*, and containers/* must never be able to reach the
+# runner/*, models/ (adapters that hold the user's model key), local_store/*,
+# notifications/*, and containers/* must never be able to reach the
 # hosted database client (the only current handle onto hosted-only settings: Neon credentials, the
 # webhook secret, and, once it exists, the GitHub App private key), the hosted control plane
 # itself, or pr_reviewer.cli -- the operator/debug package that legitimately holds that same
 # database access, so importing it would grant it through a side door.
-RUNNER_SIDE_PACKAGES = frozenset({"runner", "local_store", "notifications", "containers"})
+RUNNER_SIDE_PACKAGES = frozenset(
+    {"runner", "models", "local_store", "notifications", "containers"}
+)
 RUNNER_SIDE_FORBIDDEN_MODULES = frozenset(
     {"pr_reviewer.db", "pr_reviewer.control_plane", "pr_reviewer.cli"}
 )
@@ -110,7 +115,7 @@ RUNNER_SIDE_FORBIDDEN_MODULES = frozenset(
 # It is hosted-side: it may import the control plane, and it must not import runner-side packages
 # where the user's model key will live. The same forbidden targets as control_plane, so a new
 # onboarding route cannot grow a back-door import into runner/web/local_auth.
-HOSTED_SIDE_PACKAGES = frozenset({"web", "connectors", "models"})
+HOSTED_SIDE_PACKAGES = frozenset({"web", "connectors"})
 HOSTED_SIDE_FORBIDDEN_TARGETS = CONTROL_PLANE_FORBIDDEN_TARGETS
 
 
@@ -211,9 +216,9 @@ def test_control_plane_boundary() -> None:
 
 
 def test_runner_side_packages_boundary() -> None:
-    """Covers runner/, local_store/, notifications/, and containers/: none of them may reach the
-    hosted database, the hosted control plane, or pr_reviewer.cli (the operator package that
-    holds that same hosted access -- see the module docstring). collect_imports walks each
+    """Covers runner/, models/, local_store/, notifications/, and containers/: none of them may
+    reach the hosted database, the hosted control plane, or pr_reviewer.cli (the operator package
+    that holds that same hosted access -- see the module docstring). collect_imports walks each
     package's directory recursively, so a nested subpackage such as runner/cli/ is already
     covered here with no separate entry needed.
     """
@@ -322,3 +327,26 @@ def test_evals_package_must_not_import_hosted_stores() -> None:
     for prefix in ("pr_reviewer.models", "pr_reviewer.db", "pr_reviewer.control_plane"):
         hits = _imports_matching_prefix(imports, prefix)
         assert not hits, f"evals/* must not import {prefix}, found: {sorted(hits)}"
+
+
+def test_prompts_package_is_shared_and_must_not_import_hosted_or_runner_stores() -> None:
+    """prompts/ is shared like github/: both hosted and runner import the in-process registry.
+
+    It must not grow a Neon handle or a model-key adapter. The hosted insert writer lives in
+    events/record_prompt_version.py.
+    """
+    assert "prompts" in GUARDED_PACKAGES
+    assert "prompts" in EXPECTED_EXISTING_PACKAGES
+    package_dir = SRC_ROOT / "prompts"
+    assert package_dir.is_dir()
+    imports = collect_imports(package_dir)
+    forbidden = (
+        "pr_reviewer.db",
+        "pr_reviewer.control_plane",
+        "pr_reviewer.runner",
+        "pr_reviewer.local_store",
+    )
+    hits: set[str] = set()
+    for prefix in forbidden:
+        hits |= _imports_matching_prefix(imports, prefix)
+    assert not hits, f"prompts/* must not import hosted or runner stores, found: {sorted(hits)}"

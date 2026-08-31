@@ -1,3 +1,11 @@
-from pr_reviewer.models.record_model_call import ModelCallInput, record_model_call
+from pr_reviewer.models.anthropic_provider import AnthropicProvider
+from pr_reviewer.models.openai_provider import OpenAIProvider
+from pr_reviewer.models.provider import ModelProvider, ModelRequest, ModelResponse
 
-__all__ = ["ModelCallInput", "record_model_call"]
+__all__ = [
+    "AnthropicProvider",
+    "ModelProvider",
+    "ModelRequest",
+    "ModelResponse",
+    "OpenAIProvider",
+]

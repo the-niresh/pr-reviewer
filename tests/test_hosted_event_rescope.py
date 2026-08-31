@@ -23,8 +23,8 @@ import pytest
 from pr_reviewer.contracts.errors import ReviewJobErrorClass
 from pr_reviewer.db.client import connection
 from pr_reviewer.events.record_event import record_event
+from pr_reviewer.events.record_model_call import ModelCallInput, record_model_call
 from pr_reviewer.jobs.fail_review_job import fail_review_job
-from pr_reviewer.models import ModelCallInput, record_model_call
 
 FORBIDDEN_MODEL_CALLS_COLUMNS = frozenset(
     {"request_metadata", "response_metadata", "prompt", "output", "output_hash"}

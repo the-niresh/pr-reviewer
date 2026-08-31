@@ -40,7 +40,7 @@ must stay that way -- see Exemptions below.
 | `pairing_codes` | `code_hash` | A one-way hash of the pairing code. The code itself is never stored, so this column cannot be reversed back into it. |
 | `pairing_codes` | `device_name` | Operator-chosen label for the runner device being paired, not review content. |
 | `pairing_codes` | `repository_ids` | Our own repositories.id values selected at approval, an array of opaque identifiers, not repository content. |
-| `prompt_versions` | `content` | Our own prompt template text, operational config we author ourselves, not a customer's source, diff, or finding. No writer exists yet; unused scaffolding from migration 0001. |
+| `prompt_versions` | `content` | Our own prompt template text, operational config we author ourselves, not a customer's source, diff, or finding. Insert-only: record_prompt_version writes a new name and version, and the prompt_versions_immutable_update trigger rejects any UPDATE. |
 | `prompt_versions` | `name` | Name of one of our own prompt templates, not customer content. |
 | `prompt_versions` | `version` | Version label for one of our own prompt templates. |
 | `repositories` | `name` | GitHub repository name: an identifier, not repository content. |

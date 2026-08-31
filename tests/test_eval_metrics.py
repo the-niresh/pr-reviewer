@@ -118,6 +118,7 @@ def test_run_eval_and_evals_package_import_nothing_from_models() -> None:
         EXPECTED_EXISTING_PACKAGES,
         GUARDED_PACKAGES,
         HOSTED_SIDE_PACKAGES,
+        RUNNER_SIDE_PACKAGES,
         _imports_matching_prefix,
         collect_imports,
     )
@@ -126,7 +127,8 @@ def test_run_eval_and_evals_package_import_nothing_from_models() -> None:
     assert "models" in GUARDED_PACKAGES
     assert "evals" in EXPECTED_EXISTING_PACKAGES
     assert "models" in EXPECTED_EXISTING_PACKAGES
-    assert "models" in HOSTED_SIDE_PACKAGES
+    assert "models" in RUNNER_SIDE_PACKAGES
+    assert "models" not in HOSTED_SIDE_PACKAGES
     assert "evals" not in HOSTED_SIDE_PACKAGES
 
     evals_imports = collect_imports(SRC_ROOT / "evals")

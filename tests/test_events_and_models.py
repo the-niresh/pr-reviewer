@@ -6,8 +6,13 @@ import uuid
 import pytest
 
 from pr_reviewer.db.client import connection
-from pr_reviewer.events import list_events_for_job, record_event, serialize_json_object
-from pr_reviewer.models import ModelCallInput, record_model_call
+from pr_reviewer.events import (
+    ModelCallInput,
+    list_events_for_job,
+    record_event,
+    record_model_call,
+    serialize_json_object,
+)
 
 
 def create_review_job() -> str:
