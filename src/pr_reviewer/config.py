@@ -7,6 +7,8 @@ from urllib.parse import parse_qsl, urlencode, urlsplit, urlunsplit
 import certifi
 from dotenv import load_dotenv
 
+from pr_reviewer.contracts.review_context import ContextBudget
+
 load_dotenv()
 
 LOCAL_DATABASE_URL = "postgresql://pr_reviewer:pr_reviewer@localhost:54329/pr_reviewer"
@@ -31,6 +33,21 @@ def get_settings() -> Settings:
         github_app_id=os.environ.get("GITHUB_APP_ID", ""),
         github_app_private_key=os.environ.get("GITHUB_APP_PRIVATE_KEY", ""),
     )
+
+
+# (context_window, output_allowance). The packer only ever sees window minus allowance.
+MODEL_CONTEXT_WINDOWS: dict[str, tuple[int, int]] = {
+    "gpt-4o-mini": (128_000, 16_384),
+    "claude-3-5-haiku-latest": (200_000, 8_192),
+}
+
+
+def context_budget_for_model(model: str) -> ContextBudget:
+    try:
+        context_window, output_allowance = MODEL_CONTEXT_WINDOWS[model]
+    except KeyError as exc:
+        raise KeyError(model) from exc
+    return ContextBudget.from_window(context_window, output_allowance)
 
 
 def normalize_database_url(database_url: str) -> str:

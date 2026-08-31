@@ -84,6 +84,7 @@ EXPECTED_EXISTING_PACKAGES = frozenset(
         "evals",
         "models",
         "prompts",
+        "reviewer",
     }
 )
 
@@ -350,3 +351,29 @@ def test_prompts_package_is_shared_and_must_not_import_hosted_or_runner_stores()
     for prefix in forbidden:
         hits |= _imports_matching_prefix(imports, prefix)
     assert not hits, f"prompts/* must not import hosted or runner stores, found: {sorted(hits)}"
+
+
+def test_reviewer_packer_modules_must_not_import_hosted_stores() -> None:
+    """The packer is pure. The CLI router still fans out to cli and runner."""
+    assert "reviewer" in GUARDED_PACKAGES
+    assert "reviewer" in EXPECTED_EXISTING_PACKAGES
+    package_dir = SRC_ROOT / "reviewer"
+    assert package_dir.is_dir()
+    forbidden = (
+        "pr_reviewer.db",
+        "pr_reviewer.control_plane",
+        "pr_reviewer.cli",
+        "pr_reviewer.local_store",
+    )
+    for filename in ("hunk_format.py", "diff_budget.py"):
+        file_path = package_dir / filename
+        assert file_path.is_file()
+        tree = ast.parse(file_path.read_text(encoding="utf-8"), filename=str(file_path))
+        imports: set[str] = set()
+        for node in ast.walk(tree):
+            if isinstance(node, ast.Import | ast.ImportFrom):
+                imports.update(_resolve_import(file_path, node))
+        hits: set[str] = set()
+        for prefix in forbidden:
+            hits |= _imports_matching_prefix(imports, prefix)
+        assert not hits, f"reviewer/{filename} must not import hosted stores, found: {sorted(hits)}"

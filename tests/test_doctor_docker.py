@@ -408,7 +408,7 @@ def test_doctor_on_ready_probe_enables_full_mode_without_confirm(
 
 
 def test_unified_reviewer_entry_dispatches_doctor_without_loading_operator_cli() -> None:
-    source = (SRC_ROOT / "reviewer.py").read_text(encoding="utf-8")
+    source = (SRC_ROOT / "reviewer" / "__init__.py").read_text(encoding="utf-8")
     tree = ast.parse(source)
     top_level_imports: set[str] = set()
     for node in tree.body:
@@ -428,7 +428,7 @@ def test_unified_reviewer_entry_dispatches_doctor_without_loading_operator_cli()
         or name.startswith("pr_reviewer.control_plane.")
     }
     assert not hosted, (
-        f"reviewer.py loaded operator/hosted imports at module scope: {sorted(hosted)}"
+        f"reviewer/__init__.py loaded operator/hosted imports at module scope: {sorted(hosted)}"
     )
 
 
