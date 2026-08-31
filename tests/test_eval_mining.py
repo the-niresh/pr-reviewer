@@ -94,11 +94,9 @@ def test_finding_and_candidate_forbid_unknown_fields() -> None:
         )
 
 
-def _git_repo_with_commit(root: Path, message: str) -> Path:
+def _init_git_repo(root: Path) -> Path:
     repo = root / "repo"
     repo.mkdir()
-    (repo / "src").mkdir()
-    (repo / "src" / "widget.py").write_text("value = widget.value\n", encoding="utf-8")
     subprocess.run(["git", "init"], cwd=repo, check=True, capture_output=True)
     subprocess.run(
         ["git", "config", "user.email", "eval@test.example"],
@@ -112,8 +110,20 @@ def _git_repo_with_commit(root: Path, message: str) -> Path:
         check=True,
         capture_output=True,
     )
-    subprocess.run(["git", "add", "."], cwd=repo, check=True, capture_output=True)
+    return repo
+
+
+def _commit_file(repo: Path, relative: str, content: str, message: str) -> None:
+    path = repo / relative
+    path.parent.mkdir(parents=True, exist_ok=True)
+    path.write_text(content, encoding="utf-8")
+    subprocess.run(["git", "add", "--", relative], cwd=repo, check=True, capture_output=True)
     subprocess.run(["git", "commit", "-m", message], cwd=repo, check=True, capture_output=True)
+
+
+def _git_repo_with_commit(root: Path, message: str) -> Path:
+    repo = _init_git_repo(root)
+    _commit_file(repo, "src/widget.py", "value = widget.value\n", message)
     return repo
 
 
@@ -122,7 +132,7 @@ def test_mining_emits_candidates_not_labels(tmp_path: Path) -> None:
     from pr_reviewer.evals.types import EvalCandidate, EvalLabel
 
     repo = _git_repo_with_commit(tmp_path, "fix null check")
-    mined = mine_eval_candidates(repo, max_cases=10)
+    mined = mine_eval_candidates(repo, max_cases=10).candidates
     assert mined
     assert all(isinstance(item, EvalCandidate) for item in mined)
     assert not any(isinstance(item, EvalLabel) for item in mined)
@@ -162,8 +172,8 @@ def test_mining_survives_a_non_utf8_byte_in_the_repo(tmp_path: Path) -> None:
     )
     assert b"\xff" in patch.stdout
     mined = mine_eval_candidates(repo, max_cases=10)
-    assert mined
-    assert "\ufffd" in mined[0].diff or "suffix" in mined[0].diff
+    assert mined.candidates
+    assert "\ufffd" in mined.candidates[0].diff or "suffix" in mined.candidates[0].diff
 
 
 def test_commit_message_is_evidence_not_ground_truth(tmp_path: Path) -> None:
@@ -171,13 +181,75 @@ def test_commit_message_is_evidence_not_ground_truth(tmp_path: Path) -> None:
     from pr_reviewer.evals.types import EvalCandidate
 
     repo = _git_repo_with_commit(tmp_path, "fix null check")
-    mined = mine_eval_candidates(repo, max_cases=10)
+    mined = mine_eval_candidates(repo, max_cases=10).candidates
     assert mined
     for item in mined:
         evidence = " ".join(item.source_evidence).lower()
         assert "fix null check" in evidence
         assert "expected_labels" not in EvalCandidate.model_fields
         assert "is_label" not in EvalCandidate.model_fields
+
+
+def test_mining_emits_one_candidate_per_commit(tmp_path: Path) -> None:
+    from pr_reviewer.evals.mine_candidates import mine_eval_candidates
+
+    subjects = (
+        "fix null check in widget",
+        "add alpha helper",
+        "document beta flag",
+    )
+    marks = (
+        ("src/widget.py", "WIDGET_UNIQUE = 1\n"),
+        ("src/alpha.py", "ALPHA_UNIQUE = 1\n"),
+        ("src/beta.py", "BETA_UNIQUE = 1\n"),
+    )
+    repo = _init_git_repo(tmp_path)
+    for (relative, content), subject in zip(marks, subjects, strict=True):
+        _commit_file(repo, relative, content, subject)
+
+    mined = mine_eval_candidates(repo, max_cases=10).candidates
+    assert len(mined) == 3
+    by_subject = {item.source_evidence[0]: item for item in mined}
+    assert set(by_subject) == set(subjects)
+    for (relative, content), subject in zip(marks, subjects, strict=True):
+        candidate = by_subject[subject]
+        mark = content.split("=", 1)[0].strip()
+        assert mark in candidate.diff
+        assert relative in candidate.diff
+        for other_subject, other_mark in zip(subjects, marks, strict=True):
+            if other_subject == subject:
+                continue
+            assert other_subject not in " ".join(candidate.source_evidence)
+            other_token = other_mark[1].split("=", 1)[0].strip()
+            assert other_token not in candidate.diff
+
+
+def test_oversized_commit_is_skipped_with_a_recorded_reason(tmp_path: Path) -> None:
+    from pr_reviewer.config import context_budget_for_model
+    from pr_reviewer.evals.mine_candidates import estimate_diff_tokens, mine_eval_candidates
+
+    budget = context_budget_for_model("gpt-4o-mini")
+    repo = _init_git_repo(tmp_path)
+    _commit_file(repo, "src/small.py", "SMALL_UNIQUE = 1\n", "add small helper")
+    huge = "H" * (budget.tokens * 4 + 64) + "\n"
+    _commit_file(repo, "src/huge.py", huge, "add huge blob")
+    _commit_file(repo, "src/other.py", "OTHER_UNIQUE = 1\n", "add other helper")
+
+    result = mine_eval_candidates(repo, max_cases=10)
+    assert len(result.candidates) == 2
+    assert {item.source_evidence[0] for item in result.candidates} == {
+        "add small helper",
+        "add other helper",
+    }
+    assert all("huge blob" not in " ".join(item.source_evidence) for item in result.candidates)
+    assert len(result.skipped) == 1
+    skipped = result.skipped[0]
+    assert skipped.reason == "diff_exceeds_packed_budget"
+    assert skipped.subject == "add huge blob"
+    assert skipped.token_budget == budget.tokens
+    assert skipped.token_count > budget.tokens
+    for item in result.candidates:
+        assert estimate_diff_tokens(item.diff) <= budget.tokens
 
 
 def test_holdout_case_without_a_human_auditor_is_rejected() -> None:

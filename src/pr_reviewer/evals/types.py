@@ -41,6 +41,25 @@ class EvalCandidate(BaseModel):
     committed_at: date | None = None
 
 
+class SkippedMineCommit(BaseModel):
+    model_config = ConfigDict(frozen=True, extra="forbid")
+
+    sha: str = Field(min_length=1)
+    subject: str = Field(min_length=1)
+    reason: Literal["diff_exceeds_packed_budget"]
+    token_count: int = Field(ge=0)
+    token_budget: int = Field(ge=0)
+
+
+class MineResult(BaseModel):
+    """Usable candidates plus commits skipped as too large to review."""
+
+    model_config = ConfigDict(frozen=True, extra="forbid")
+
+    candidates: list[EvalCandidate]
+    skipped: tuple[SkippedMineCommit, ...] = ()
+
+
 class EvalCase(BaseModel):
     model_config = ConfigDict(frozen=True, extra="forbid")
 
