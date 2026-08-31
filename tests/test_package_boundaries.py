@@ -38,6 +38,8 @@ it is at it:
 from __future__ import annotations
 
 import ast
+from collections import deque
+from collections.abc import Collection, Mapping, Sequence
 from pathlib import Path
 
 SRC_ROOT = Path(__file__).resolve().parent.parent / "src" / "pr_reviewer"
@@ -190,6 +192,217 @@ def _imports_matching_prefix(imports: set[str], prefix: str) -> set[str]:
     not just the ones added for this task.
     """
     return {module for module in imports if module == prefix or module.startswith(prefix + ".")}
+
+
+def _is_internal_module(module: str) -> bool:
+    return module == "pr_reviewer" or module.startswith("pr_reviewer.")
+
+
+def _is_forbidden_module(module: str, forbidden_prefixes: Collection[str]) -> bool:
+    return any(module == prefix or module.startswith(prefix + ".") for prefix in forbidden_prefixes)
+
+
+def _package_label(module: str) -> str:
+    rest = module.removeprefix("pr_reviewer.")
+    return rest.split(".")[0] if rest else module
+
+
+def format_forbidden_paths(paths: Sequence[tuple[str, ...]]) -> str:
+    lines: list[str] = []
+    for path in paths:
+        short: list[str] = []
+        for module in path:
+            label = _package_label(module)
+            if not short or short[-1] != label:
+                short.append(label)
+        lines.append(" -> ".join(short))
+        lines.append("  " + " -> ".join(path))
+    return "\n".join(lines)
+
+
+def reachable_forbidden_paths(
+    graph: Mapping[str, set[str]],
+    starts: Sequence[str],
+    forbidden_prefixes: Collection[str],
+) -> list[tuple[str, ...]]:
+    """Walk pr_reviewer.* edges to a fixed point. Cycles and self-imports terminate."""
+    found: list[tuple[str, ...]] = []
+    node_count = max(len(graph), 1)
+    edge_count = sum(len(edges) for edges in graph.values())
+    step_limit = node_count + edge_count + 1
+    for start in starts:
+        visited = {start}
+        queue: deque[tuple[str, tuple[str, ...]]] = deque([(start, (start,))])
+        steps = 0
+        while queue:
+            steps += 1
+            if steps > step_limit:
+                raise RuntimeError(
+                    f"import graph walk exceeded {step_limit} steps from {start}; "
+                    "the visited set must terminate on every input"
+                )
+            current, path = queue.popleft()
+            for nxt in sorted(graph.get(current, ())):
+                if not _is_internal_module(nxt) or nxt in visited:
+                    continue
+                visited.add(nxt)
+                new_path = (*path, nxt)
+                if _is_forbidden_module(nxt, forbidden_prefixes):
+                    found.append(new_path)
+                    continue
+                queue.append((nxt, new_path))
+    return found
+
+
+def build_internal_import_graph(package_root: Path) -> dict[str, set[str]]:
+    graph: dict[str, set[str]] = {}
+    for file_path in sorted(package_root.rglob("*.py")):
+        if "__pycache__" in file_path.parts:
+            continue
+        module = _module_name_for_file(file_path)
+        tree = ast.parse(file_path.read_text(encoding="utf-8"), filename=str(file_path))
+        imported: set[str] = set()
+        for node in ast.walk(tree):
+            if isinstance(node, ast.Import | ast.ImportFrom):
+                imported.update(
+                    name
+                    for name in _resolve_import(file_path, node)
+                    if _is_internal_module(name)
+                )
+        graph.setdefault(module, set()).update(imported)
+    return graph
+
+
+def _modules_in_package(graph: Mapping[str, set[str]], package_name: str) -> list[str]:
+    prefix = f"pr_reviewer.{package_name}"
+    return sorted(
+        module
+        for module in graph
+        if module == prefix or module.startswith(prefix + ".")
+    )
+
+
+def live_transitive_forbidden_paths(
+    graph: Mapping[str, set[str]],
+) -> list[tuple[str, ...]]:
+    found: list[tuple[str, ...]] = []
+    seen: set[tuple[str, ...]] = set()
+
+    def add(paths: Sequence[tuple[str, ...]]) -> None:
+        for path in paths:
+            if path not in seen:
+                seen.add(path)
+                found.append(path)
+
+    runner_existing = [name for name in sorted(RUNNER_SIDE_PACKAGES) if (SRC_ROOT / name).is_dir()]
+    for package_name in runner_existing:
+        add(
+            reachable_forbidden_paths(
+                graph,
+                _modules_in_package(graph, package_name),
+                tuple(sorted(RUNNER_SIDE_FORBIDDEN_MODULES)),
+            )
+        )
+
+    control_plane_forbidden = tuple(
+        sorted(f"pr_reviewer.{name}" for name in CONTROL_PLANE_FORBIDDEN_TARGETS)
+    )
+    if (SRC_ROOT / "control_plane").is_dir():
+        add(
+            reachable_forbidden_paths(
+                graph,
+                _modules_in_package(graph, "control_plane"),
+                control_plane_forbidden,
+            )
+        )
+
+    hosted_existing = [name for name in sorted(HOSTED_SIDE_PACKAGES) if (SRC_ROOT / name).is_dir()]
+    for package_name in hosted_existing:
+        add(
+            reachable_forbidden_paths(
+                graph,
+                _modules_in_package(graph, package_name),
+                control_plane_forbidden,
+            )
+        )
+
+    shared_store_forbidden = (
+        "pr_reviewer.db",
+        "pr_reviewer.control_plane",
+        "pr_reviewer.runner",
+        "pr_reviewer.local_store",
+    )
+    for package_name in ("github", "prompts", "security"):
+        if (SRC_ROOT / package_name).is_dir():
+            add(
+                reachable_forbidden_paths(
+                    graph,
+                    _modules_in_package(graph, package_name),
+                    shared_store_forbidden,
+                )
+            )
+
+    if (SRC_ROOT / "evals").is_dir():
+        add(
+            reachable_forbidden_paths(
+                graph,
+                _modules_in_package(graph, "evals"),
+                ("pr_reviewer.models", "pr_reviewer.db", "pr_reviewer.control_plane"),
+            )
+        )
+
+    packer_forbidden = (
+        "pr_reviewer.db",
+        "pr_reviewer.control_plane",
+        "pr_reviewer.cli",
+        "pr_reviewer.local_store",
+    )
+    add(
+        reachable_forbidden_paths(
+            graph,
+            ("pr_reviewer.reviewer.hunk_format", "pr_reviewer.reviewer.diff_budget"),
+            packer_forbidden,
+        )
+    )
+
+    if (SRC_ROOT / "contracts").is_dir():
+        foreign = tuple(
+            sorted(
+                {
+                    f"pr_reviewer.{_package_label(module)}"
+                    for module in graph
+                    if _is_internal_module(module) and _package_label(module) != "contracts"
+                }
+            )
+        )
+        add(
+            reachable_forbidden_paths(
+                graph,
+                _modules_in_package(graph, "contracts"),
+                foreign,
+            )
+        )
+
+    if (SRC_ROOT / "observability").is_dir():
+        foreign = tuple(
+            sorted(
+                {
+                    f"pr_reviewer.{_package_label(module)}"
+                    for module in graph
+                    if _is_internal_module(module)
+                    and _package_label(module) not in {"observability", "contracts"}
+                }
+            )
+        )
+        add(
+            reachable_forbidden_paths(
+                graph,
+                _modules_in_package(graph, "observability"),
+                foreign,
+            )
+        )
+
+    return found
 
 
 def test_guarded_package_inventory_matches_snapshot() -> None:
@@ -409,6 +622,8 @@ def test_security_package_is_shared_and_must_not_import_hosted_or_runner_stores(
     for prefix in forbidden:
         hits |= _imports_matching_prefix(imports, prefix)
     assert not hits, f"security/* must not import hosted or runner stores, found: {sorted(hits)}"
+
+
 def test_retrieval_package_is_runner_side_because_it_indexes_private_source() -> None:
     """retrieval/ reads the user's source tree and writes embeddings to local pgvector.
 
@@ -432,3 +647,70 @@ def test_retrieval_package_is_runner_side_because_it_indexes_private_source() ->
         "retrieval/* must not import the hosted database, the control plane, or the "
         f"operator cli package, found: {sorted(hits)}"
     )
+
+
+def test_transitive_reachability_names_the_whole_path() -> None:
+    graph = {
+        "pr_reviewer.retrieval.hybrid_search": {"pr_reviewer.events.record_event"},
+        "pr_reviewer.events.record_event": {"pr_reviewer.db.client"},
+        "pr_reviewer.db.client": set(),
+    }
+    paths = reachable_forbidden_paths(
+        graph,
+        ["pr_reviewer.retrieval.hybrid_search"],
+        frozenset({"pr_reviewer.db"}),
+    )
+    assert paths == [
+        (
+            "pr_reviewer.retrieval.hybrid_search",
+            "pr_reviewer.events.record_event",
+            "pr_reviewer.db.client",
+        )
+    ]
+    message = format_forbidden_paths(paths)
+    assert "retrieval -> events -> db" in message
+    assert (
+        "pr_reviewer.retrieval.hybrid_search -> "
+        "pr_reviewer.events.record_event -> "
+        "pr_reviewer.db.client"
+    ) in message
+
+
+def test_import_graph_walk_terminates_on_a_cycle() -> None:
+    graph = {
+        "pr_reviewer.a": {"pr_reviewer.b"},
+        "pr_reviewer.b": {"pr_reviewer.a", "pr_reviewer.db.client"},
+        "pr_reviewer.db.client": {"pr_reviewer.a"},
+    }
+    paths = reachable_forbidden_paths(
+        graph,
+        ["pr_reviewer.a"],
+        frozenset({"pr_reviewer.db"}),
+    )
+    assert paths == [
+        ("pr_reviewer.a", "pr_reviewer.b", "pr_reviewer.db.client"),
+    ]
+
+
+def test_import_graph_walk_terminates_on_a_self_import() -> None:
+    graph = {"pr_reviewer.a": {"pr_reviewer.a"}}
+    paths = reachable_forbidden_paths(
+        graph,
+        ["pr_reviewer.a"],
+        frozenset({"pr_reviewer.db"}),
+    )
+    assert paths == []
+
+
+def test_direct_runner_side_check_still_uses_first_hop_imports() -> None:
+    import inspect
+
+    source = inspect.getsource(test_runner_side_packages_boundary)
+    assert "collect_imports(" in source
+    assert "_imports_matching_prefix(" in source
+
+
+def test_guarded_packages_have_no_transitive_forbidden_reach() -> None:
+    graph = build_internal_import_graph(SRC_ROOT)
+    paths = live_transitive_forbidden_paths(graph)
+    assert not paths, format_forbidden_paths(paths)
