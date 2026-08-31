@@ -33,6 +33,7 @@ class JobStore:
 
 
 def run_review_job(job: ReviewJob, stop_event: threading.Event) -> None:
+    """Hosted worker stub. Reviews run on the runner daemon, not in this process."""
     del job, stop_event
 
 
