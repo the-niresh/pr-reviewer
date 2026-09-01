@@ -186,6 +186,56 @@ ALLOWLIST: dict[tuple[str, str], str] = {
         "Closed-set error class name for the last failure that opened the circuit, never a "
         "stack trace or response body."
     ),
+    # Phase 27 deliberately widens this boundary: findings text and per-agent reasoning are now
+    # allowed to reach the hosted plane so the web dashboard can show them (requirements.md,
+    # "What reaches the server"). review_findings is a fresh table, not the findings table
+    # Runtime Task 1A retired -- test_hosted_boundary_enforcement.py still proves that one stays
+    # gone. Deliberately not allowlisted: review_findings has no evidence column (see
+    # 202609020136_review_projection_findings.sql for why) and no writer exists yet; that lands
+    # with review_projection.py.
+    ("review_findings", "id"): "Our own finding id (contracts/finding.py), an opaque identifier.",
+    ("review_findings", "concern"): (
+        "Fixed enum ('security', 'correctness', 'tests', 'docs', 'maintainability'), enforced "
+        "by a check constraint, not free text."
+    ),
+    ("review_findings", "severity"): (
+        "Fixed enum ('critical', 'high', 'medium', 'low', 'info'), enforced by a check "
+        "constraint."
+    ),
+    ("review_findings", "category"): (
+        "A short finding category label (e.g. 'null-check'), not the finding's source or diff."
+    ),
+    ("review_findings", "file_path"): (
+        "Path of the file the finding is about: an identifier GitHub itself already shows on "
+        "the PR, not file content."
+    ),
+    ("review_findings", "title"): (
+        "Findings text. requirements.md's 'What reaches the server' list explicitly names "
+        "findings text as allowed; this is the model-authored summary line from "
+        "contracts/finding.py, never a diff hunk or raw source."
+    ),
+    ("review_findings", "rationale"): (
+        "Findings text (the reasoning behind a finding), explicitly allowed by the same list as "
+        "title. Never a diff hunk, source, or a sandbox log; those stay local."
+    ),
+    ("review_findings", "verification_method"): (
+        "Fixed enum ('sandbox', 'static', 'not_applicable', 'failed'), enforced by a check "
+        "constraint, not review content."
+    ),
+    ("review_findings", "status"): (
+        "Fixed enum ('draft', 'queued_for_human', 'posted', 'rejected', 'disputed'), enforced "
+        "by a check constraint."
+    ),
+    ("agent_reasoning", "concern"): (
+        "Fixed enum, the same closed set as review_findings.concern, enforced by a check "
+        "constraint."
+    ),
+    ("agent_reasoning", "reasoning"): (
+        "Per-agent reasoning text, explicitly allowed by requirements.md's 'What reaches the "
+        "server' list. No writer exists yet -- Phase 26's local persistence and "
+        "review_projection.py land after this migration -- so this entry states the column type "
+        "is allowed, not that a real writer has been proved safe yet."
+    ),
 }
 
 
