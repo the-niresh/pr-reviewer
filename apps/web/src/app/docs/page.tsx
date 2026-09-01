@@ -1,3 +1,5 @@
+import Link from "next/link";
+
 import styles from "./page.module.css";
 
 const SECTIONS = [
@@ -35,6 +37,9 @@ export default function DocsPage() {
           <p className={styles.sectionTag}>{section.tag}</p>
           <h2 className={styles.sectionTitle}>{section.title}</h2>
           <p className={styles.sectionBody}>{section.body}</p>
+          {section.tag === "Agent plugin" ? (
+            <Link href="/docs/agents">See the four surfaces</Link>
+          ) : null}
         </section>
       ))}
     </main>
