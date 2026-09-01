@@ -229,3 +229,13 @@
   - Phase 18: master 26 ⬜
   - Phase 19: master 24 ⬜, 26 ⬜, runtime 10 ⬜
   - Phase 20: master 9 ⚠️, 24 ⬜, 26 ⬜
+
+## Phase 18 - ✅ done  2026-09-01T07:40:00+05:30
+- RED: n/a, docs only
+- GREEN: Phase 18 proof suite `69 passed, 1 warning in 15.24s`. Includes non-root checksummed container install. CLAUDE-IN 2026-09-01T06:26:00+05:30 FIX already on HEAD.
+- Commit: docs: add phase 18 write-up with verified proof gate
+- Decisions: Local install-pair-doctor-start-update-rollback-uninstall is this gate. Quoted 69 passed. No public GitHub Releases URL claimed. No eval number invented. Task 26 is not this gate.
+- Blocked: -
+- Skipped remaining:
+  - Phase 19: master 24 ⬜, 26 ⬜, runtime 10 ⬜
+  - Phase 20: master 9 ⚠️, 24 ⬜, 26 ⬜
