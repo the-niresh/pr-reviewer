@@ -143,3 +143,10 @@
 - Commit: see Phase 17
 - Decisions: Phase 18 still needs Task 26.
 - Blocked: -
+
+## Phase 17 - ✅ done  2026-09-01T06:32:00+05:30
+- RED: n/a
+- GREEN: `17 passed (23.7s)` on `cd apps/web && bunx playwright test`
+- Commit: docs: add phase 17 write-up with verified proof gate
+- Decisions: quoted the Playwright count. No quality number invented.
+- Blocked: -
