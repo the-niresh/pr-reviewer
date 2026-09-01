@@ -226,6 +226,39 @@ ALLOWLIST: dict[tuple[str, str], str] = {
         "Fixed enum ('draft', 'queued_for_human', 'posted', 'rejected', 'disputed'), enforced "
         "by a check constraint."
     ),
+    # Phase 30: the same provenance receipt the TUI shows (reviewer/receipt.py) reaches the web
+    # dashboard too. receipt.py:115 enforces verified=true only when a real sandbox run is
+    # cited, in Python, before a Finding is ever built; these columns just carry whichever half
+    # of ReceiptVerification that check already approved -- they do not re-derive verified.
+    ("review_findings", "verification_reason"): (
+        "AssertedVerification.reason: a short human-authored reason a finding was not run, "
+        "findings text under the same allowance as title/rationale, never a sandbox log."
+    ),
+    ("review_findings", "sandbox_run_id"): (
+        "Opaque identifier for the sandbox run that verified this finding, not review content."
+    ),
+    ("review_findings", "command_id"): (
+        "Opaque identifier for the specific command inside the sandbox run, not review content."
+    ),
+    ("review_findings", "verification_detail"): (
+        "SandboxVerification.detail: a short human-authored summary of what ran (e.g. 'sandbox "
+        "command exited 0', see test_receipt_verified_means_ran.py), never the raw command log."
+    ),
+    ("finding_context_sources", "finding_id"): (
+        "References review_findings.id, our own finding id, an opaque identifier."
+    ),
+    ("finding_context_sources", "kind"): (
+        "Fixed enum ('diff', 'retrieval', 'profile', 'graph'), enforced by a check constraint, "
+        "which context source fed the finding, not review content."
+    ),
+    ("finding_context_sources", "name"): (
+        "Our own name for a context source (e.g. a retrieval index name), an identifier, not "
+        "the content that source returned."
+    ),
+    ("finding_context_sources", "reference"): (
+        "A pointer into a context source (e.g. a chunk id or graph node id), an identifier, "
+        "never the chunk's own text or the diff itself."
+    ),
     ("agent_reasoning", "concern"): (
         "Fixed enum, the same closed set as review_findings.concern, enforced by a check "
         "constraint."

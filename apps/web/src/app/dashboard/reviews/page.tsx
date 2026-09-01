@@ -5,6 +5,23 @@ import styles from "./page.module.css";
 const CONTROL_PLANE_ORIGIN =
   process.env.NEXT_PUBLIC_CONTROL_PLANE_ORIGIN ?? "http://127.0.0.1:8000";
 
+type ReceiptContextSource = {
+  kind: string;
+  name: string;
+  reference: string;
+};
+
+type FindingReceipt = {
+  provider: string | null;
+  model: string | null;
+  cost_usd: string | null;
+  verification_status: "verified" | "asserted";
+  verification_reason: string | null;
+  sandbox_run_id: string | null;
+  verification_detail: string | null;
+  context_sources: ReceiptContextSource[];
+};
+
 type ReviewFinding = {
   id: string;
   concern: string;
@@ -17,6 +34,7 @@ type ReviewFinding = {
   rationale: string;
   verified: boolean;
   status: string;
+  receipt: FindingReceipt | null;
 };
 
 type AgentReasoning = {
@@ -95,6 +113,34 @@ export default async function ReviewsPage() {
                       {finding.file_path}:{finding.line_start}
                     </p>
                     <p className={styles.findingRationale}>{finding.rationale}</p>
+                    {finding.receipt ? (
+                      <div className={styles.receipt}>
+                        <span
+                          className={styles.receiptBadge}
+                          data-verification={finding.receipt.verification_status}
+                        >
+                          {finding.receipt.verification_status}
+                        </span>
+                        {finding.receipt.verification_status === "verified" ? (
+                          <span className={styles.receiptDetail}>
+                            {finding.receipt.verification_detail}
+                            {finding.receipt.sandbox_run_id
+                              ? ` (run ${finding.receipt.sandbox_run_id})`
+                              : ""}
+                          </span>
+                        ) : (
+                          <span className={styles.receiptDetail}>
+                            {finding.receipt.verification_reason}
+                          </span>
+                        )}
+                        {finding.receipt.model ? (
+                          <span className={styles.receiptMeta}>
+                            {finding.receipt.provider}/{finding.receipt.model}
+                            {finding.receipt.cost_usd ? ` · $${finding.receipt.cost_usd}` : ""}
+                          </span>
+                        ) : null}
+                      </div>
+                    ) : null}
                   </div>
                 ))}
                 {review.reasoning.map((entry, index) => (

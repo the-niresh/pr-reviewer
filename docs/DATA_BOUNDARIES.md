@@ -33,6 +33,10 @@ must stay that way -- see Exemptions below.
 | `connector_runs` | `external_id` | Opaque GitHub request identifier when one is present. Typed and redacted so it cannot hold a token, a header, or a payload. |
 | `connector_runs` | `operation` | Fixed enum ('create_installation_token', 'fetch_pull_request', 'create_pull_request_review'), the named call that ran, not a request or response body. |
 | `connector_runs` | `payload_hash` | sha256 hex of operation, status, and byte counts only. The payload itself is never stored; this hash cannot be reversed into a body, a token, or a patch. |
+| `finding_context_sources` | `finding_id` | References review_findings.id, our own finding id, an opaque identifier. |
+| `finding_context_sources` | `kind` | Fixed enum ('diff', 'retrieval', 'profile', 'graph'), enforced by a check constraint, which context source fed the finding, not review content. |
+| `finding_context_sources` | `name` | Our own name for a context source (e.g. a retrieval index name), an identifier, not the content that source returned. |
+| `finding_context_sources` | `reference` | A pointer into a context source (e.g. a chunk id or graph node id), an identifier, never the chunk's own text or the diff itself. |
 | `github_deliveries` | `event_name` | GitHub webhook event name, a fixed enum (e.g. pull_request). |
 | `github_deliveries` | `id` | GitHub's own delivery id: an opaque identifier, not content. |
 | `installations` | `account_login` | GitHub account or org login: a public identifier GitHub itself shows on every page of the installation, not review content. |
@@ -56,14 +60,18 @@ must stay that way -- see Exemptions below.
 | `repositories` | `name` | GitHub repository name: an identifier, not repository content. |
 | `repository_budget_reservations` | `status` | Fixed enum ('held', 'released', 'committed'), whether one job still holds a slice of the repository budget. Not review content. |
 | `review_findings` | `category` | A short finding category label (e.g. 'null-check'), not the finding's source or diff. |
+| `review_findings` | `command_id` | Opaque identifier for the specific command inside the sandbox run, not review content. |
 | `review_findings` | `concern` | Fixed enum ('security', 'correctness', 'tests', 'docs', 'maintainability'), enforced by a check constraint, not free text. |
 | `review_findings` | `file_path` | Path of the file the finding is about: an identifier GitHub itself already shows on the PR, not file content. |
 | `review_findings` | `id` | Our own finding id (contracts/finding.py), an opaque identifier. |
 | `review_findings` | `rationale` | Findings text (the reasoning behind a finding), explicitly allowed by the same list as title. Never a diff hunk, source, or a sandbox log; those stay local. |
+| `review_findings` | `sandbox_run_id` | Opaque identifier for the sandbox run that verified this finding, not review content. |
 | `review_findings` | `severity` | Fixed enum ('critical', 'high', 'medium', 'low', 'info'), enforced by a check constraint. |
 | `review_findings` | `status` | Fixed enum ('draft', 'queued_for_human', 'posted', 'rejected', 'disputed'), enforced by a check constraint. |
 | `review_findings` | `title` | Findings text. requirements.md's 'What reaches the server' list explicitly names findings text as allowed; this is the model-authored summary line from contracts/finding.py, never a diff hunk or raw source. |
+| `review_findings` | `verification_detail` | SandboxVerification.detail: a short human-authored summary of what ran (e.g. 'sandbox command exited 0', see test_receipt_verified_means_ran.py), never the raw command log. |
 | `review_findings` | `verification_method` | Fixed enum ('sandbox', 'static', 'not_applicable', 'failed'), enforced by a check constraint, not review content. |
+| `review_findings` | `verification_reason` | AssertedVerification.reason: a short human-authored reason a finding was not run, findings text under the same allowance as title/rationale, never a sandbox log. |
 | `review_jobs` | `base_sha` | GitHub base commit SHA: an identifier, not repository content. |
 | `review_jobs` | `delivery_id` | References github_deliveries.id, an opaque identifier. |
 | `review_jobs` | `head_sha` | GitHub head commit SHA: an identifier, not repository content. |

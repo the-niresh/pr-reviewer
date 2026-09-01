@@ -102,6 +102,46 @@
   background: var(--color-accent);
 }
 
+.receipt {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.5rem;
+  margin-top: 0.5rem;
+  font-size: 0.8rem;
+}
+
+.receiptBadge {
+  font-family: var(--font-mono);
+  font-size: 0.7rem;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  padding: 0.1rem 0.5rem;
+  border-radius: 999px;
+  border: 1px solid var(--color-border);
+}
+
+.receiptBadge[data-verification="verified"] {
+  color: var(--color-accent-ink);
+  background: var(--color-accent);
+  border-color: transparent;
+}
+
+.receiptBadge[data-verification="asserted"] {
+  color: var(--color-muted);
+  background: transparent;
+}
+
+.receiptDetail {
+  color: var(--color-muted);
+}
+
+.receiptMeta {
+  font-family: var(--font-mono);
+  color: var(--color-muted);
+  margin-left: auto;
+}
+
 .findingLocation {
   font-family: var(--font-mono);
   font-size: 0.8rem;
