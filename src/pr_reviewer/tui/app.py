@@ -7,10 +7,17 @@ from textual.containers import Horizontal
 from textual.widgets import Static
 
 from pr_reviewer.tui.nav import SECTIONS, SectionNav, SectionSelected
+from pr_reviewer.tui.theme import REVIEWER_CSS, REVIEWER_THEME
 
 
 class ReviewerApp(App[None]):
     TITLE = "reviewer"
+    CSS = REVIEWER_CSS
+
+    def __init__(self) -> None:
+        super().__init__()
+        self.register_theme(REVIEWER_THEME)
+        self.theme = REVIEWER_THEME.name
 
     def compose(self) -> ComposeResult:
         yield Horizontal(
