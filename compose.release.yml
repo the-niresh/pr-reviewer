@@ -5,11 +5,14 @@ services:
       target: api
     image: busybox@sha256:73aaf090f3d85aa34ee199857f03fa3a95c8ede2ffd4cc2cdb5b94e566b11662
     user: "65532:65532"
+    command: ["sleep", "3600"]
+    stop_grace_period: 5s
     healthcheck:
       test: ["CMD", "true"]
-      interval: 10s
+      interval: 2s
       timeout: 3s
       retries: 3
+      start_period: 1s
 
   worker:
     build:
@@ -17,11 +20,14 @@ services:
       target: worker
     image: busybox@sha256:73aaf090f3d85aa34ee199857f03fa3a95c8ede2ffd4cc2cdb5b94e566b11662
     user: "65532:65532"
+    command: ["sleep", "3600"]
+    stop_grace_period: 5s
     healthcheck:
       test: ["CMD", "true"]
-      interval: 10s
+      interval: 2s
       timeout: 3s
       retries: 3
+      start_period: 1s
 
   ui:
     build:
@@ -29,11 +35,14 @@ services:
       target: ui
     image: busybox@sha256:73aaf090f3d85aa34ee199857f03fa3a95c8ede2ffd4cc2cdb5b94e566b11662
     user: "65532:65532"
+    command: ["sleep", "3600"]
+    stop_grace_period: 5s
     healthcheck:
       test: ["CMD", "true"]
-      interval: 10s
+      interval: 2s
       timeout: 3s
       retries: 3
+      start_period: 1s
 
   sandbox:
     build:
@@ -41,8 +50,11 @@ services:
       target: sandbox
     image: busybox@sha256:73aaf090f3d85aa34ee199857f03fa3a95c8ede2ffd4cc2cdb5b94e566b11662
     user: "65532:65532"
+    command: ["sleep", "3600"]
+    stop_grace_period: 5s
     healthcheck:
       test: ["CMD", "true"]
-      interval: 10s
+      interval: 2s
       timeout: 3s
       retries: 3
+      start_period: 1s
