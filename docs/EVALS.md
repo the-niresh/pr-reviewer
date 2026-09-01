@@ -3,6 +3,25 @@
 The harness lives in `src/pr_reviewer/evals/`. It scores an injected reviewer.
 It does not call a model API and it does not write Neon.
 
+## Why eval data stays local
+
+The hosted plane does not get an `eval_foundation` migration. Eval cases hold
+diffs, labels, and repository case IDs. Those must never exist on Neon
+(`docs/DATA_BOUNDARIES.md`). `evals/` already cannot import `db`,
+`control_plane`, or `config` (`tests/test_eval_metrics.py`). Reports are JSON
+files written by `write_eval_report`. The dashboard lists reports through the
+local store protocol, not hosted tables.
+
+Phase 1 G3 split hosted aggregate `eval_reports` from local case-level
+`eval_results`. No hosted reader or writer for aggregates exists. An unused
+hosted table would still need `ALLOWLIST` entries for columns nothing writes.
+That is a phantom. If trend tracking later needs hosted aggregates, add a
+migration then, with an owner outside `evals/`, and only numeric or enum
+columns. Do not add the table first.
+
+`tests/test_eval_stays_local.py` fails if a hosted eval table or
+`eval_foundation` migration appears.
+
 ## Public dataset
 
 `datasets/public/eval_cases.jsonl` currently has one `dev` case and zero
