@@ -75,6 +75,12 @@ class SectionNav(Widget):
     def watch_current_section(self, _section_id: str) -> None:
         self._sync_current_classes()
 
+    def select_section(self, section_id: str) -> None:
+        if section_id not in SECTIONS:
+            return
+        self.current_section = section_id
+        self.post_message(SectionSelected(section_id))
+
     def on_button_pressed(self, event: Button.Pressed) -> None:
         button_id = event.button.id
         if button_id is None:
@@ -82,8 +88,7 @@ class SectionNav(Widget):
         section_id = button_id.removeprefix("nav-")
         if section_id not in SECTIONS:
             return
-        self.current_section = section_id
-        self.post_message(SectionSelected(section_id))
+        self.select_section(section_id)
 
     def _sync_current_classes(self) -> None:
         for section_id in SECTIONS:

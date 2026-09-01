@@ -2,7 +2,9 @@
 
 from __future__ import annotations
 
+import sys
 from pathlib import Path
+from typing import Any
 
 from textual.app import App, ComposeResult
 from textual.containers import Container, Horizontal
@@ -12,6 +14,13 @@ from pr_reviewer.local_store.repo_config import RepoConfigStore, default_repo_co
 from pr_reviewer.local_store.review_log import ReviewLogStore, default_review_log_path
 from pr_reviewer.runner.secrets import SecretStore, get_secret_store
 from pr_reviewer.tui.auth_state import RUNNER_CREDENTIAL_SECRET, has_model_key, is_github_connected
+from pr_reviewer.tui.auto_review import (
+    TUI_CLOSED_AUTO_REVIEW_MESSAGE,
+    AutoReviewCoordinator,
+    AutoReviewEventSource,
+    AutoReviewOutcome,
+    PullRequestSyncEvent,
+)
 from pr_reviewer.tui.installation_client import HostedInstallationClient, InstallationClient
 from pr_reviewer.tui.installation_snapshot import (
     InstallationSnapshot,
@@ -19,7 +28,7 @@ from pr_reviewer.tui.installation_snapshot import (
     load_installation_snapshot,
     save_installation_snapshot,
 )
-from pr_reviewer.tui.nav import SectionNav, SectionSelected
+from pr_reviewer.tui.nav import SECTIONS, SectionNav, SectionSelected
 from pr_reviewer.tui.pairing_client import PairingClient
 from pr_reviewer.tui.screens.byok import ByokPanel, ModelKeyStored
 from pr_reviewer.tui.screens.connect import ConnectPanel, can_start_review
@@ -44,6 +53,8 @@ class ReviewerApp(App[None]):
         repo_config: RepoConfigStore | None = None,
         review_log: ReviewLogStore | None = None,
         config_dir: Path | None = None,
+        auto_review_event_source: AutoReviewEventSource | None = None,
+        auto_review_poll_interval: float = 1.0,
     ) -> None:
         super().__init__()
         self.register_theme(REVIEWER_THEME)
@@ -59,6 +70,11 @@ class ReviewerApp(App[None]):
         self._review_log = review_log or ReviewLogStore(
             default_review_log_path(self._config_dir)
         )
+        self._auto_review_event_source = auto_review_event_source
+        self._auto_review_poll_interval = auto_review_poll_interval
+        self._auto_review = AutoReviewCoordinator(on_start_review=self._on_auto_review_start)
+        self._auto_review_timer: Any = None
+        self._auto_review_was_running = False
 
     @property
     def github_connected(self) -> bool:
@@ -90,11 +106,16 @@ class ReviewerApp(App[None]):
             self._mount_byok_panel()
             return
         self._mount_default_section()
+        self._start_auto_review()
+
+    def on_unmount(self) -> None:
+        self._stop_auto_review()
 
     def on_model_key_stored(self, _message: ModelKeyStored) -> None:
         pane = self.query_one("#section-content", Container)
         pane.remove_children()
         self._mount_default_section()
+        self._start_auto_review()
 
     def on_section_selected(self, message: SectionSelected) -> None:
         if message.section_id == "reviews" and not can_start_review(
@@ -145,7 +166,76 @@ class ReviewerApp(App[None]):
             return fetched
         return cached
 
-    def _show_section(self, section_id: str, snapshot: InstallationSnapshot) -> None:
+    def _start_auto_review(self) -> None:
+        if not self.github_connected or not self.model_key_configured:
+            return
+        if self._auto_review.running:
+            return
+        self._auto_review.start()
+        self._auto_review_was_running = True
+        if self._auto_review_event_source is None:
+            return
+        self._auto_review_timer = self.set_interval(
+            self._auto_review_poll_interval,
+            self._poll_auto_review_events,
+        )
+
+    def _stop_auto_review(self) -> None:
+        if self._auto_review_timer is not None:
+            self._auto_review_timer.stop()
+            self._auto_review_timer = None
+        if self._auto_review.running:
+            self._auto_review.stop()
+
+    def _poll_auto_review_events(self) -> None:
+        if self._auto_review_event_source is None:
+            return
+        for event in self._auto_review_event_source.poll():
+            self._auto_review.handle(event)
+
+    def _on_auto_review_start(
+        self,
+        event: PullRequestSyncEvent,
+        superseded: bool,
+        _previous_head_sha: str,
+    ) -> None:
+        outcome = AutoReviewOutcome(
+            kind="superseded" if superseded else "started",
+            pull_request_number=event.pull_request_number,
+            head_sha=event.head_sha,
+        )
+        self._show_auto_review(outcome)
+
+    def _show_auto_review(self, outcome: AutoReviewOutcome) -> None:
+        if outcome.kind not in {"started", "superseded"}:
+            return
+        message = f"Reviewing PR #{outcome.pull_request_number}"
+        if outcome.kind == "superseded":
+            message += " (superseded previous run)"
+        self.notify(message)
+        snapshot = self._resolve_installation_snapshot()
+        if snapshot is None:
+            return
+        if "section-nav" in {widget.id for widget in self.query("#section-nav")}:
+            self.query_one(SectionNav).select_section("reviews")
+        self._show_section("reviews", snapshot, review_id=f"pr-{outcome.pull_request_number}")
+
+    def _show_section(
+        self,
+        section_id: str,
+        snapshot: InstallationSnapshot,
+        *,
+        review_id: str = "live-review",
+    ) -> None:
+        if section_id not in SECTIONS:
+            pane = self.query_one("#section-content", Container)
+            pane.remove_children()
+            pane.mount(Static(section_id, id="section-placeholder"))
+            return
+        if section_id == "reviews" and (
+            not self.github_connected or not self.model_key_configured
+        ):
+            return
         pane = self.query_one("#section-content", Container)
         pane.remove_children()
         if section_id == "profile":
@@ -171,6 +261,7 @@ class ReviewerApp(App[None]):
                         ),
                     ),
                     review_log=self._review_log,
+                    review_id=review_id,
                 )
             )
             return
@@ -187,5 +278,8 @@ def _hosted_origin_from_env() -> str | None:
 
 
 def run_tui() -> int:
-    ReviewerApp().run()
+    app = ReviewerApp()
+    app.run()
+    if app._auto_review_was_running:
+        print(TUI_CLOSED_AUTO_REVIEW_MESSAGE, file=sys.stderr)
     return 0
