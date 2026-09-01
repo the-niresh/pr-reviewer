@@ -39,6 +39,8 @@ class EvalCandidate(BaseModel):
     source_evidence: list[str] = Field(min_length=1)
     diff: str = ""
     committed_at: date | None = None
+    sha: str = ""
+    files: tuple[str, ...] = ()
 
 
 class SkippedMineCommit(BaseModel):

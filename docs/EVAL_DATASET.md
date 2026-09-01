@@ -6,6 +6,15 @@ Public cases live in `datasets/public/eval_cases.jsonl`. Private FoodSpector cas
 A mined row is a candidate. A commit message is evidence, not ground truth. A holdout case
 without a named human auditor is rejected.
 
+The mechanical audit path is `pr-reviewer-holdout` (`evals/holdout_sheet.py`).
+`write-sheet` mines commits into `datasets/private/candidate_sheet.jsonl` with
+an empty verdict column. `build-holdout` writes `EvalCase` JSONL only from
+judged include rows and refuses any blank verdict.
+
+FoodSpector miner run 2026-09-01 (`--max-cases 40`): `candidates=37`
+`skipped=3`. No row in that sheet has been labelled. The public file still has
+one `dev` case and zero `holdout` cases.
+
 ## Precision denominators
 
 `compute_metrics` reports both, as named fields. Do not read one number as the other.

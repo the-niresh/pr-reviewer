@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import subprocess
+from datetime import date
 from pathlib import Path
 
 from pr_reviewer.context_budget import context_budget_for_model
@@ -43,7 +44,18 @@ def mine_eval_candidates(
     candidates: list[EvalCandidate] = []
     skipped: list[SkippedMineCommit] = []
     for sha in shas:
-        subject = _git_output(repo, ["show", "-s", "--format=%s", sha]).strip() or sha
+        meta = _git_output(repo, ["show", "-s", "--format=%s%n%cs", sha]).splitlines()
+        subject = (meta[0].strip() if meta else "") or sha
+        committed_at: date | None = None
+        if len(meta) > 1 and meta[1].strip():
+            committed_at = date.fromisoformat(meta[1].strip())
+        files = tuple(
+            line.strip()
+            for line in _git_output(
+                repo, ["diff-tree", "--no-commit-id", "--name-only", "-r", sha]
+            ).splitlines()
+            if line.strip()
+        )
         patch = _git_output(repo, ["show", "--format=", "-p", sha])
         token_count = estimate_diff_tokens(patch)
         if token_count > budget.tokens:
@@ -57,5 +69,13 @@ def mine_eval_candidates(
                 )
             )
             continue
-        candidates.append(EvalCandidate(source_evidence=[subject], diff=patch))
+        candidates.append(
+            EvalCandidate(
+                source_evidence=[subject],
+                diff=patch,
+                committed_at=committed_at,
+                sha=sha,
+                files=files,
+            )
+        )
     return MineResult(candidates=candidates, skipped=tuple(skipped))

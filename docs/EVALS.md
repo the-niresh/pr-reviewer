@@ -48,6 +48,35 @@ from that file. Do not treat a missing holdout as a passing score.
 false findings per PR, high-value recall (`recall_per_finding`), cost, and
 latency. Use it on synthetic `EvalRun` objects until a real holdout exists.
 
+## Candidate sheet and holdout builder
+
+Mine a repo into an unjudged JSONL sheet. Every row has empty `verdict`,
+`human_auditor`, `split`, and `labels`. The writer does not label anything.
+
+```bash
+uv run python -m pr_reviewer.evals.holdout_sheet write-sheet \
+  --repo /srv/claude/projects/FoodSpector \
+  --out datasets/private/candidate_sheet.jsonl \
+  --max-cases 40
+```
+
+Real run on 2026-09-01 against FoodSpector printed:
+
+`candidates=37 skipped=3 out=datasets/private/candidate_sheet.jsonl`
+
+That sheet is gitignored. A human fills `verdict` (`include` or `exclude`),
+and for include rows also `human_auditor`, `split` (`dev` or `holdout`), and
+`labels`. Then:
+
+```bash
+uv run python -m pr_reviewer.evals.holdout_sheet build-holdout \
+  --sheet datasets/private/candidate_sheet.jsonl \
+  --out datasets/private/eval_cases.jsonl
+```
+
+The builder refuses with exit 2 if any row is still unjudged. It does not
+guess a split. No holdout file has been written from the FoodSpector sheet.
+
 ## Feedback age cutoff
 
 `consider_feedback` drops `FeedbackEvent` rows whose `observed_at` is older
