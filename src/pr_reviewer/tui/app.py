@@ -9,6 +9,7 @@ from textual.containers import Container, Horizontal
 from textual.widgets import Static
 
 from pr_reviewer.local_store.repo_config import RepoConfigStore, default_repo_config_path
+from pr_reviewer.local_store.review_log import ReviewLogStore, default_review_log_path
 from pr_reviewer.runner.secrets import SecretStore, get_secret_store
 from pr_reviewer.tui.auth_state import RUNNER_CREDENTIAL_SECRET, has_model_key, is_github_connected
 from pr_reviewer.tui.installation_client import HostedInstallationClient, InstallationClient
@@ -41,6 +42,7 @@ class ReviewerApp(App[None]):
         installation_client: InstallationClient | None = None,
         installation_snapshot: InstallationSnapshot | None = None,
         repo_config: RepoConfigStore | None = None,
+        review_log: ReviewLogStore | None = None,
         config_dir: Path | None = None,
     ) -> None:
         super().__init__()
@@ -53,6 +55,9 @@ class ReviewerApp(App[None]):
         self._installation_snapshot = installation_snapshot
         self._repo_config = repo_config or RepoConfigStore(
             default_repo_config_path(self._config_dir)
+        )
+        self._review_log = review_log or ReviewLogStore(
+            default_review_log_path(self._config_dir)
         )
 
     @property
@@ -164,7 +169,8 @@ class ReviewerApp(App[None]):
                             "README.md",
                             "@@ -1,1 +1,2 @@\n # Widgets\n+More docs\n",
                         ),
-                    )
+                    ),
+                    review_log=self._review_log,
                 )
             )
             return
