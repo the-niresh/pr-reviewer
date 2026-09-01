@@ -80,3 +80,24 @@
 - Commit: docs: add phase 13 write-up with verified proof gate
 - Decisions: quoted the refusal. No specialist quality number invented.
 - Blocked: frozen holdout does not exist
+
+## Task 21 - ✅ done  2026-09-01T05:59:42+05:30
+- RED: 22 failed, 0 passed, failing for: missing dashboard modules
+- GREEN: 730 passed. ruff 0, mypy 0, boundary doc current, exemptions empty.
+- Commit: e704cd7 feat: add loopback-only authenticated dashboard api
+- Decisions: Dashboard files live under web/ at the plan paths. Local and hosted I/O are injected. web/__init__.py no longer imports the hosted app. Two identities: paired runner_id for account, random local session cookie for localhost. No webhook route.
+- Blocked: -
+
+## Task P1 after 21 - ✅ done  2026-09-01T05:59:42+05:30
+- RED: n/a
+- GREEN: Phase 5 mapped tasks are now implemented. Document written.
+- Commit: see Phase 5
+- Decisions: Master Task 21 heading is still ⬜; treated as done because e704cd7 shipped it.
+- Blocked: -
+
+## Phase 5 - ✅ done  2026-09-01T05:59:42+05:30
+- RED: n/a
+- GREEN: `81 passed, 1 warning in 4.68s` on webhook, jobs, claim, token broker, post_review, and dashboard tests
+- Commit: docs: add phase 5 write-up with verified proof gate
+- Decisions: none
+- Blocked: -
