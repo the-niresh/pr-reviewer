@@ -28,6 +28,7 @@ STEPS = (
 )
 HEAD_SHA = "a" * 40
 OTHER_SHA = "b" * 40
+ENGINES = ("simple", "langgraph")
 
 
 class SimulatedCrash(Exception):
@@ -84,6 +85,7 @@ def _counting_handlers(
 def _engine(
     tmp_path: Path,
     *,
+    engine_cls: str = "simple",
     handlers: dict[str, Callable[..., object]] | None = None,
     counts: dict[str, int] | None = None,
     heartbeat: Callable[[Any], LeaseState] | None = None,
@@ -93,12 +95,19 @@ def _engine(
     crash_before: str | None = None,
     crashed: dict[str, bool] | None = None,
 ) -> Any:
-    from pr_reviewer.workflow.simple_engine import SimpleEngine
+    if engine_cls == "langgraph":
+        from pr_reviewer.workflow.langgraph_engine import LangGraphEngine
+
+        cls: Any = LangGraphEngine
+    else:
+        from pr_reviewer.workflow.simple_engine import SimpleEngine
+
+        cls = SimpleEngine
 
     if handlers is None:
         counts = counts if counts is not None else {}
         handlers = _counting_handlers(counts, crash_before=crash_before, crashed=crashed)
-    return SimpleEngine(
+    return cls(
         store=_store(tmp_path),
         fetch=handlers["fetch"],
         baseline_review=handlers["baseline_review"],
@@ -113,9 +122,10 @@ def _engine(
     )
 
 
-def test_run_executes_all_six_steps_once(tmp_path: Path) -> None:
+@pytest.mark.parametrize("engine_cls", ENGINES)
+def test_run_executes_all_six_steps_once(tmp_path: Path, engine_cls: str) -> None:
     counts: dict[str, int] = {}
-    engine = _engine(tmp_path, counts=counts)
+    engine = _engine(tmp_path, engine_cls=engine_cls, counts=counts)
     result = engine.run("wf-1", _input())
     assert result.status == "completed"
     assert [counts[name] for name in STEPS] == [1] * 6
@@ -124,10 +134,12 @@ def test_run_executes_all_six_steps_once(tmp_path: Path) -> None:
     assert counts["notifies"] == 1
 
 
+@pytest.mark.parametrize("engine_cls", ENGINES)
 def test_get_state_lists_completed_steps_without_a_running_queue_status(
     tmp_path: Path,
+    engine_cls: str,
 ) -> None:
-    engine = _engine(tmp_path)
+    engine = _engine(tmp_path, engine_cls=engine_cls)
     engine.run("wf-1", _input())
     state = engine.get_state("wf-1")
     assert state.completed_steps == STEPS
@@ -135,13 +147,20 @@ def test_get_state_lists_completed_steps_without_a_running_queue_status(
     assert not hasattr(state, "status") or state.outcome != "running"
 
 
+@pytest.mark.parametrize("engine_cls", ENGINES)
 @pytest.mark.parametrize("crash_before", STEPS)
 def test_resume_after_crash_before_each_step_does_not_repeat_completed_effects(
-    tmp_path: Path, crash_before: str
+    tmp_path: Path, crash_before: str, engine_cls: str
 ) -> None:
     counts: dict[str, int] = {}
     crashed = {"done": False}
-    engine = _engine(tmp_path, counts=counts, crash_before=crash_before, crashed=crashed)
+    engine = _engine(
+        tmp_path,
+        engine_cls=engine_cls,
+        counts=counts,
+        crash_before=crash_before,
+        crashed=crashed,
+    )
     with pytest.raises(SimulatedCrash):
         engine.run("wf-1", _input())
 
@@ -163,9 +182,12 @@ def test_resume_after_crash_before_each_step_does_not_repeat_completed_effects(
     assert counts["notifies"] == 1
 
 
-def test_rerunning_a_completed_workflow_is_a_no_op_for_external_effects(tmp_path: Path) -> None:
+@pytest.mark.parametrize("engine_cls", ENGINES)
+def test_rerunning_a_completed_workflow_is_a_no_op_for_external_effects(
+    tmp_path: Path, engine_cls: str
+) -> None:
     counts: dict[str, int] = {}
-    engine = _engine(tmp_path, counts=counts)
+    engine = _engine(tmp_path, engine_cls=engine_cls, counts=counts)
     engine.run("wf-1", _input())
     again = engine.run("wf-1", _input())
     assert again.status == "completed"
@@ -174,8 +196,10 @@ def test_rerunning_a_completed_workflow_is_a_no_op_for_external_effects(tmp_path
     assert counts["notifies"] == 1
 
 
+@pytest.mark.parametrize("engine_cls", ENGINES)
 def test_cancelled_lease_between_steps_records_cancelled_not_a_dead_lease(
     tmp_path: Path,
+    engine_cls: str,
 ) -> None:
     counts: dict[str, int] = {}
     events: list[tuple[str, dict[str, str | int]]] = []
@@ -194,6 +218,7 @@ def test_cancelled_lease_between_steps_records_cancelled_not_a_dead_lease(
 
     engine = _engine(
         tmp_path,
+        engine_cls=engine_cls,
         counts=counts,
         heartbeat=heartbeat,
         record_event=record_event,
@@ -209,19 +234,28 @@ def test_cancelled_lease_between_steps_records_cancelled_not_a_dead_lease(
     assert "invalid_or_expired" not in reasons
 
 
-def test_invalid_or_expired_lease_is_not_recorded_as_cancelled(tmp_path: Path) -> None:
+@pytest.mark.parametrize("engine_cls", ENGINES)
+def test_invalid_or_expired_lease_is_not_recorded_as_cancelled(
+    tmp_path: Path, engine_cls: str
+) -> None:
     heartbeats = iter([LeaseState(status="active"), LeaseState(status="invalid_or_expired")])
-    engine = _engine(tmp_path, heartbeat=lambda _inp: next(heartbeats))
+    engine = _engine(
+        tmp_path, engine_cls=engine_cls, heartbeat=lambda _inp: next(heartbeats)
+    )
     result = engine.run("wf-1", _input())
     assert result.reason == "invalid_or_expired"
     assert result.status != "cancelled" or result.reason != "cancelled"
 
 
-def test_superseded_head_sha_cancels_before_the_next_step(tmp_path: Path) -> None:
+@pytest.mark.parametrize("engine_cls", ENGINES)
+def test_superseded_head_sha_cancels_before_the_next_step(
+    tmp_path: Path, engine_cls: str
+) -> None:
     counts: dict[str, int] = {}
     shas = iter([HEAD_SHA, OTHER_SHA])
     engine = _engine(
         tmp_path,
+        engine_cls=engine_cls,
         counts=counts,
         current_head_sha=lambda _inp: next(shas),
     )
@@ -233,7 +267,10 @@ def test_superseded_head_sha_cancels_before_the_next_step(tmp_path: Path) -> Non
     assert counts.get("model_calls", 0) == 0
 
 
-def test_every_step_transition_records_a_flat_event(tmp_path: Path) -> None:
+@pytest.mark.parametrize("engine_cls", ENGINES)
+def test_every_step_transition_records_a_flat_event(
+    tmp_path: Path, engine_cls: str
+) -> None:
     events: list[tuple[str, dict[str, str | int]]] = []
 
     def record_event(_job_id: str, event_type: str, payload: dict[str, str | int]) -> None:
@@ -241,7 +278,7 @@ def test_every_step_transition_records_a_flat_event(tmp_path: Path) -> None:
         for value in payload.values():
             assert not isinstance(value, (dict, list))
 
-    engine = _engine(tmp_path, record_event=record_event)
+    engine = _engine(tmp_path, engine_cls=engine_cls, record_event=record_event)
     engine.run("wf-1", _input())
     completed = [
         payload["step"] for event_type, payload in events if event_type.endswith("completed")
@@ -268,7 +305,9 @@ def test_node_deadline_expires_when_a_step_waits_on_a_missing_artifact(tmp_path:
 
     handlers = _counting_handlers({})
     handlers["fetch"] = fetch
-    engine = _engine(tmp_path, handlers=handlers, step_timeouts={"fetch": 0.05})
+    engine = _engine(
+        tmp_path, engine_cls="simple", handlers=handlers, step_timeouts={"fetch": 0.05}
+    )
     with pytest.raises(RuntimeError, match="TIMEOUT"):
         engine.run("wf-1", _input())
 
@@ -317,7 +356,10 @@ def test_workflow_package_does_not_import_langgraph_gates_events_jobs_or_db() ->
     for path in sorted(root.rglob("*.py")):
         tree = ast.parse(path.read_text(encoding="utf-8"), filename=str(path))
         text = path.read_text(encoding="utf-8")
+        adapter_only = path.name == "langgraph_engine.py"
         for token in forbidden:
+            if token == "langgraph" and adapter_only:
+                continue
             if token == "langgraph":
                 assert token not in text.lower()
             else:
@@ -325,9 +367,12 @@ def test_workflow_package_does_not_import_langgraph_gates_events_jobs_or_db() ->
         for node in ast.walk(tree):
             if isinstance(node, ast.Import):
                 for alias in node.names:
+                    if adapter_only and alias.name.startswith("langgraph"):
+                        continue
                     assert not alias.name.startswith("langgraph")
             if isinstance(node, ast.ImportFrom) and node.module:
-                assert not node.module.startswith("langgraph")
+                if not (adapter_only and node.module.startswith("langgraph")):
+                    assert not node.module.startswith("langgraph")
                 assert not node.module.startswith("pr_reviewer.gates")
                 assert not node.module.startswith("pr_reviewer.events")
                 assert not node.module.startswith("pr_reviewer.jobs")
