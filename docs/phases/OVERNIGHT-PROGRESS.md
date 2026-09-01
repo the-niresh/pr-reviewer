@@ -256,3 +256,11 @@
 - Skipped remaining:
   - Phase 20: master 9 ⚠️, 24 ⬜, 26 ⬜
 
+## Phase 20 - ⚠️ partial  2026-09-01T12:21:00+05:30
+- RED: n/a, docs only
+- GREEN: Phase 20 local proof suite `27 passed, 1 warning in 3.23s`. Holdout commands raised `BaselineBlocked` for baseline, retrieval, and specialist. CLAUDE-IN heading `## 2026-09-01T11:52:00+05:30 | claude`. Untrack already on 764bb66; `git check-ignore -v` names `.gitignore:24`.
+- Commit: docs: add phase 20 write-up with verified proof gate
+- Decisions: Overnight section 8: write when local proof is runnable. Quoted 27 passed and three BaselineBlocked refusals. No precision, noise, safety, or cost invented. Old-feedback decay and dataset version id named as missing. Task 24 and Task 26 are not this gate.
+- Blocked: frozen holdout; old-feedback decay not in src; Task 24; Task 26
+- Skipped remaining: none. Phases 0-20 now have write-ups.
+
