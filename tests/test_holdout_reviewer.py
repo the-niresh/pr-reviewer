@@ -56,6 +56,11 @@ def _row_labels(row: dict[str, object]) -> list[dict[str, object]]:
     return labels
 
 
+class _TtyStdin(StringIO):
+    def isatty(self) -> bool:
+        return True
+
+
 def test_exclude_needs_no_auditor_split_or_labels(tmp_path: Path) -> None:
     from pr_reviewer.evals.holdout_sheet import review_sheet
 
@@ -251,3 +256,39 @@ def test_add_another_label_then_stop(tmp_path: Path) -> None:
     assert labels[1]["concern"] == "security"
     assert labels[1]["file_path"] == "src/other.py"
     assert labels[1]["line_start"] == 3
+
+
+def test_q_at_pager_reaches_verdict_without_printing_the_rest(tmp_path: Path) -> None:
+    from pr_reviewer.evals.holdout_sheet import DIFF_PAGE_LINES, review_sheet
+
+    tail = "UNIQUE_TAIL_SHOULD_NOT_APPEAR"
+    diff = "\n".join([f"line-{index}" for index in range(DIFF_PAGE_LINES)] + [tail]) + "\n"
+    sheet = tmp_path / "sheet.jsonl"
+    _write_sheet(sheet, [_row("cand-001") | {"diff": diff}])
+    stdout = StringIO()
+    review_sheet(
+        sheet, auditor="niresh", stdin=_TtyStdin("q\nq\n"), stdout=stdout
+    )
+    text = stdout.getvalue()
+    assert "line-0" in text
+    assert tail not in text
+    assert "-- more -- (enter=more, q=skip rest)" in text
+    assert "e/exclude  i/include  s/skip  q/quit" in text
+    rows = _load(sheet)
+    assert rows[0]["verdict"] == ""
+
+
+def test_unrecognised_key_reprompts_without_redrawing_the_diff(tmp_path: Path) -> None:
+    from pr_reviewer.evals.holdout_sheet import review_sheet
+
+    marker = "UNIQUE_DIFF_BODY"
+    sheet = tmp_path / "sheet.jsonl"
+    _write_sheet(sheet, [_row("cand-001") | {"diff": f"@@\n+{marker}\n"}])
+    stdout = StringIO()
+    review_sheet(sheet, auditor="niresh", stdin=StringIO("x\nq\n"), stdout=stdout)
+    text = stdout.getvalue()
+    assert text.count(marker) == 1
+    assert text.count("row 1 of 1") == 1
+    assert text.count("e/exclude  i/include  s/skip  q/quit") == 2
+    rows = _load(sheet)
+    assert rows[0]["verdict"] == ""

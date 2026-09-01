@@ -144,6 +144,8 @@ def build_holdout(sheet: Path, dest: Path) -> int:
 
 
 DIFF_PAGE_LINES = 40
+MORE_PROMPT = "-- more -- (enter=more, q=skip rest)\n"
+COMMAND_MENU = "e/exclude  i/include  s/skip  q/quit\n"
 
 
 def _load_sheet_rows(sheet: Path) -> list[dict[str, object]]:
@@ -188,11 +190,19 @@ def _show_diff(diff: str, *, stdin: TextIO, stdout: TextIO) -> None:
         chunk = lines[start : start + page]
         stdout.write("\n".join(chunk) + "\n")
         start += page
-        if start < len(lines):
-            stdout.write("-- more --\n")
+        if start >= len(lines):
+            return
+        while True:
+            stdout.write(MORE_PROMPT)
             stdout.flush()
-            if _read_line(stdin) is None:
+            raw = _read_line(stdin)
+            if raw is None:
                 return
+            token = raw.strip().lower()
+            if token in {"q", "quit"}:
+                return
+            if token == "":
+                break
 
 
 def _pick_numbered(raw: str, options: Sequence[str]) -> str | None:
@@ -419,24 +429,28 @@ def review_sheet(
         raise ValueError("auditor is required")
     rows = _load_sheet_rows(sheet)
     index = 0
+    shown_index: int | None = None
     while index < len(rows):
         row = rows[index]
         if str(row.get("verdict") or "").strip():
             index += 1
             continue
-        include_count, exclude_count = _verdict_counts(rows)
-        stdout.write(
-            f"row {index + 1} of {len(rows)}, {include_count} include, {exclude_count} exclude\n"
-        )
-        stdout.write(f"id: {row.get('id')}\n")
-        stdout.write(f"sha: {row.get('sha')}\n")
-        stdout.write(f"committed_at: {row.get('committed_at')}\n")
-        stdout.write(f"subject: {row.get('subject')}\n")
-        files = row.get("files") or []
-        stdout.write(f"files: {files}\n")
-        stdout.write("diff:\n")
-        _show_diff(str(row.get("diff") or ""), stdin=stdin, stdout=stdout)
-        stdout.write("e/exclude  i/include  s/skip  q/quit\n")
+        if shown_index != index:
+            include_count, exclude_count = _verdict_counts(rows)
+            stdout.write(
+                f"row {index + 1} of {len(rows)}, "
+                f"{include_count} include, {exclude_count} exclude\n"
+            )
+            stdout.write(f"id: {row.get('id')}\n")
+            stdout.write(f"sha: {row.get('sha')}\n")
+            stdout.write(f"committed_at: {row.get('committed_at')}\n")
+            stdout.write(f"subject: {row.get('subject')}\n")
+            files = row.get("files") or []
+            stdout.write(f"files: {files}\n")
+            stdout.write("diff:\n")
+            _show_diff(str(row.get("diff") or ""), stdin=stdin, stdout=stdout)
+            shown_index = index
+        stdout.write(COMMAND_MENU)
         stdout.flush()
         command = _read_line(stdin)
         if command is None:
