@@ -822,7 +822,7 @@ Review IDs go in a flat event payload, not a new Neon table.
 - ✅ Record GitHub review ID, comment IDs, response status, and event rows.
 - ✅ Run all backend checks.
 
-### Task 18 - ⚠️ Reliability, budgets, retention, and fault tests
+### Task 18 - ✅ Reliability, budgets, retention, and fault tests
 
 **Files:**
 - Create: hosted migration `<timestamp>_reliability_and_budget.sql`
@@ -846,7 +846,7 @@ Review IDs go in a flat event payload, not a new Neon table.
 - ✅ Test concurrent budget reservations so two workers cannot exceed one repository budget.
 - ✅ Add health, readiness, queue, cost, rejection-rate, and circuit-state endpoints.
 - ✅ Test repository uninstall and retention deletion without removing shared installation data.
-- ⬜ Run a Postgres queue benchmark at the expected worker count and record the result before considering Redis.
+- ✅ Run a Postgres queue benchmark at the expected worker count and record the result before considering Redis.
 - ✅ Run all backend checks.
 
 ### Task 19 - ⚠️ Specialist-agent experiment and optional LangGraph adapter
