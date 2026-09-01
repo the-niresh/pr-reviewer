@@ -81,12 +81,14 @@ def test_inserting_into_a_retired_table_is_rejected_by_the_database() -> None:
 def test_hosted_exemptions_is_empty() -> None:
     from pr_reviewer.control_plane.boundary import HOSTED_EXEMPTIONS
 
-    assert not HOSTED_EXEMPTIONS, (
-        "HOSTED_EXEMPTIONS must stay empty. Runtime Task 1B re-scoped agent_events and "
-        "model_calls to fit the boundary column by column, like every other hosted table; "
-        "adding a table back here is a regression, not a shortcut. Same idea as "
-        "EXPECTED_EXISTING_PACKAGES in test_package_boundaries.py."
+    assert frozenset() == HOSTED_EXEMPTIONS, (
+        "HOSTED_EXEMPTIONS is closed empty, not an unfinished list. Runtime Task 1B "
+        "re-scoped agent_events and model_calls to fit the boundary column by column, "
+        "like every other hosted table; adding a table back here is a regression, not a "
+        "shortcut. Same idea as EXPECTED_EXISTING_PACKAGES in test_package_boundaries.py."
     )
+    source = (SRC_ROOT / "control_plane" / "boundary.py").read_text(encoding="utf-8")
+    assert "Closed. Empty is the finished state, not a TODO." in source
 
 
 def test_assert_no_private_columns_passes_against_the_current_hosted_schema() -> None:

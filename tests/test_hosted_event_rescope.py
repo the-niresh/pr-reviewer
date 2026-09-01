@@ -194,6 +194,6 @@ def test_fail_review_job_writes_the_closed_set_value_not_prose() -> None:
 def test_hosted_exemptions_is_empty_and_the_schema_still_passes() -> None:
     from pr_reviewer.control_plane.boundary import HOSTED_EXEMPTIONS, assert_no_private_columns
 
-    assert not HOSTED_EXEMPTIONS
+    assert frozenset() == HOSTED_EXEMPTIONS
     with connection() as conn:
         assert_no_private_columns(conn)

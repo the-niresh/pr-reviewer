@@ -74,7 +74,7 @@ Every other hosted column is either `uuid`, `timestamptz`, `integer`, `bigint`, 
 
 ### Exemptions
 
-`HOSTED_EXEMPTIONS = frozenset()`, exactly, pinned by
+`HOSTED_EXEMPTIONS = frozenset()`, exactly, closed empty, not a TODO, pinned by
 `tests/test_hosted_boundary_enforcement.py::test_hosted_exemptions_is_empty`. `agent_events` and
 `model_calls` used to be exempted here: both held jsonb payloads that could carry more than the
 boundary allows, because both had live writers and there was nowhere local to point the detail

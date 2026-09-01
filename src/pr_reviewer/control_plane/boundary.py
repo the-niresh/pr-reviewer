@@ -24,14 +24,13 @@ AUTO_PERMIT_TYPES = frozenset(
     {"uuid", "timestamp with time zone", "integer", "bigint", "boolean", "numeric"}
 )
 
-# Tables that may keep a shape this module would otherwise reject. Runtime Task 1B emptied this:
+# Closed. Empty is the finished state, not a TODO. Runtime Task 1B emptied this:
 # agent_events and model_calls used to hold free-form jsonb (a caller-supplied event payload, and
 # a request_metadata/response_metadata blob nobody constrained) with nowhere local to point the
 # detail until local_store/ existed (Runtime Task 5). Both are now allowlisted narrowly, column by
-# column, like every other hosted table -- see agent_events.payload and
-# model_calls.provider/model_name below. Staying empty is itself part of the boundary:
-# tests/test_hosted_boundary_enforcement.py's test_hosted_exemptions_is_empty fails the moment
-# anything is added back.
+# column, like every other hosted table. See agent_events.payload and
+# model_calls.provider/model_name below. tests/test_hosted_boundary_enforcement.py's
+# test_hosted_exemptions_is_empty fails the moment anything is added back.
 HOSTED_EXEMPTIONS: frozenset[str] = frozenset()
 
 
@@ -222,6 +221,8 @@ def _assert_no_private_columns(conn: Connection[Row]) -> None:
         column_name = str(row["column_name"])
         data_type = str(row["data_type"])
         if table_name in HOSTED_EXEMPTIONS:
+            # Unreachable while HOSTED_EXEMPTIONS stays closed empty. Kept so a
+            # regression that adds a name is still skipped until the empty-set test fails.
             continue
         if data_type in AUTO_PERMIT_TYPES:
             continue
