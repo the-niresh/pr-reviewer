@@ -25,6 +25,7 @@ from pr_reviewer.tui.screens.connect import ConnectPanel, can_start_review
 from pr_reviewer.tui.screens.profile import ProfilePanel
 from pr_reviewer.tui.screens.prompts import AgentPromptsPanel
 from pr_reviewer.tui.screens.repositories import RepositoriesPanel
+from pr_reviewer.tui.screens.review import ReviewDiffItem, ReviewPanel
 from pr_reviewer.tui.theme import REVIEWER_CSS, REVIEWER_THEME
 
 
@@ -150,6 +151,22 @@ class ReviewerApp(App[None]):
             return
         if section_id == "agent-prompts":
             pane.mount(AgentPromptsPanel(snapshot, repo_config=self._repo_config))
+            return
+        if section_id == "reviews":
+            pane.mount(
+                ReviewPanel(
+                    (
+                        ReviewDiffItem(
+                            "app.py",
+                            "@@ -1,1 +1,2 @@\n-old\n+new\n",
+                        ),
+                        ReviewDiffItem(
+                            "README.md",
+                            "@@ -1,1 +1,2 @@\n # Widgets\n+More docs\n",
+                        ),
+                    )
+                )
+            )
             return
         pane.mount(Static(section_id, id="section-placeholder"))
 

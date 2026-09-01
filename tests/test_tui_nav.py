@@ -84,8 +84,10 @@ def test_selecting_a_section_updates_content_and_indicator(tmp_path: Path) -> No
             await pilot.click("#nav-reviews")
             nav = app.query_one(SectionNav)
             assert nav.current_section == "reviews"
-            assert pilot.app.query_one("#section-placeholder") is not None
-            assert str(pilot.app.query_one("#section-placeholder").render()) == "reviews"
+            from pr_reviewer.tui.screens.review import ReviewPanel
+
+            panel = pilot.app.query_one(ReviewPanel)
+            assert panel.phase == "diffs"
             reviews = nav.query_one("#nav-reviews")
             repositories = nav.query_one("#nav-repositories")
             assert "nav-item--current" in reviews.classes
