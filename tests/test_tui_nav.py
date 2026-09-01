@@ -8,7 +8,25 @@ from pathlib import Path
 import pytest
 
 from pr_reviewer.tui.app import ReviewerApp
+from pr_reviewer.tui.installation_snapshot import InstallationSnapshot, RepositoryPermission
 from pr_reviewer.tui.nav import SECTIONS, SectionNav
+
+SAMPLE_INSTALLATION = InstallationSnapshot(
+    github_login="the-niresh",
+    github_user_id=42,
+    installation_id=7010,
+    repositories=(RepositoryPermission(11, "in-scope"),),
+)
+
+
+
+
+def make_connected_app(tmp_path: Path):
+
+    return ReviewerApp(
+        secrets=connected_secrets(tmp_path),
+        installation_snapshot=SAMPLE_INSTALLATION,
+    )
 
 
 def connected_secrets(tmp_path: Path):
@@ -32,19 +50,18 @@ def test_section_nav_lists_four_sections() -> None:
 
 def test_reviewer_app_starts_on_repositories(tmp_path: Path) -> None:
     async def exercise() -> None:
-        app = ReviewerApp(secrets=connected_secrets(tmp_path))
+        app = make_connected_app(tmp_path)
         async with app.run_test() as pilot:
             nav = app.query_one(SectionNav)
             assert nav.current_section == "repositories"
-            content = pilot.app.query_one("#section-content")
-            assert str(content.render()) == "repositories"
+            assert pilot.app.query_one("#repositories-heading") is not None
 
     asyncio.run(exercise())
 
 
 def test_current_section_is_visually_distinct_without_focus(tmp_path: Path) -> None:
     async def exercise() -> None:
-        app = ReviewerApp(secrets=connected_secrets(tmp_path))
+        app = make_connected_app(tmp_path)
         async with app.run_test() as pilot:
             nav = app.query_one(SectionNav)
             current = nav.query_one("#nav-repositories")
@@ -61,13 +78,13 @@ def test_current_section_is_visually_distinct_without_focus(tmp_path: Path) -> N
 
 def test_selecting_a_section_updates_content_and_indicator(tmp_path: Path) -> None:
     async def exercise() -> None:
-        app = ReviewerApp(secrets=connected_secrets(tmp_path))
+        app = make_connected_app(tmp_path)
         async with app.run_test() as pilot:
             await pilot.click("#nav-reviews")
             nav = app.query_one(SectionNav)
             assert nav.current_section == "reviews"
-            content = pilot.app.query_one("#section-content")
-            assert str(content.render()) == "reviews"
+            assert pilot.app.query_one("#section-placeholder") is not None
+            assert str(pilot.app.query_one("#section-placeholder").render()) == "reviews"
             reviews = nav.query_one("#nav-reviews")
             repositories = nav.query_one("#nav-repositories")
             assert "nav-item--current" in reviews.classes

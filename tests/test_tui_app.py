@@ -9,8 +9,27 @@ from types import SimpleNamespace
 
 import pytest
 
+from pr_reviewer.tui.installation_snapshot import InstallationSnapshot, RepositoryPermission
 from pr_reviewer.tui.nav import SECTIONS
 from pr_reviewer.tui.theme import REVIEWER_THEME
+
+SAMPLE_INSTALLATION = InstallationSnapshot(
+    github_login="the-niresh",
+    github_user_id=42,
+    installation_id=7010,
+    repositories=(RepositoryPermission(11, "in-scope"),),
+)
+
+
+
+
+def make_connected_app(tmp_path: Path):
+    from pr_reviewer.tui.app import ReviewerApp
+
+    return ReviewerApp(
+        secrets=connected_secrets(tmp_path),
+        installation_snapshot=SAMPLE_INSTALLATION,
+    )
 
 
 def connected_secrets(tmp_path: Path):
@@ -75,9 +94,7 @@ def test_reviewer_theme_uses_deliberate_colours() -> None:
 
 def test_reviewer_app_registers_custom_theme(tmp_path: Path) -> None:
     async def exercise() -> None:
-        from pr_reviewer.tui.app import ReviewerApp
-
-        app = ReviewerApp(secrets=connected_secrets(tmp_path))
+        app = make_connected_app(tmp_path)
         async with app.run_test():
             assert app.theme == "reviewer"
             assert "reviewer" in app.available_themes
@@ -88,12 +105,15 @@ def test_reviewer_app_registers_custom_theme(tmp_path: Path) -> None:
 @pytest.mark.parametrize("section_id", SECTIONS)
 def test_each_section_screen_renders_headless(section_id: str, tmp_path: Path) -> None:
     async def exercise() -> None:
-        from pr_reviewer.tui.app import ReviewerApp
-
-        app = ReviewerApp(secrets=connected_secrets(tmp_path))
+        app = make_connected_app(tmp_path)
         async with app.run_test() as pilot:
             await pilot.click(f"#nav-{section_id}")
-            content = pilot.app.query_one("#section-content")
-            assert str(content.render()) == section_id
+            if section_id == "profile":
+                assert pilot.app.query_one("#profile-login") is not None
+            elif section_id == "repositories":
+                assert pilot.app.query_one("#repositories-heading") is not None
+            else:
+                placeholder = pilot.app.query_one("#section-placeholder")
+                assert str(placeholder.render()) == section_id
 
     asyncio.run(exercise())
