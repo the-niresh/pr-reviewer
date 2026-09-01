@@ -96,6 +96,66 @@ def test_repeated_evidence_plus_human_audit_becomes_an_eval_candidate() -> None:
     assert result.routing_changes == ()
 
 
+def test_old_feedback_is_decayed_and_does_not_become_a_candidate() -> None:
+    from datetime import UTC, datetime, timedelta
+
+    from pr_reviewer.evals.feedback_candidates import FeedbackEvent, consider_feedback
+
+    now = datetime(2026, 9, 1, tzinfo=UTC)
+    old = now - timedelta(days=200)
+    events = [
+        FeedbackEvent(
+            finding_fingerprint="fp-old",
+            action="disputed",
+            actor=f"reviewer-{index}",
+            human_audited=index == 2,
+            observed_at=old,
+        )
+        for index in range(3)
+    ]
+    result = consider_feedback(
+        events,
+        prompts={"diff_only_reviewer": "1"},
+        policy=default_review_policy(),
+        labels=["null-check"],
+        routing="queue_for_human",
+        now=now,
+        max_age=timedelta(days=90),
+    )
+    assert result.candidates == ()
+    assert result.prompt_rewrites == ()
+
+
+def test_recent_feedback_still_becomes_a_candidate_after_decay_filter() -> None:
+    from datetime import UTC, datetime, timedelta
+
+    from pr_reviewer.evals.feedback_candidates import FeedbackEvent, consider_feedback
+
+    now = datetime(2026, 9, 1, tzinfo=UTC)
+    recent = now - timedelta(days=2)
+    events = [
+        FeedbackEvent(
+            finding_fingerprint="fp-new",
+            action="disputed",
+            actor=f"reviewer-{index}",
+            human_audited=index == 2,
+            observed_at=recent,
+        )
+        for index in range(3)
+    ]
+    result = consider_feedback(
+        events,
+        prompts={"diff_only_reviewer": "1"},
+        policy=default_review_policy(),
+        labels=["null-check"],
+        routing="queue_for_human",
+        now=now,
+        max_age=timedelta(days=90),
+    )
+    assert len(result.candidates) == 1
+    assert result.candidates[0].finding_fingerprint == "fp-new"
+
+
 def test_evals_doc_lists_commands_and_does_not_invent_numbers() -> None:
     text = (DOCS / "EVALS.md").read_text(encoding="utf-8")
     assert "run_diff_only_baseline" in text

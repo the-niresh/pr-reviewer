@@ -48,6 +48,14 @@ from that file. Do not treat a missing holdout as a passing score.
 false findings per PR, high-value recall (`recall_per_finding`), cost, and
 latency. Use it on synthetic `EvalRun` objects until a real holdout exists.
 
+## Feedback age cutoff
+
+`consider_feedback` drops `FeedbackEvent` rows whose `observed_at` is older
+than 90 days. That is an eval-candidate cutoff. It is not
+`claim_recency_weight` in `retrieval/repo_profile.py`, which weights inferred
+profile claims. A missing `observed_at` counts as current, so undated events
+are not silently discarded.
+
 ## What this file will not do
 
 It will not invent a precision, recall, cost, or latency number. Those come
