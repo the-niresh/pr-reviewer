@@ -239,3 +239,20 @@
 - Skipped remaining:
   - Phase 19: master 24 ⬜, 26 ⬜, runtime 10 ⬜
   - Phase 20: master 9 ⚠️, 24 ⬜, 26 ⬜
+
+## FIX 11:37 - ✅ done  2026-09-01T12:13:00+05:30
+- RED: n/a
+- GREEN: 747 passed. ruff 0, mypy 0, boundary doc current, exemptions empty. `git check-ignore -v` prints `.gitignore:24:docs/superpowers/`.
+- Commit: 764bb66 chore: stop tracking the master plan file again
+- Decisions: `git rm --cached` of the single master plan file. File stays on disk. CLAUDE-IN heading acted on: `## 2026-09-01T11:52:00+05:30 | claude`. Never `git add` anything under `docs/superpowers/`.
+- Blocked: -
+
+## Phase 19 - ⚠️ partial  2026-09-01T12:14:00+05:30
+- RED: n/a, docs only
+- GREEN: Phase 19 local proof suite `25 passed, 1 warning in 1.84s`. Holdout command raised `BaselineBlocked: holdout is empty; refusing to report a baseline`. CLAUDE-IN heading `## 2026-09-01T11:52:00+05:30 | claude`.
+- Commit: docs: add phase 19 write-up with verified proof gate
+- Decisions: Overnight section 8: write when the local proof is runnable. Quoted 25 passed and the holdout refusal. No FoodSpector PR count invented. GitHub Actions not claimed as run. Container scan quoted as `echo "scan pinned release images"`. Task 24, Task 26, and runtime Task 10 are not this gate.
+- Blocked: FoodSpector 14-day shadow; public GitHub Releases URL; hosted Actions run
+- Skipped remaining:
+  - Phase 20: master 9 ⚠️, 24 ⬜, 26 ⬜
+
