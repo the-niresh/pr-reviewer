@@ -1022,37 +1022,70 @@ onboarding UI. This task adds the dashboard on top of that project, it does not 
 - ⬜ Document known limits, data retention, rollback, and why Redis, TigerData, and specialist mode are disabled or enabled.
 - ⬜ Run secret scans and all project checks.
 
-## Done Means - ⬜
+## Done Means - ⚠️
 
-- ⬜ Every Phase 0 through Phase 20 topic has an approved learning record and reproduced proof gate.
-- ⬜ Every master and product-runtime task maps back to at least one phase.
-- ⬜ A signed GitHub webhook creates one installation-scoped job and returns quickly.
-- ⬜ A new head SHA supersedes stale work and cannot receive an old review.
-- ⬜ Omitted GitHub patches use a bounded fallback or produce a clear incomplete result.
-- ⬜ A pull request too large for the context budget packs deterministically, reports every omitted file with a reason, and is never reported as full coverage.
-- ⬜ Repository instruction files come only from the default branch at a recorded SHA, and a pull request cannot change the guidance used to review it.
+Audited 2026-09-01 against tests and runnable commands, not against phase prose.
+
+- ⚠️ Every Phase 0 through Phase 20 topic has an approved learning record and reproduced proof gate.
+  Close: write phase 19 and 20 with quoted proof. Holdout still blocks 7, 8, 9, 16, and 20.
+- ⚠️ Every master and product-runtime task maps back to at least one phase.
+  Close: Task 24, Task 26 measured reports, and runtime Task 10 are still ⬜.
+- ✅ A signed GitHub webhook creates one installation-scoped job and returns quickly.
+  `tests/test_webhook.py::test_webhook_enqueues_pull_request`. Live internet delivery is not this line.
+- ✅ A new head SHA supersedes stale work and cannot receive an old review.
+  `tests/test_github_lifecycle.py::test_enqueue_review_job_already_supersedes_older_active_jobs_for_the_same_pr`.
+- ✅ Omitted GitHub patches use a bounded fallback or produce a clear incomplete result.
+  `tests/test_github_repository_fallback.py`.
+- ✅ A pull request too large for the context budget packs deterministically, reports every omitted file with a reason, and is never reported as full coverage.
+  `tests/test_diff_budget.py`.
+- ✅ Repository instruction files come only from the default branch at a recorded SHA, and a pull request cannot change the guidance used to review it.
+  `tests/test_instruction_sources.py::test_head_branch_instruction_file_never_loads_as_instructions`.
 - ⬜ The one-agent baseline has a repeatable public eval report.
-- ⬜ Retrieval is enabled only after a measured comparison.
-- ⬜ Model output cannot set verification, public safety, status, or posting fields.
-- ⬜ Untrusted commands run only inside the locked-down Docker sandbox.
-- ⬜ Human approval controls public posting until both release gates pass.
-- ⬜ Security findings route privately, and only to channels declared restricted.
-- ⬜ Notifications reach Slack, Telegram, or Discord without a restricted finding ever landing on an
+  Close: audit mined candidates into a named-auditor holdout, then rerun `run_diff_only_baseline`.
+- ⚠️ Retrieval is enabled only after a measured comparison.
+  `tests/test_hybrid_search.py::test_retrieval_is_off_by_default`. Comparison raises `BaselineBlocked`.
+  Close: the same holdout.
+- ✅ Model output cannot set verification, public safety, status, or posting fields.
+  `tests/test_notification_policy.py::test_model_cannot_bypass_routing_through_severity_confidence_rationale_or_title`.
+- ✅ Untrusted commands run only inside the locked-down Docker sandbox.
+  `tests/test_doctor_docker.py::test_run_never_executes_spec_command_on_the_host_when_docker_is_missing`.
+- ✅ Human approval controls public posting until both release gates pass.
+  `tests/test_dashboard_api.py` and `tests/test_notification_policy.py`.
+- ✅ Security findings route privately, and only to channels declared restricted.
+  `tests/test_notification_policy.py::test_unsafe_security_finding_always_routes_privately`.
+- ✅ Notifications reach Slack, Telegram, or Discord without a restricted finding ever landing on an
   ordinary channel or in a push preview.
-- ⬜ A repository profile and a code graph are each enabled only after the measured comparison, and
+  `test_restricted_content_on_ordinary_channel_is_refused_not_downgraded` and
+  `test_restricted_preview_title_has_no_finding_detail`.
+- ⚠️ A repository profile and a code graph are each enabled only after the measured comparison, and
   neither can assert an invariant.
-- ⬜ The eval harness runs and is proved on recorded fixtures before any model provider exists.
-- ⬜ The hosted schema physically cannot store private review data.
-- ⬜ Every external call and workflow step is traceable without exposing secrets or private code, across both the hosted and local stores.
-- ⬜ Costs are limited before model calls and reported per PR and repository.
-- ⬜ Queue, provider, GitHub, database, and worker failures have tested recovery paths.
-- ⬜ The authenticated dashboard shows queue, findings, traces, approvals, costs, and evals.
+  `tests/test_repo_profile.py::test_invariant_shaped_claims_are_candidate_only_with_no_auto_promotion`.
+  Close: holdout comparison before enabling.
+- ✅ The eval harness runs and is proved on recorded fixtures before any model provider exists.
+  `tests/test_eval_metrics.py` and `tests/test_eval_regression_gate.py`.
+- ✅ The hosted schema physically cannot store private review data.
+  `tests/test_hosted_boundary_enforcement.py`.
+- ✅ Every external call and workflow step is traceable without exposing secrets or private code, across both the hosted and local stores.
+  `tests/test_trace_cli.py::test_cli_json_export_redacts_secret_like_keys_and_shapes_segments`.
+- ✅ Costs are limited before model calls and reported per PR and repository.
+  `tests/test_budget.py` and `tests/test_dashboard_api.py::test_findings_and_redacted_events_and_costs`.
+- ✅ Queue, provider, GitHub, database, and worker failures have tested recovery paths.
+  `tests/test_fault_injection.py`.
+- ✅ The authenticated dashboard shows queue, findings, traces, approvals, costs, and evals.
+  `tests/test_dashboard_api.py` and `apps/web/tests/dashboard.spec.ts`.
 - ⬜ FoodSpector completes the shadow run with a recorded decision on auto-post.
-- ⬜ A fresh user can install a versioned release, enter secrets safely, and open the UI.
+  Close: deploy `reviewer.niresh.tech`, then 14 days of non-draft PRs.
+- ⚠️ A fresh user can install a versioned release, enter secrets safely, and open the UI.
+  Local checksum install is tested. Close: publish a GitHub release asset and install from that URL.
 - ⬜ The installed runner receives real jobs through outbound HTTPS without a tunnel or public local port.
-- ⬜ Full mode requires Docker. Analysis-only mode never claims executable verification.
-- ⬜ CI checks backend, database changes, frontend, security, release images, and installer behavior.
-- ⬜ README claims are backed by commands, reports, screenshots, and measured results.
+  Close: runtime Task 10 after the control plane is live.
+- ✅ Full mode requires Docker. Analysis-only mode never claims executable verification.
+  `tests/test_doctor_docker.py`.
+- ⚠️ CI checks backend, database changes, frontend, security, release images, and installer behavior.
+  `.github/workflows/ci.yml` is on disk. Close: push so Actions run, and replace the release
+  `echo "scan pinned release images"` stub with a real scanner.
+- ✅ README claims are backed by commands, reports, screenshots, and measured results.
+  `README.md` names the command or the gap. Queue p99 is measured. Eval quality is not.
 
 ## Traps - ⚠️
 
