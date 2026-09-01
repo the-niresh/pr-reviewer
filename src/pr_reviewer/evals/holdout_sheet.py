@@ -12,9 +12,10 @@ import sys
 from dataclasses import dataclass
 from datetime import date
 from pathlib import Path
+from typing import TextIO
 
 from pr_reviewer.evals.mine_candidates import estimate_diff_tokens, mine_eval_candidates
-from pr_reviewer.evals.types import EvalCase, EvalLabel, EvalSplit
+from pr_reviewer.evals.types import EvalCase, EvalLabel, EvalSplit, assign_time_split
 
 
 class HoldoutUnjudged(Exception):
@@ -112,6 +113,187 @@ def build_holdout(sheet: Path, dest: Path) -> int:
     return len(cases)
 
 
+DIFF_PAGE_LINES = 40
+
+
+def _load_sheet_rows(sheet: Path) -> list[dict[str, object]]:
+    return [
+        json.loads(line)
+        for line in sheet.read_text(encoding="utf-8").splitlines()
+        if line.strip()
+    ]
+
+
+def _atomic_write_rows(sheet: Path, rows: list[dict[str, object]]) -> None:
+    tmp = sheet.with_name(sheet.name + ".tmp")
+    tmp.write_text(
+        "".join(json.dumps(row, ensure_ascii=False) + "\n" for row in rows),
+        encoding="utf-8",
+    )
+    tmp.replace(sheet)
+
+
+def _verdict_counts(rows: list[dict[str, object]]) -> tuple[int, int]:
+    include = sum(1 for row in rows if str(row.get("verdict") or "").strip() == "include")
+    exclude = sum(1 for row in rows if str(row.get("verdict") or "").strip() == "exclude")
+    return include, exclude
+
+
+def _read_line(stdin: TextIO) -> str | None:
+    line = stdin.readline()
+    if line == "":
+        return None
+    return line.rstrip("\n")
+
+
+def _show_diff(diff: str, *, stdin: TextIO, stdout: TextIO) -> None:
+    lines = diff.splitlines() or [""]
+    page = DIFF_PAGE_LINES
+    tty = bool(getattr(stdin, "isatty", lambda: False)())
+    if not tty or len(lines) <= page:
+        stdout.write(diff if diff.endswith("\n") or diff == "" else diff + "\n")
+        return
+    start = 0
+    while start < len(lines):
+        chunk = lines[start : start + page]
+        stdout.write("\n".join(chunk) + "\n")
+        start += page
+        if start < len(lines):
+            stdout.write("-- more --\n")
+            stdout.flush()
+            if _read_line(stdin) is None:
+                return
+
+
+def _prompt_labels(stdin: TextIO, stdout: TextIO) -> list[dict[str, object]] | None:
+    while True:
+        stdout.write("labels json (array of EvalLabel, empty rejected):\n")
+        stdout.flush()
+        raw = _read_line(stdin)
+        if raw is None:
+            return None
+        if raw.strip() == "":
+            continue
+        try:
+            parsed = json.loads(raw)
+        except json.JSONDecodeError:
+            continue
+        if not isinstance(parsed, list) or not parsed:
+            continue
+        try:
+            labels = [EvalLabel.model_validate(item) for item in parsed]
+        except Exception:
+            continue
+        return [label.model_dump() for label in labels]
+
+
+def _prompt_split(stdin: TextIO, stdout: TextIO) -> EvalSplit | None:
+    while True:
+        stdout.write("split (dev|holdout):\n")
+        stdout.flush()
+        raw = _read_line(stdin)
+        if raw is None:
+            return None
+        value = raw.strip()
+        if value in {"dev", "holdout"}:
+            return value  # type: ignore[return-value]
+        # Empty and unknown values are rejected. No default.
+
+
+def _split_from_committed_at(committed_at: date, holdout_after: date) -> EvalSplit:
+    stub = EvalCase(
+        id="derive-split",
+        split="dev",
+        diff="placeholder",
+        expected_labels=[
+            EvalLabel(
+                concern="correctness",
+                category="derive",
+                file_path="derive.py",
+                line_start=1,
+                line_end=1,
+            )
+        ],
+        source_evidence=["derive"],
+        human_auditor="derive",
+        committed_at=committed_at,
+    )
+    return assign_time_split([stub], holdout_after=holdout_after)[0].split
+
+
+def review_sheet(
+    sheet: Path,
+    *,
+    auditor: str,
+    split_after: date | None = None,
+    stdin: TextIO = sys.stdin,
+    stdout: TextIO = sys.stdout,
+) -> int:
+    if not auditor.strip():
+        raise ValueError("auditor is required")
+    rows = _load_sheet_rows(sheet)
+    index = 0
+    while index < len(rows):
+        row = rows[index]
+        if str(row.get("verdict") or "").strip():
+            index += 1
+            continue
+        include_count, exclude_count = _verdict_counts(rows)
+        stdout.write(
+            f"row {index + 1} of {len(rows)}, {include_count} include, {exclude_count} exclude\n"
+        )
+        stdout.write(f"id: {row.get('id')}\n")
+        stdout.write(f"sha: {row.get('sha')}\n")
+        stdout.write(f"committed_at: {row.get('committed_at')}\n")
+        stdout.write(f"subject: {row.get('subject')}\n")
+        files = row.get("files") or []
+        stdout.write(f"files: {files}\n")
+        stdout.write("diff:\n")
+        _show_diff(str(row.get("diff") or ""), stdin=stdin, stdout=stdout)
+        stdout.write("e/exclude  i/include  s/skip  q/quit\n")
+        stdout.flush()
+        command = _read_line(stdin)
+        if command is None:
+            return 0
+        token = command.strip().lower()
+        if token in {"q", "quit"}:
+            return 0
+        if token in {"s", "skip"}:
+            index += 1
+            continue
+        if token in {"e", "exclude"}:
+            row["verdict"] = "exclude"
+            _atomic_write_rows(sheet, rows)
+            index += 1
+            continue
+        if token in {"i", "include"}:
+            labels = _prompt_labels(stdin, stdout)
+            if labels is None:
+                return 0
+            if split_after is not None:
+                committed_raw = str(row.get("committed_at") or "").strip()
+                if not committed_raw:
+                    stdout.write("committed_at missing; cannot derive split\n")
+                    continue
+                chosen_split = _split_from_committed_at(
+                    date.fromisoformat(committed_raw), split_after
+                )
+            else:
+                prompted_split = _prompt_split(stdin, stdout)
+                if prompted_split is None:
+                    return 0
+                chosen_split = prompted_split
+            row["verdict"] = "include"
+            row["human_auditor"] = auditor.strip()
+            row["split"] = chosen_split
+            row["labels"] = labels
+            _atomic_write_rows(sheet, rows)
+            index += 1
+            continue
+        # Unknown or empty command: re-prompt this row. No default verdict.
+    return 0
+
+
 def main(argv: list[str] | None = None) -> int:
     parser = argparse.ArgumentParser(prog="pr-reviewer-holdout")
     sub = parser.add_subparsers(dest="command", required=True)
@@ -125,6 +307,10 @@ def main(argv: list[str] | None = None) -> int:
     )
     build.add_argument("--sheet", type=Path, required=True)
     build.add_argument("--out", type=Path, required=True)
+    review = sub.add_parser("review", help="judge unjudged sheet rows from a terminal")
+    review.add_argument("--sheet", type=Path, required=True)
+    review.add_argument("--auditor", required=True)
+    review.add_argument("--split-after", type=date.fromisoformat, default=None)
     args = parser.parse_args(argv)
     try:
         if args.command == "write-sheet":
@@ -138,6 +324,10 @@ def main(argv: list[str] | None = None) -> int:
                 f"candidates={stats.candidate_count} skipped={stats.skipped_count} out={args.out}"
             )
             return 0
+        if args.command == "review":
+            return review_sheet(
+                args.sheet, auditor=args.auditor, split_after=args.split_after
+            )
         written = build_holdout(args.sheet, args.out)
         print(f"holdout_cases={written} out={args.out}")
         return 0
