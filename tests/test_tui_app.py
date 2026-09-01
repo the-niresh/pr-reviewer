@@ -37,6 +37,7 @@ def connected_secrets(tmp_path: Path):
 
     secrets = FileSecretStore(tmp_path)
     secrets.set("runner_credential", "test-runner-credential")
+    secrets.set("model_key", "sk-test-model-key")
     return secrets
 
 

@@ -150,5 +150,5 @@ def _default_device_name() -> str:
     return socket.gethostname() or "reviewer-tui"
 
 
-def can_start_review(connected: bool) -> bool:
-    return connected
+def can_start_review(connected: bool, *, model_key_present: bool = True) -> bool:
+    return connected and model_key_present

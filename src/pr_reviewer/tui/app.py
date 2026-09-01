@@ -10,7 +10,7 @@ from textual.widgets import Static
 
 from pr_reviewer.local_store.repo_config import RepoConfigStore, default_repo_config_path
 from pr_reviewer.runner.secrets import SecretStore, get_secret_store
-from pr_reviewer.tui.auth_state import RUNNER_CREDENTIAL_SECRET, is_github_connected
+from pr_reviewer.tui.auth_state import RUNNER_CREDENTIAL_SECRET, has_model_key, is_github_connected
 from pr_reviewer.tui.installation_client import HostedInstallationClient, InstallationClient
 from pr_reviewer.tui.installation_snapshot import (
     InstallationSnapshot,
@@ -20,6 +20,7 @@ from pr_reviewer.tui.installation_snapshot import (
 )
 from pr_reviewer.tui.nav import SectionNav, SectionSelected
 from pr_reviewer.tui.pairing_client import PairingClient
+from pr_reviewer.tui.screens.byok import ByokPanel, ModelKeyStored
 from pr_reviewer.tui.screens.connect import ConnectPanel, can_start_review
 from pr_reviewer.tui.screens.profile import ProfilePanel
 from pr_reviewer.tui.screens.repositories import RepositoriesPanel
@@ -56,6 +57,10 @@ class ReviewerApp(App[None]):
     def github_connected(self) -> bool:
         return is_github_connected(self._secrets)
 
+    @property
+    def model_key_configured(self) -> bool:
+        return has_model_key(self._secrets)
+
     def compose(self) -> ComposeResult:
         if self.github_connected:
             yield Horizontal(
@@ -74,6 +79,39 @@ class ReviewerApp(App[None]):
     def on_mount(self) -> None:
         if not self.github_connected:
             return
+        if not self.model_key_configured:
+            self._mount_byok_panel()
+            return
+        self._mount_default_section()
+
+    def on_model_key_stored(self, _message: ModelKeyStored) -> None:
+        pane = self.query_one("#section-content", Container)
+        pane.remove_children()
+        self._mount_default_section()
+
+    def on_section_selected(self, message: SectionSelected) -> None:
+        if message.section_id == "reviews" and not can_start_review(
+            self.github_connected,
+            model_key_present=self.model_key_configured,
+        ):
+            if not self.github_connected:
+                self.notify("Connect GitHub before starting a review.", severity="warning")
+            else:
+                self.notify("Add a model key before starting a review.", severity="warning")
+            return
+        if not self.github_connected or not self.model_key_configured:
+            return
+        snapshot = self._resolve_installation_snapshot()
+        if snapshot is None:
+            return
+        self._show_section(message.section_id, snapshot)
+
+    def _mount_byok_panel(self) -> None:
+        self.query_one("#section-content", Container).mount(
+            ByokPanel(secrets=self._secrets, id="byok-screen")
+        )
+
+    def _mount_default_section(self) -> None:
         snapshot = self._resolve_installation_snapshot()
         if snapshot is None:
             self.query_one("#section-content", Container).mount(
@@ -81,17 +119,6 @@ class ReviewerApp(App[None]):
             )
             return
         self._show_section("repositories", snapshot)
-
-    def on_section_selected(self, message: SectionSelected) -> None:
-        if message.section_id == "reviews" and not can_start_review(self.github_connected):
-            self.notify("Connect GitHub before starting a review.", severity="warning")
-            return
-        if not self.github_connected:
-            return
-        snapshot = self._resolve_installation_snapshot()
-        if snapshot is None:
-            return
-        self._show_section(message.section_id, snapshot)
 
     def _resolve_installation_snapshot(self) -> InstallationSnapshot | None:
         if self._installation_snapshot is not None:

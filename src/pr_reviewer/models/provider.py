@@ -50,6 +50,10 @@ class ModelProviderFailure(Exception):
     """Any other provider HTTP or protocol failure."""
 
 
+class ModelKeyInvalid(Exception):
+    """The provider rejected the API key before any review ran."""
+
+
 class UntrustedInput(BaseModel):
     model_config = ConfigDict(frozen=True)
 
@@ -171,6 +175,36 @@ def finish_completion(
         cost_usd=cost_usd_for(vendor, request.model, input_tokens, output_tokens),
         latency_ms=latency_ms,
     )
+
+
+def verify_provider_api_key(
+    provider_id: ModelVendor,
+    api_key: str,
+    *,
+    http: httpx.Client | None = None,
+) -> None:
+    """Probe the provider with a lightweight models listing call."""
+    if provider_id == "openai":
+        client = http if http is not None else httpx.Client(base_url="https://api.openai.com")
+        response = client.get(
+            "/v1/models",
+            headers={"authorization": f"Bearer {api_key}"},
+            timeout=10.0,
+        )
+    else:
+        client = http if http is not None else httpx.Client(base_url="https://api.anthropic.com")
+        response = client.get(
+            "/v1/models",
+            headers={
+                "x-api-key": api_key,
+                "anthropic-version": "2023-06-01",
+            },
+            timeout=10.0,
+        )
+    if response.status_code in {401, 403}:
+        raise ModelKeyInvalid()
+    if response.status_code != 200:
+        raise ModelProviderFailure()
 
 
 def raise_for_provider_status(response: httpx.Response) -> None:

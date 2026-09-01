@@ -41,7 +41,8 @@ class FakePairingClient:
 
 def test_can_start_review_requires_connection() -> None:
     assert can_start_review(False) is False
-    assert can_start_review(True) is True
+    assert can_start_review(True, model_key_present=False) is False
+    assert can_start_review(True, model_key_present=True) is True
 
 
 def test_unconnected_app_shows_connect_screen() -> None:
