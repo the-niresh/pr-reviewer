@@ -1,0 +1,22 @@
+# Overlay for reviewer.niresh.tech. Not applied. Use with compose.release.yml:
+#   docker compose -f compose.release.yml -f docker-compose.hosted.yml config
+# Do not run up. Traefik on this VPS is v2.11 with the Docker provider and
+# network n8n-mkvx_proxy.
+
+services:
+  api:
+    networks:
+      - default
+      - proxy
+    labels:
+      traefik.enable: "true"
+      traefik.docker.network: n8n-mkvx_proxy
+      traefik.http.routers.reviewer.rule: Host(`reviewer.niresh.tech`)
+      traefik.http.routers.reviewer.entrypoints: websecure
+      traefik.http.routers.reviewer.tls.certresolver: letsencrypt
+      traefik.http.services.reviewer.loadbalancer.server.port: "8000"
+
+networks:
+  proxy:
+    external: true
+    name: n8n-mkvx_proxy

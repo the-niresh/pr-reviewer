@@ -1,0 +1,18 @@
+# Traefik v2.11 file-provider form of the reviewer.niresh.tech router.
+# This host's Traefik process uses the Docker provider only. This file is
+# not loaded. The apply path is docker-compose.hosted.yml labels.
+
+http:
+  routers:
+    reviewer:
+      rule: Host(`reviewer.niresh.tech`)
+      entryPoints:
+        - websecure
+      service: reviewer
+      tls:
+        certResolver: letsencrypt
+  services:
+    reviewer:
+      loadBalancer:
+        servers:
+          - url: "http://api:8000"
