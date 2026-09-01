@@ -9,6 +9,7 @@ Imports of new evals modules stay inside test bodies.
 
 from __future__ import annotations
 
+import os
 import subprocess
 from datetime import date
 from pathlib import Path
@@ -119,6 +120,27 @@ def _commit_file(repo: Path, relative: str, content: str, message: str) -> None:
     path.write_text(content, encoding="utf-8")
     subprocess.run(["git", "add", "--", relative], cwd=repo, check=True, capture_output=True)
     subprocess.run(["git", "commit", "-m", message], cwd=repo, check=True, capture_output=True)
+
+
+def _commit_file_at(
+    repo: Path, relative: str, content: str, message: str, when: str
+) -> None:
+    path = repo / relative
+    path.parent.mkdir(parents=True, exist_ok=True)
+    path.write_text(content, encoding="utf-8")
+    env = {
+        **os.environ,
+        "GIT_AUTHOR_DATE": when,
+        "GIT_COMMITTER_DATE": when,
+    }
+    subprocess.run(["git", "add", "--", relative], cwd=repo, check=True, capture_output=True)
+    subprocess.run(
+        ["git", "commit", "-m", message],
+        cwd=repo,
+        check=True,
+        capture_output=True,
+        env=env,
+    )
 
 
 def _git_repo_with_commit(root: Path, message: str) -> Path:
@@ -320,3 +342,108 @@ def test_private_foodspector_cases_are_gitignored_public_cases_are_not() -> None
     assert "datasets/public/" not in lines
     assert (REPO / "datasets" / "public" / "eval_cases.jsonl").is_file()
     assert (REPO / "docs" / "EVAL_DATASET.md").is_file()
+
+
+def _dated_repo(root: Path) -> Path:
+    repo = _init_git_repo(root)
+    marks = (
+        ("src/jun1.py", "JUN1 = 1\n", "june one", "2026-06-05T12:00:00"),
+        ("src/jun2.py", "JUN2 = 1\n", "june two", "2026-06-15T12:00:00"),
+        ("src/jun3.py", "JUN3 = 1\n", "june three", "2026-06-25T12:00:00"),
+        ("src/jul1.py", "JUL1 = 1\n", "july one", "2026-07-05T12:00:00"),
+        ("src/jul2.py", "JUL2 = 1\n", "july two", "2026-07-15T12:00:00"),
+        ("src/jul3.py", "JUL3 = 1\n", "july three", "2026-07-25T12:00:00"),
+    )
+    for relative, content, message, when in marks:
+        _commit_file_at(repo, relative, content, message, when)
+    return repo
+
+
+def test_since_until_keeps_only_commits_inside_the_window(tmp_path: Path) -> None:
+    from pr_reviewer.evals.mine_candidates import mine_eval_candidates
+
+    repo = _dated_repo(tmp_path)
+    mined = mine_eval_candidates(
+        repo,
+        max_cases=10,
+        since=date(2026, 6, 1),
+        until=date(2026, 7, 1),
+    ).candidates
+    subjects = [item.source_evidence[0] for item in mined]
+    assert subjects == ["june three", "june two", "june one"] or set(subjects) == {
+        "june one",
+        "june two",
+        "june three",
+    }
+    assert all(item.committed_at is not None and item.committed_at.month == 6 for item in mined)
+    assert all("july" not in item.source_evidence[0] for item in mined)
+
+
+def test_max_cases_without_per_window_still_takes_newest(tmp_path: Path) -> None:
+    from pr_reviewer.evals.mine_candidates import mine_eval_candidates
+
+    repo = _dated_repo(tmp_path)
+    mined = mine_eval_candidates(repo, max_cases=2).candidates
+    subjects = [item.source_evidence[0] for item in mined]
+    assert subjects == ["july three", "july two"]
+
+
+def test_per_window_samples_evenly_instead_of_newest(tmp_path: Path) -> None:
+    from pr_reviewer.evals.mine_candidates import mine_eval_candidates
+
+    repo = _init_git_repo(tmp_path)
+    for index in range(10):
+        day = f"{index + 1:02d}"
+        _commit_file_at(
+            repo,
+            f"src/c{index}.py",
+            f"C{index} = 1\n",
+            f"commit-{index}",
+            f"2026-06-{day}T12:00:00",
+        )
+    newest = mine_eval_candidates(repo, max_cases=3).candidates
+    newest_subjects = [item.source_evidence[0] for item in newest]
+    assert newest_subjects == ["commit-9", "commit-8", "commit-7"]
+    sampled = mine_eval_candidates(repo, per_window=3).candidates
+    sampled_subjects = [item.source_evidence[0] for item in sampled]
+    assert len(sampled_subjects) == 3
+    assert sampled_subjects != newest_subjects
+    assert "commit-0" in sampled_subjects
+
+
+def test_write_sheet_prints_per_month_counts(
+    tmp_path: Path, capsys: pytest.CaptureFixture[str]
+) -> None:
+    from pr_reviewer.evals.holdout_sheet import main, write_candidate_sheet
+
+    repo = _dated_repo(tmp_path)
+    sheet = tmp_path / "sheet.jsonl"
+    stats = write_candidate_sheet(
+        repo,
+        sheet,
+        since=date(2026, 6, 1),
+        until=date(2026, 8, 1),
+        per_window=4,
+    )
+    assert stats.per_month["2026-06"] >= 1
+    assert stats.per_month["2026-07"] >= 1
+    code = main(
+        [
+            "write-sheet",
+            "--repo",
+            str(repo),
+            "--out",
+            str(tmp_path / "cli.jsonl"),
+            "--since",
+            "2026-06-01",
+            "--until",
+            "2026-07-01",
+            "--per-window",
+            "2",
+        ]
+    )
+    captured = capsys.readouterr()
+    assert code == 0
+    assert "2026-06:" in captured.out
+    assert "2026-07:" not in captured.out
+

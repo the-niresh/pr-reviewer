@@ -75,15 +75,30 @@ Mine a repo into an unjudged JSONL sheet. Every row has empty `verdict`,
 ```bash
 uv run python -m pr_reviewer.evals.holdout_sheet write-sheet \
   --repo /srv/claude/projects/FoodSpector \
-  --out datasets/private/candidate_sheet.jsonl \
-  --max-cases 40
+  --out /tmp/june.jsonl \
+  --since 2026-06-01 \
+  --until 2026-07-01 \
+  --per-window 20 \
+  --id-prefix jun
+uv run python -m pr_reviewer.evals.holdout_sheet write-sheet \
+  --repo /srv/claude/projects/FoodSpector \
+  --out /tmp/july.jsonl \
+  --since 2026-07-01 \
+  --until 2026-08-01 \
+  --per-window 20 \
+  --id-prefix jul
+cat /tmp/june.jsonl /tmp/july.jsonl > datasets/private/candidate_sheet.jsonl
 ```
 
 Real run on 2026-09-01 against FoodSpector printed:
 
-`candidates=37 skipped=3 out=datasets/private/candidate_sheet.jsonl`
+`candidates=20 skipped=0 months=2026-06:20 out=/tmp/pr-reviewer-june.jsonl`
 
-That sheet is gitignored. A human fills `verdict` (`include` or `exclude`),
+`candidates=20 skipped=0 months=2026-07:20 out=/tmp/pr-reviewer-july.jsonl`
+
+The combined gitignored sheet has 40 unjudged rows: 20 from 2026-06 and 20 from
+2026-07. `review --split-after 2026-07-01` then has a one-month gap. A human
+fills `verdict` (`include` or `exclude`),
 and for include rows also `human_auditor`, `split` (`dev` or `holdout`), and
 `labels`. Then:
 

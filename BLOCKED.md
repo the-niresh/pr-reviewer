@@ -6,8 +6,9 @@ thing that unblocks it.
 ## 1. Fill the candidate sheet
 
 Sheet: `datasets/private/candidate_sheet.jsonl`.
-FoodSpector `write-sheet --max-cases 40` on 2026-09-01 printed
-`candidates=37 skipped=3`. Every `verdict` is still empty.
+FoodSpector June+July `write-sheet --per-window 20` on 2026-09-01 printed
+`candidates=20 skipped=0 months=2026-06:20` and
+`candidates=20 skipped=0 months=2026-07:20`. Every `verdict` is still empty.
 
 **You need to:** set `verdict` to `include` or `exclude` on every row. Include
 rows also need `human_auditor`, `split`, and `labels`. Then run

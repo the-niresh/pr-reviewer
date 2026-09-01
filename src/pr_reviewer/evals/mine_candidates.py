@@ -25,21 +25,58 @@ def _git_output(repo: Path, args: list[str]) -> str:
     return result.stdout.decode("utf-8", errors="replace")
 
 
+def _even_sample(items: list[str], n: int) -> list[str]:
+    if n <= 0 or not items:
+        return []
+    if len(items) <= n:
+        return items
+    return [items[(index * len(items)) // n] for index in range(n)]
+
+
+def _log_shas(
+    repo: Path,
+    *,
+    since: date | None,
+    until: date | None,
+    max_count: int | None,
+    reverse: bool,
+) -> list[str]:
+    args = ["log", "--format=%H"]
+    if since is not None:
+        args.append(f"--since={since.isoformat()}")
+    if until is not None:
+        args.append(f"--until={until.isoformat()}")
+    if reverse:
+        args.append("--reverse")
+    if max_count is not None:
+        args.append(f"--max-count={max_count}")
+    return [
+        line.strip()
+        for line in _git_output(repo, args).splitlines()
+        if line.strip()
+    ]
+
+
 def mine_eval_candidates(
     repo: Path,
     max_cases: int = 10,
     *,
     model: str = "gpt-4o-mini",
+    since: date | None = None,
+    until: date | None = None,
+    per_window: int | None = None,
 ) -> MineResult:
     if not (repo / ".git").exists():
         return MineResult(candidates=[], skipped=())
-    shas = [
-        line.strip()
-        for line in _git_output(
-            repo, ["log", f"--max-count={max_cases}", "--format=%H"]
-        ).splitlines()
-        if line.strip()
-    ]
+    if per_window is not None:
+        shas = _even_sample(
+            _log_shas(repo, since=since, until=until, max_count=None, reverse=True),
+            per_window,
+        )
+    else:
+        shas = _log_shas(
+            repo, since=since, until=until, max_count=max_cases, reverse=False
+        )
     budget = context_budget_for_model(model)
     candidates: list[EvalCandidate] = []
     skipped: list[SkippedMineCommit] = []

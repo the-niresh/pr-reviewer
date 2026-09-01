@@ -35,12 +35,26 @@ class HoldoutUnjudged(Exception):
 class SheetStats:
     candidate_count: int
     skipped_count: int
+    per_month: dict[str, int]
 
 
 def write_candidate_sheet(
-    repo: Path, dest: Path, max_cases: int = 40, *, id_prefix: str = "cand"
+    repo: Path,
+    dest: Path,
+    max_cases: int = 40,
+    *,
+    id_prefix: str = "cand",
+    since: date | None = None,
+    until: date | None = None,
+    per_window: int | None = None,
 ) -> SheetStats:
-    mined = mine_eval_candidates(repo, max_cases=max_cases)
+    mined = mine_eval_candidates(
+        repo,
+        max_cases=max_cases,
+        since=since,
+        until=until,
+        per_window=per_window,
+    )
     dest.parent.mkdir(parents=True, exist_ok=True)
     lines: list[str] = []
     for index, candidate in enumerate(mined.candidates, start=1):
@@ -63,9 +77,16 @@ def write_candidate_sheet(
         }
         lines.append(json.dumps(row, ensure_ascii=False))
     dest.write_text("\n".join(lines) + ("\n" if lines else ""), encoding="utf-8")
+    per_month: dict[str, int] = {}
+    for candidate in mined.candidates:
+        if candidate.committed_at is None:
+            continue
+        key = candidate.committed_at.strftime("%Y-%m")
+        per_month[key] = per_month.get(key, 0) + 1
     return SheetStats(
         candidate_count=len(mined.candidates),
         skipped_count=len(mined.skipped),
+        per_month=per_month,
     )
 
 
@@ -473,6 +494,9 @@ def main(argv: list[str] | None = None) -> int:
     write.add_argument("--out", type=Path, required=True)
     write.add_argument("--max-cases", type=int, default=40)
     write.add_argument("--id-prefix", default="cand")
+    write.add_argument("--since", type=date.fromisoformat, default=None)
+    write.add_argument("--until", type=date.fromisoformat, default=None)
+    write.add_argument("--per-window", type=int, default=None)
     build = sub.add_parser(
         "build-holdout", help="write judged include rows to an EvalCase JSONL"
     )
@@ -490,9 +514,16 @@ def main(argv: list[str] | None = None) -> int:
                 args.out,
                 max_cases=args.max_cases,
                 id_prefix=args.id_prefix,
+                since=args.since,
+                until=args.until,
+                per_window=args.per_window,
+            )
+            months = ",".join(
+                f"{month}:{count}" for month, count in sorted(stats.per_month.items())
             )
             print(
-                f"candidates={stats.candidate_count} skipped={stats.skipped_count} out={args.out}"
+                f"candidates={stats.candidate_count} skipped={stats.skipped_count} "
+                f"months={months} out={args.out}"
             )
             return 0
         if args.command == "review":

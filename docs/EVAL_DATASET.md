@@ -11,8 +11,11 @@ The mechanical audit path is `pr-reviewer-holdout` (`evals/holdout_sheet.py`).
 an empty verdict column. `build-holdout` writes `EvalCase` JSONL only from
 judged include rows and refuses any blank verdict.
 
-FoodSpector miner run 2026-09-01 (`--max-cases 40`): `candidates=37`
-`skipped=3`. No row in that sheet has been labelled. The public file still has
+FoodSpector miner run 2026-09-01 (June `--since 2026-06-01 --until 2026-07-01
+--per-window 20`, then July `--since 2026-07-01 --until 2026-08-01
+--per-window 20`): printed `candidates=20 skipped=0 months=2026-06:20` and
+`candidates=20 skipped=0 months=2026-07:20`. Combined private sheet has 40
+unjudged rows. No row in that sheet has been labelled. The public file still has
 one `dev` case and zero `holdout` cases.
 
 ## Precision denominators
