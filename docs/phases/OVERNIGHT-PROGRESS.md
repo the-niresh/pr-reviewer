@@ -161,7 +161,6 @@
   - Phase 6: master 26 ⬜, runtime 10 ⬜
   - Phase 7: master 9 ⚠️, 24 ⬜, 26 ⬜
   - Phase 11: master 24 ⬜, runtime 10 ⬜
-  - Phase 14: runtime 10 ⬜
   - Phase 15: master 24 ⬜, 26 ⬜
   - Phase 16: master 24 ⬜, 26 ⬜
   - Phase 18: master 26 ⬜
@@ -187,4 +186,11 @@
 - GREEN: Phase 10 proof suite `60 passed, 1 warning in 29.07s`. Full suite 747 passed. ruff 0, mypy 0, boundary doc current, exemptions empty. CLAUDE-IN 2026-09-01T06:26:00+05:30 FIX already on HEAD.
 - Commit: docs: add phase 10 write-up with verified proof gate
 - Decisions: Sandbox unit proof is this gate. Runtime Task 10 is not. Quoted 60 passed. No host-execution claimed.
+- Blocked: -
+
+## Phase 14 - ✅ done  2026-09-01T07:04:00+05:30
+- RED: n/a, docs only
+- GREEN: Phase 14 proof suite `33 passed, 1 warning in 3.14s`. Full suite pending gate. CLAUDE-IN 2026-09-01T06:26:00+05:30 FIX already on HEAD.
+- Commit: docs: add phase 14 write-up with verified proof gate
+- Decisions: Fault injection is this gate. Runtime Task 10 is not. Quoted 33 passed. No latency number invented.
 - Blocked: -
