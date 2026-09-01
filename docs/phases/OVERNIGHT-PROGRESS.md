@@ -158,7 +158,6 @@
 - Decisions: Updated the existing design-gate file. Did not invent a new phase. No newly unlocked complete phase after Task 25.
 - Blocked: runtime Task 10. Hosted end-to-end at reviewer.niresh.tech is not live.
 - Skipped:
-  - Phase 15: master 24 ⬜, 26 ⬜
   - Phase 16: master 24 ⬜, 26 ⬜
   - Phase 18: master 26 ⬜
   - Phase 19: master 24 ⬜, 26 ⬜, runtime 10 ⬜
@@ -212,3 +211,10 @@
 - Commit: docs: add phase 7 write-up with verified proof gate
 - Decisions: Quoted the refusal. No precision, recall, latency, or cost invented. Task 9 still ⚠️.
 - Blocked: frozen holdout does not exist
+
+## Phase 15 - ✅ done  2026-09-01T07:24:00+05:30
+- RED: n/a, docs only
+- GREEN: Phase 15 proof suite `20 passed, 1 warning in 1.52s`. Full suite 747 passed. ruff 0, mypy 0, boundary doc current, exemptions empty. CLAUDE-IN 2026-09-01T06:26:00+05:30 FIX already on HEAD.
+- Commit: docs: add phase 15 write-up with verified proof gate
+- Decisions: Inspectability is this gate. Task 24 and Task 26 are not. Quoted 20 passed. No eval number invented.
+- Blocked: -
