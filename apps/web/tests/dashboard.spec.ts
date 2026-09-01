@@ -1,4 +1,7 @@
 import { expect, test, type APIRequestContext, type Page, type Response } from "@playwright/test";
+import path from "node:path";
+
+const assetDir = path.join(process.cwd(), "../../docs/assets");
 
 const DASHBOARD_API = process.env.NEXT_PUBLIC_DASHBOARD_API_ORIGIN ?? "http://127.0.0.1:8742";
 const TITLE_APPROVE = "Null check on widget.value";
@@ -201,10 +204,10 @@ test("desktop and mobile screenshots still show live approval titles", async ({
   await page.goto("/dashboard");
   const body = (await (await approvals).json()) as { items: Array<{ title: string }> };
   await expect(page.getByTestId("approval-queue")).toContainText(body.items[0].title);
-  await page.screenshot({ path: "test-results/dashboard-desktop.png", fullPage: true });
+  await page.screenshot({ path: path.join(assetDir, "dashboard-desktop.png"), fullPage: true });
   await page.setViewportSize({ width: 390, height: 844 });
   await expect(page.getByTestId("approval-queue")).toContainText(body.items[0].title);
-  await page.screenshot({ path: "test-results/dashboard-mobile.png", fullPage: true });
+  await page.screenshot({ path: path.join(assetDir, "dashboard-mobile.png"), fullPage: true });
 });
 
 test("approving a finding posts the live decision and drops it from the queue", async ({
