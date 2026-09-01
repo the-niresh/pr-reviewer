@@ -51,7 +51,9 @@ class FeedbackConsideration:
 def _event_is_fresh(
     event: FeedbackEvent, *, now: datetime, max_age: timedelta
 ) -> bool:
-    when = event.observed_at or now
+    if event.observed_at is None:
+        return False
+    when = event.observed_at
     if when.tzinfo is None:
         when = when.replace(tzinfo=UTC)
     clock = now if now.tzinfo is not None else now.replace(tzinfo=UTC)

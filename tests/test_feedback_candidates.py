@@ -15,6 +15,8 @@ DOCS = Path(__file__).resolve().parent.parent / "docs"
 
 
 def test_one_dispute_does_not_change_prompts_policy_labels_or_routing() -> None:
+    from datetime import UTC, datetime
+
     from pr_reviewer.evals.feedback_candidates import FeedbackEvent, consider_feedback
 
     prompts = {"diff_only_reviewer": "1"}
@@ -28,6 +30,7 @@ def test_one_dispute_does_not_change_prompts_policy_labels_or_routing() -> None:
                 action="disputed",
                 actor="reviewer-1",
                 human_audited=False,
+                observed_at=datetime(2026, 9, 1, tzinfo=UTC),
             )
         ],
         prompts=prompts,
@@ -47,14 +50,18 @@ def test_one_dispute_does_not_change_prompts_policy_labels_or_routing() -> None:
 
 
 def test_repeated_disputes_without_human_audit_are_not_candidates() -> None:
+    from datetime import UTC, datetime
+
     from pr_reviewer.evals.feedback_candidates import FeedbackEvent, consider_feedback
 
+    now = datetime(2026, 9, 1, tzinfo=UTC)
     events = [
         FeedbackEvent(
             finding_fingerprint="fp-1",
             action="disputed",
             actor=f"reviewer-{index}",
             human_audited=False,
+            observed_at=now,
         )
         for index in range(3)
     ]
@@ -69,14 +76,18 @@ def test_repeated_disputes_without_human_audit_are_not_candidates() -> None:
 
 
 def test_repeated_evidence_plus_human_audit_becomes_an_eval_candidate() -> None:
+    from datetime import UTC, datetime
+
     from pr_reviewer.evals.feedback_candidates import FeedbackEvent, consider_feedback
 
+    now = datetime(2026, 9, 1, tzinfo=UTC)
     events = [
         FeedbackEvent(
             finding_fingerprint="fp-1",
             action="disputed",
             actor=f"reviewer-{index}",
             human_audited=index == 2,
+            observed_at=now,
         )
         for index in range(3)
     ]
@@ -154,6 +165,45 @@ def test_recent_feedback_still_becomes_a_candidate_after_decay_filter() -> None:
     )
     assert len(result.candidates) == 1
     assert result.candidates[0].finding_fingerprint == "fp-new"
+
+
+def test_missing_observed_at_is_dropped_while_a_fresh_event_is_kept() -> None:
+    from datetime import UTC, datetime, timedelta
+
+    from pr_reviewer.evals.feedback_candidates import FeedbackEvent, consider_feedback
+
+    now = datetime(2026, 9, 1, tzinfo=UTC)
+    fresh = now - timedelta(days=2)
+    unknown = [
+        FeedbackEvent(
+            finding_fingerprint="fp-unknown",
+            action="disputed",
+            actor=f"reviewer-{index}",
+            human_audited=index == 2,
+            observed_at=None,
+        )
+        for index in range(3)
+    ]
+    dated = [
+        FeedbackEvent(
+            finding_fingerprint="fp-fresh",
+            action="disputed",
+            actor=f"reviewer-{index}",
+            human_audited=index == 2,
+            observed_at=fresh,
+        )
+        for index in range(3)
+    ]
+    result = consider_feedback(
+        [*unknown, *dated],
+        prompts={"diff_only_reviewer": "1"},
+        policy=default_review_policy(),
+        labels=["null-check"],
+        routing="queue_for_human",
+        now=now,
+        max_age=timedelta(days=90),
+    )
+    assert [item.finding_fingerprint for item in result.candidates] == ["fp-fresh"]
 
 
 def test_evals_doc_lists_commands_and_does_not_invent_numbers() -> None:

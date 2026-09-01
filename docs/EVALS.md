@@ -53,8 +53,8 @@ latency. Use it on synthetic `EvalRun` objects until a real holdout exists.
 `consider_feedback` drops `FeedbackEvent` rows whose `observed_at` is older
 than 90 days. That is an eval-candidate cutoff. It is not
 `claim_recency_weight` in `retrieval/repo_profile.py`, which weights inferred
-profile claims. A missing `observed_at` counts as current, so undated events
-are not silently discarded.
+profile claims. A missing `observed_at` is treated as older than the cutoff
+and is excluded. Unknown age counts against the event, not for it.
 
 ## What this file will not do
 
