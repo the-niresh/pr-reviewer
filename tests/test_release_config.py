@@ -43,6 +43,7 @@ REQUIRED_APPLIED_MIGRATIONS = {
         "202609010100_notification_channels.sql",
         "202609010300_create_pull_request_review.sql",
         "202609010400_reliability_and_budget.sql",
+        "202609011830_drop_review_jobs_draft.sql",
     ),
     "src/pr_reviewer/local_store/migrations": (
         "202608291645_local_state.sql",

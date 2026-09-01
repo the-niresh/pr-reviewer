@@ -28,20 +28,40 @@ def _pull_request_payload(
     installation_id: int = INSTALLATION_ID,
     repository_id: int = REPOSITORY_ID,
 ) -> dict[str, Any]:
+    state = "closed" if action == "closed" else "open"
     return {
         "action": action,
-        "installation": {"id": installation_id},
+        "installation": {"id": installation_id, "account": {"login": "acme"}},
         "repository": {
             "id": repository_id,
             "name": "widgets",
-            "owner": {"login": "acme"},
+            "full_name": "acme/widgets",
+            "private": False,
+            "owner": {"login": "acme", "id": 1},
         },
         "pull_request": {
+            "id": 9000 + number,
             "number": number,
+            "state": state,
+            "locked": False,
+            "title": "Fix widget",
+            "body": "A synthetic GitHub pull_request object for tests.",
             "draft": draft,
-            "base": {"sha": BASE_SHA},
-            "head": {"sha": HEAD_SHA},
+            "merged": False,
+            "html_url": f"https://github.com/acme/widgets/pull/{number}",
+            "user": {"login": "octocat", "id": 1},
+            "base": {
+                "sha": BASE_SHA,
+                "ref": "main",
+                "repo": {"id": repository_id, "full_name": "acme/widgets"},
+            },
+            "head": {
+                "sha": HEAD_SHA,
+                "ref": "fix-widget",
+                "repo": {"id": repository_id, "full_name": "acme/widgets"},
+            },
         },
+        "sender": {"login": "octocat", "id": 1},
     }
 
 

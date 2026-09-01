@@ -164,3 +164,76 @@ def test_enqueue_review_job_already_supersedes_older_active_jobs_for_the_same_pr
     assert rows[0]["head_sha"] == HEAD_SHA
     assert rows[1]["status"] == "pending"
     assert rows[1]["head_sha"] == NEWER_HEAD_SHA
+
+
+def test_opened_draft_creates_no_queued_job() -> None:
+    from fastapi.testclient import TestClient
+    from test_webhook import _insert_installation, _post_webhook, _pull_request_payload
+
+    from pr_reviewer.web.app import app
+
+    _insert_installation()
+    client = TestClient(app)
+    response = _post_webhook(
+        client,
+        "delivery-lifecycle-opened-draft",
+        _pull_request_payload(action="opened", draft=True),
+    )
+    assert response.status_code == 200
+    assert response.json() == {"result": "ignored"}
+    with connection() as conn:
+        rows = conn.execute(
+            """
+            select id, status
+            from review_jobs
+            where installation_id = %s
+              and github_repository_id = %s
+              and pull_request_number = 7
+            """,
+            (8401, 94001),
+        ).fetchall()
+    assert rows == []
+
+
+def test_closed_event_leaves_the_job_cancelled() -> None:
+    from fastapi.testclient import TestClient
+    from test_webhook import _insert_installation, _post_webhook, _pull_request_payload
+
+    from pr_reviewer.web.app import app
+
+    _insert_installation()
+    client = TestClient(app)
+    opened = _post_webhook(
+        client, "delivery-lifecycle-open-then-close", _pull_request_payload(action="opened")
+    )
+    assert opened.status_code == 202
+    closed = _post_webhook(
+        client, "delivery-lifecycle-closed", _pull_request_payload(action="closed")
+    )
+    assert closed.status_code == 200
+    assert closed.json() == {"result": "cancelled"}
+    with connection() as conn:
+        row = conn.execute(
+            """
+            select status
+            from review_jobs
+            where delivery_id = %s
+            """,
+            ("delivery-lifecycle-open-then-close",),
+        ).fetchone()
+    assert row is not None
+    assert row["status"] == "cancelled"
+
+
+def test_review_jobs_has_no_draft_column() -> None:
+    with connection() as conn:
+        row = conn.execute(
+            """
+            select 1
+            from information_schema.columns
+            where table_schema = current_schema()
+              and table_name = 'review_jobs'
+              and column_name = 'draft'
+            """
+        ).fetchone()
+    assert row is None
