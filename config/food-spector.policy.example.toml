@@ -1,0 +1,9 @@
+# Example FoodSpector shadow policy. Copy and fill before any deploy.
+# Auto-post stays false until measured release gates pass.
+# kill_switch must be present so ops can halt reviews. true stops them.
+# per_pr_budget_usd must not exceed the enqueue cap of 1.000000 USD.
+
+auto_post = false
+kill_switch = false
+per_pr_budget_usd = "1.000000"
+repository_allowlist = ["the-niresh/FoodSpector"]
