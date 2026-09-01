@@ -149,7 +149,7 @@ class ReviewerApp(App[None]):
             pane.mount(RepositoriesPanel(snapshot, repo_config=self._repo_config))
             return
         if section_id == "agent-prompts":
-            pane.mount(AgentPromptsPanel())
+            pane.mount(AgentPromptsPanel(snapshot, repo_config=self._repo_config))
             return
         pane.mount(Static(section_id, id="section-placeholder"))
 

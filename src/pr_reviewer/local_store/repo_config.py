@@ -23,6 +23,21 @@ class RepoModelChoice:
     model_id: str
 
 
+class RepositoryPromptLocked(Exception):
+    """A prompt version that a review already used cannot be rewritten."""
+
+
+@dataclass(frozen=True)
+class RepositoryPromptVersion:
+    version: str
+    content: str
+    locked: bool
+
+
+def repository_prompt_name(github_repository_id: int) -> str:
+    return f"repository-{github_repository_id}-custom"
+
+
 def default_repo_model_choice() -> RepoModelChoice:
     first = list_providers()[0]
     return RepoModelChoice(
@@ -100,6 +115,99 @@ class RepoConfigStore:
         self, github_repository_ids: list[int]
     ) -> dict[int, RepoModelChoice]:
         return {repo_id: self.get_model_choice(repo_id) for repo_id in github_repository_ids}
+
+    def list_repository_prompt_versions(
+        self, github_repository_id: int
+    ) -> tuple[RepositoryPromptVersion, ...]:
+        repo_prompts = self._repository_prompts_entry(github_repository_id)
+        versions = repo_prompts.get("versions", {})
+        if not isinstance(versions, dict):
+            raise ValueError("repository prompt versions must be a JSON object")
+        items: list[RepositoryPromptVersion] = []
+        for version in sorted(versions, key=lambda item: int(item)):
+            raw = versions[version]
+            if not isinstance(raw, dict):
+                raise ValueError("repository prompt version must be a JSON object")
+            items.append(
+                RepositoryPromptVersion(
+                    version=str(version),
+                    content=str(raw.get("content", "")),
+                    locked=bool(raw.get("locked", False)),
+                )
+            )
+        return tuple(items)
+
+    def get_active_repository_prompt(
+        self, github_repository_id: int
+    ) -> RepositoryPromptVersion | None:
+        repo_prompts = self._repository_prompts_entry(github_repository_id)
+        active = repo_prompts.get("active_version")
+        if not active:
+            return None
+        for item in self.list_repository_prompt_versions(github_repository_id):
+            if item.version == str(active):
+                return item
+        return None
+
+    def add_repository_prompt(
+        self, github_repository_id: int, content: str
+    ) -> RepositoryPromptVersion:
+        cleaned = content.strip()
+        if not cleaned:
+            raise ValueError("prompt content must not be empty")
+        payload = self._read_payload()
+        prompts = payload.setdefault("repository_prompts", {})
+        key = str(github_repository_id)
+        repo_prompts = prompts.setdefault(key, {"versions": {}, "active_version": None})
+        versions = repo_prompts.setdefault("versions", {})
+        if not isinstance(versions, dict):
+            raise ValueError("repository prompt versions must be a JSON object")
+        next_version = str(len(versions) + 1)
+        registry = self._prompt_registry_for(github_repository_id, versions)
+        name = repository_prompt_name(github_repository_id)
+        registry.register(name, next_version, cleaned)
+        versions[next_version] = {"content": cleaned, "locked": False}
+        repo_prompts["active_version"] = next_version
+        self._write_payload(payload)
+        return RepositoryPromptVersion(
+            version=next_version,
+            content=cleaned,
+            locked=False,
+        )
+
+    def mark_repository_prompt_used(self, github_repository_id: int, version: str) -> None:
+        payload = self._read_payload()
+        prompts = payload.setdefault("repository_prompts", {})
+        repo_prompts = prompts.setdefault(str(github_repository_id), {"versions": {}})
+        versions = repo_prompts.setdefault("versions", {})
+        if version not in versions:
+            raise KeyError(f"unknown prompt version: {version}")
+        versions[version]["locked"] = True
+        self._write_payload(payload)
+
+    def _repository_prompts_entry(self, github_repository_id: int) -> dict[str, Any]:
+        payload = self._read_payload()
+        prompts = payload.get("repository_prompts", {})
+        if not isinstance(prompts, dict):
+            raise ValueError("repository_prompts must be a JSON object")
+        raw = prompts.get(str(github_repository_id), {})
+        if not isinstance(raw, dict):
+            raise ValueError("repository prompt entry must be a JSON object")
+        return dict(raw)
+
+    def _prompt_registry_for(
+        self, github_repository_id: int, versions: dict[str, Any]
+    ) -> Any:
+        from pr_reviewer.prompts.registry import PromptRegistry
+
+        registry = PromptRegistry()
+        name = repository_prompt_name(github_repository_id)
+        for version in sorted(versions, key=lambda item: int(item)):
+            raw = versions[version]
+            if not isinstance(raw, dict):
+                raise ValueError("repository prompt version must be a JSON object")
+            registry.register(name, str(version), str(raw["content"]))
+        return registry
 
     def _repo_entry(self, github_repository_id: int) -> dict[str, Any]:
         payload = self._read_payload()

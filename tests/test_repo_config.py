@@ -9,8 +9,10 @@ import pytest
 from pr_reviewer.local_store.repo_config import (
     RepoConfigStore,
     RepoModelChoice,
+    RepositoryPromptVersion,
     default_repo_config_path,
     default_repo_model_choice,
+    repository_prompt_name,
     validate_repo_model_choice,
 )
 from pr_reviewer.security.instruction_sources import ReviewPolicy, default_review_policy
@@ -118,3 +120,44 @@ def test_validate_repo_model_choice_rejects_unknown_pairs() -> None:
         validate_repo_model_choice(
             RepoModelChoice(provider_id="openai", model_id="not-a-real-model")
         )
+
+
+def test_add_repository_prompt_creates_versioned_entries(tmp_path: Path) -> None:
+    store = RepoConfigStore(tmp_path / "repo_config.json")
+    first = store.add_repository_prompt(11, "Focus on API migrations")
+    second = store.add_repository_prompt(11, "Also check auth boundaries")
+
+    assert first == RepositoryPromptVersion(
+        version="1", content="Focus on API migrations", locked=False
+    )
+    assert second.version == "2"
+    assert store.get_active_repository_prompt(11) == second
+    assert len(store.list_repository_prompt_versions(11)) == 2
+
+
+def test_locked_repository_prompt_cannot_be_re_registered(tmp_path: Path) -> None:
+    from pr_reviewer.prompts.registry import PromptVersionImmutable
+
+    store = RepoConfigStore(tmp_path / "repo_config.json")
+    store.add_repository_prompt(11, "Focus on API migrations")
+    store.mark_repository_prompt_used(11, "1")
+
+    versions = store.list_repository_prompt_versions(11)
+    assert versions[0].locked is True
+
+    registry = store._prompt_registry_for(11, {"1": {"content": "mutated", "locked": True}})
+    name = repository_prompt_name(11)
+    with pytest.raises(PromptVersionImmutable):
+        registry.register(name, "1", "mutated")
+
+
+def test_repository_prompt_versions_survive_reload(tmp_path: Path) -> None:
+    path = tmp_path / "repo_config.json"
+    first = RepoConfigStore(path)
+    first.add_repository_prompt(42, "Watch database migrations")
+
+    second = RepoConfigStore(path)
+    active = second.get_active_repository_prompt(42)
+    assert active is not None
+    assert active.content == "Watch database migrations"
+    assert active.version == "1"
