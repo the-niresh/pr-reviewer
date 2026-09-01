@@ -113,6 +113,8 @@ def test_each_section_screen_renders_headless(section_id: str, tmp_path: Path) -
                 assert pilot.app.query_one("#profile-login") is not None
             elif section_id == "repositories":
                 assert pilot.app.query_one("#repositories-heading") is not None
+            elif section_id == "agent-prompts":
+                assert pilot.app.query_one("#agent-prompts-heading") is not None
             else:
                 placeholder = pilot.app.query_one("#section-placeholder")
                 assert str(placeholder.render()) == section_id

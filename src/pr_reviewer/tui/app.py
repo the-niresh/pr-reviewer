@@ -23,6 +23,7 @@ from pr_reviewer.tui.pairing_client import PairingClient
 from pr_reviewer.tui.screens.byok import ByokPanel, ModelKeyStored
 from pr_reviewer.tui.screens.connect import ConnectPanel, can_start_review
 from pr_reviewer.tui.screens.profile import ProfilePanel
+from pr_reviewer.tui.screens.prompts import AgentPromptsPanel
 from pr_reviewer.tui.screens.repositories import RepositoriesPanel
 from pr_reviewer.tui.theme import REVIEWER_CSS, REVIEWER_THEME
 
@@ -146,6 +147,9 @@ class ReviewerApp(App[None]):
             return
         if section_id == "repositories":
             pane.mount(RepositoriesPanel(snapshot, repo_config=self._repo_config))
+            return
+        if section_id == "agent-prompts":
+            pane.mount(AgentPromptsPanel())
             return
         pane.mount(Static(section_id, id="section-placeholder"))
 
