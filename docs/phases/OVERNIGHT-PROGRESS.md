@@ -158,7 +158,6 @@
 - Decisions: Updated the existing design-gate file. Did not invent a new phase. No newly unlocked complete phase after Task 25.
 - Blocked: runtime Task 10. Hosted end-to-end at reviewer.niresh.tech is not live.
 - Skipped:
-  - Phase 6: master 26 ⬜, runtime 10 ⬜
   - Phase 7: master 9 ⚠️, 24 ⬜, 26 ⬜
   - Phase 11: master 24 ⬜, runtime 10 ⬜
   - Phase 15: master 24 ⬜, 26 ⬜
@@ -193,4 +192,11 @@
 - GREEN: Phase 14 proof suite `33 passed, 1 warning in 3.14s`. Full suite pending gate. CLAUDE-IN 2026-09-01T06:26:00+05:30 FIX already on HEAD.
 - Commit: docs: add phase 14 write-up with verified proof gate
 - Decisions: Fault injection is this gate. Runtime Task 10 is not. Quoted 33 passed. No latency number invented.
+- Blocked: -
+
+## Phase 6 - ✅ done  2026-09-01T07:09:00+05:30
+- RED: n/a, docs only
+- GREEN: Phase 6 proof suite `31 passed, 1 warning in 1.95s`. Full suite pending gate. CLAUDE-IN 2026-09-01T06:26:00+05:30 FIX already on HEAD.
+- Commit: docs: add phase 6 write-up with verified proof gate
+- Decisions: Trace reconstruction is this gate. Task 26 and runtime Task 10 are not. Quoted 31 passed. No eval number invented.
 - Blocked: -
