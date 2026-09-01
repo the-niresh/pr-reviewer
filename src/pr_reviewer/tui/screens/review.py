@@ -12,8 +12,10 @@ from textual.reactive import reactive
 from textual.widget import Widget
 from textual.widgets import Button, Label, Static
 
+from pr_reviewer.contracts.finding import Finding
 from pr_reviewer.contracts.review_context import PackedDiff
 from pr_reviewer.local_store.review_log import ReviewLogStore
+from pr_reviewer.reviewer.receipt import FindingReceipt, SandboxVerification
 from pr_reviewer.reviewer.specialists import SPECIALIST_CONCERNS
 
 ReviewPhase = Literal["diffs", "agents"]
@@ -69,6 +71,28 @@ class ReviewPanel(Widget):
     ReviewPanel .reasoning-line {
         margin-bottom: 1;
     }
+
+    ReviewPanel .finding-row {
+        margin-bottom: 1;
+        border-left: thick $panel;
+        padding: 0 1;
+    }
+
+    ReviewPanel .finding-badge {
+        text-style: bold;
+    }
+
+    ReviewPanel .finding-badge.finding-verified {
+        color: $success;
+    }
+
+    ReviewPanel .finding-badge.finding-asserted {
+        color: $warning;
+    }
+
+    ReviewPanel .finding-detail {
+        color: $text-muted;
+    }
     """
 
     phase: reactive[ReviewPhase] = reactive("diffs")
@@ -113,6 +137,8 @@ class ReviewPanel(Widget):
         yield Vertical(
             Label("Agent reasoning", id="review-agents-heading"),
             Vertical(id="review-reasoning-stream"),
+            Label("Findings", id="review-findings-heading"),
+            Vertical(id="review-findings-stream"),
             classes="review-agents",
             id="review-agents",
         )
@@ -162,6 +188,31 @@ class ReviewPanel(Widget):
                 chunk.concern,
                 chunk.text,
             )
+
+    def add_finding(self, finding: Finding, receipt: FindingReceipt) -> None:
+        """Render a finding beside its receipt. receipt.verified (receipt.py:115) is the only
+        source of the verified/asserted split: a finding is never styled verified because a
+        sandbox run was not actually cited.
+        """
+        is_verified = isinstance(receipt.verification, SandboxVerification)
+        status_class = "finding-verified" if is_verified else "finding-asserted"
+        if isinstance(receipt.verification, SandboxVerification):
+            detail = receipt.verification.detail
+        else:
+            detail = receipt.verification.reason
+        container = self.query_one("#review-findings-stream", Vertical)
+        location = f"{finding.file_path}:{finding.line_start}"
+        container.mount(
+            Vertical(
+                Label(
+                    f"{receipt.verification.status.upper()} - {finding.title}",
+                    classes=f"finding-badge {status_class}",
+                ),
+                Static(f"{location} - {detail}", classes="finding-detail"),
+                classes="finding-row",
+                id=f"finding-{finding.id}",
+            )
+        )
 
     def _stop_reasoning_stream(self) -> None:
         if self._reasoning_timer is not None:
