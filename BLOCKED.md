@@ -1,39 +1,68 @@
 # Blocked: human actions only
 
-Each item needs a human. Each line is the one action that unblocks it.
+Each item is a human action. Order is dependency order. Each line is the one
+thing that unblocks it.
 
-## Frozen eval holdout
+## 1. Fill the candidate sheet
 
-The public dataset has one `dev` case and zero `holdout` cases.
-`run_diff_only_baseline` raises `BaselineBlocked`.
+Sheet: `datasets/private/candidate_sheet.jsonl`.
+FoodSpector `write-sheet --max-cases 40` on 2026-09-01 printed
+`candidates=37 skipped=3`. Every `verdict` is still empty.
 
-**You need to:** audit the mined FoodSpector candidates and attach a named
-human auditor so holdout rows can exist.
+**You need to:** set `verdict` to `include` or `exclude` on every row. Include
+rows also need `human_auditor`, `split`, and `labels`. Then run
+`uv run python -m pr_reviewer.evals.holdout_sheet build-holdout`.
 
-## Control plane hostname and GitHub App URLs
+Unblocks: Task 9 frozen holdout, eval reports, Task 26 quality numbers.
 
-Runtime Task 10 and Task 24 cannot start without a public host.
+## 2. Create the DNS A record
 
-**You need to:**
+**You need to:** add `reviewer.niresh.tech` A `76.13.243.12`.
 
-1. Add a DNS A record for `reviewer.niresh.tech` pointing at `76.13.243.12`.
-2. Add the Traefik v2.11 router for that host.
-3. Point GitHub App `4771544` homepage, callback, and webhook URLs at
-   `reviewer.niresh.tech`, not the apex.
+Unblocks: Let's Encrypt for that host.
 
-## FoodSpector shadow (Task 24)
+## 3. Apply the Traefik overlay
 
-**You need to:** do the hostname work above, pair the FoodSpector runner with
-auto-post disabled, then collect at least 30 non-draft PRs over at least 14
-days.
+Config is on disk (`docker-compose.hosted.yml`, `deploy/traefik/reviewer.yml`,
+`docs/RUNBOOK.md`). Nothing is applied.
 
-## Task 26 measured quality
+**You need to:** merge the hosted overlay onto the running control plane so
+Traefik v2.11 serves `Host(reviewer.niresh.tech)`.
 
-Architecture, screenshots, limits, retention, rollback, Redis rationale, and
-secret scans are on disk. Precision, recall, cost per PR, and shadow totals
-are not.
+Unblocks: public HTTPS on that host.
 
-**You need to:** finish the holdout audit first. Do not invent those numbers.
+## 4. Move GitHub App 4771544 off the apex
+
+**You need to:** set homepage, callback, and webhook to:
+
+- `https://reviewer.niresh.tech`
+- `https://reviewer.niresh.tech/api/auth/github/callback`
+- `https://reviewer.niresh.tech/api/github/webhook`
+
+Unblocks: live GitHub deliveries. Needs 2 and 3 first.
+
+## 5. Publish a GitHub Release
+
+Local install of `pr-reviewer-0.1.0-compose.release.yml` is proved.
+A GitHub-hosted asset is not.
+
+**You need to:** push and create the release. Do not ask an agent to push.
+
+Unblocks: Task 25 GitHub-hosted install.
+
+## 6. Run the FoodSpector shadow (Task 24)
+
+**You need to:** after 2-4, pair the FoodSpector runner with auto-post
+disabled and collect at least 30 non-draft PRs over at least 14 days.
+
+Unblocks: Task 24, runtime Task 10, Task 26 shadow totals.
+
+## 7. Publish measured quality (Task 26)
+
+**You need to:** after 1 and 6, write precision, recall, cost per PR, and
+shadow totals from those runs. Do not invent them.
+
+Unblocks: Task 26 measured-proof steps.
 
 ## Accepted risk
 
