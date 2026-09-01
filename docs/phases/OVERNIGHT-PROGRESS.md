@@ -218,3 +218,14 @@
 - Commit: docs: add phase 15 write-up with verified proof gate
 - Decisions: Inspectability is this gate. Task 24 and Task 26 are not. Quoted 20 passed. No eval number invented.
 - Blocked: -
+
+## Phase 16 - ⚠️ partial  2026-09-01T07:32:00+05:30
+- RED: n/a, docs only
+- GREEN: Budget proof suite `16 passed, 1 warning in 1.40s`. Specialist/retrieval/baseline comparison raised `BaselineBlocked: holdout is empty`. CLAUDE-IN 2026-09-01T06:26:00+05:30 FIX already on HEAD.
+- Commit: docs: add phase 16 write-up with verified proof gate
+- Decisions: Concurrent reservation is this gate. Quoted 16 passed and the three BaselineBlocked refusals. No useful-findings-per-dollar number invented. Task 24 and Task 26 are not this gate. Overnight section 8: write the phase when the proof is runnable, mark unfinished mapped tasks as not this gate.
+- Blocked: frozen holdout does not exist
+- Skipped remaining:
+  - Phase 18: master 26 ⬜
+  - Phase 19: master 24 ⬜, 26 ⬜, runtime 10 ⬜
+  - Phase 20: master 9 ⚠️, 24 ⬜, 26 ⬜
