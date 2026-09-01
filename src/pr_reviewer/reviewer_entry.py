@@ -23,6 +23,10 @@ _USAGE = "usage: reviewer <setup|doctor|trace|start|stop|status|open|update|unin
 def main(argv: Sequence[str] | None = None) -> int:
     args = list(sys.argv[1:] if argv is None else argv)
     if not args:
+        if sys.stdin.isatty():
+            from pr_reviewer.tui.app import run_tui
+
+            return run_tui()
         print(_USAGE, file=sys.stderr)
         return 1
 
