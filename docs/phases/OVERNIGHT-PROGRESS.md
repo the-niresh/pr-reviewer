@@ -158,7 +158,6 @@
 - Decisions: Updated the existing design-gate file. Did not invent a new phase. No newly unlocked complete phase after Task 25.
 - Blocked: runtime Task 10. Hosted end-to-end at reviewer.niresh.tech is not live.
 - Skipped:
-  - Phase 3: master 24 ⬜, runtime 10 ⬜
   - Phase 6: master 26 ⬜, runtime 10 ⬜
   - Phase 7: master 9 ⚠️, 24 ⬜, 26 ⬜
   - Phase 10: runtime 10 ⬜
@@ -176,3 +175,10 @@
 - Commit: docs: add phase 4 write-up with verified proof gate
 - Decisions: Overnight spec says this gate is runnable tonight. Task 9 holdout is an eval block, not a schema block. Quoted 79 passed. No eval number invented. No down-migration claimed.
 - Blocked: runtime Task 10 is not this gate.
+
+## Phase 3 - ✅ done  2026-09-01T06:53:00+05:30
+- RED: n/a, docs only
+- GREEN: Phase 3 proof suite `67 passed, 1 warning in 44.93s`. Includes live local Postgres restart. ruff 0, mypy 0 pending full gate. CLAUDE-IN 2026-09-01T06:26:00+05:30 FIX already on HEAD.
+- Commit: docs: add phase 3 write-up with verified proof gate
+- Decisions: Local start-health-restart is this gate. Task 24 and runtime Task 10 are not. Quoted 67 passed. No public hostname claimed.
+- Blocked: -
