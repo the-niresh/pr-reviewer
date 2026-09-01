@@ -159,7 +159,6 @@
 - Blocked: runtime Task 10. Hosted end-to-end at reviewer.niresh.tech is not live.
 - Skipped:
   - Phase 7: master 9 ⚠️, 24 ⬜, 26 ⬜
-  - Phase 11: master 24 ⬜, runtime 10 ⬜
   - Phase 15: master 24 ⬜, 26 ⬜
   - Phase 16: master 24 ⬜, 26 ⬜
   - Phase 18: master 26 ⬜
@@ -199,4 +198,11 @@
 - GREEN: Phase 6 proof suite `31 passed, 1 warning in 1.95s`. Full suite pending gate. CLAUDE-IN 2026-09-01T06:26:00+05:30 FIX already on HEAD.
 - Commit: docs: add phase 6 write-up with verified proof gate
 - Decisions: Trace reconstruction is this gate. Task 26 and runtime Task 10 are not. Quoted 31 passed. No eval number invented.
+- Blocked: -
+
+## Phase 11 - ✅ done  2026-09-01T07:13:00+05:30
+- RED: n/a, docs only
+- GREEN: Phase 11 proof suite `27 passed, 1 warning in 1.55s`. Full suite pending gate. CLAUDE-IN 2026-09-01T06:26:00+05:30 FIX already on HEAD.
+- Commit: docs: add phase 11 write-up with verified proof gate
+- Decisions: HITL routing is this gate. Task 24 and runtime Task 10 are not. Quoted 27 passed. Phase 7 stays skipped because the holdout is empty.
 - Blocked: -
