@@ -112,6 +112,8 @@ def build_finding_receipt(
 ) -> FindingReceipt:
     if finding.review_job_id != model_call.review_job_id:
         raise ValueError("finding and model call must belong to the same review job")
+    if finding.verified and finding.verification_method != "sandbox":
+        raise ValueError("verified findings must come from a sandbox run")
     if finding.verified and not isinstance(verification, SandboxVerification):
         raise ValueError("verified findings must cite a sandbox run")
     if not finding.verified and isinstance(verification, SandboxVerification):
