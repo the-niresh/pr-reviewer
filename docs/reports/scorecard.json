@@ -1,0 +1,9 @@
+{
+  "precision_per_finding": "holdout is empty; refusing to report a baseline",
+  "precision_per_case": "holdout is empty; refusing to report a baseline",
+  "recall_per_finding": "holdout is empty; refusing to report a baseline",
+  "recall_per_case": "holdout is empty; refusing to report a baseline",
+  "false_findings_per_pr": "holdout is empty; refusing to report a baseline",
+  "cost_usd": "holdout is empty; refusing to report a baseline",
+  "reviewed_pr_count": "holdout is empty; refusing to report a baseline"
+}

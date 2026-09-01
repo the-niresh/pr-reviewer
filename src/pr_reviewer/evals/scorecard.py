@@ -10,15 +10,19 @@ hand-typed scorecard and no placeholder path.
 from __future__ import annotations
 
 from collections.abc import Sequence
+from pathlib import Path
 
 from pydantic import BaseModel, ConfigDict
 
+from pr_reviewer.contracts.finding_candidate import FindingCandidate
 from pr_reviewer.evals.run_eval import (
     BaselineBlocked,
     load_public_eval_cases,
     run_diff_only_baseline,
 )
 from pr_reviewer.evals.types import EvalCase, ReviewerCallable
+
+DEFAULT_SCORECARD_PATH = Path(__file__).resolve().parents[3] / "docs" / "reports" / "scorecard.json"
 
 
 class Scorecard(BaseModel):
@@ -64,3 +68,27 @@ def generate_scorecard(
         cost_usd=metrics.cost_usd,
         reviewed_pr_count=metrics.reviewed_pr_count,
     )
+
+
+def _unreachable_reviewer(_case: EvalCase) -> Sequence[FindingCandidate]:
+    # generate_scorecard checks the holdout before ever calling the reviewer, so while the
+    # holdout stays empty this is never invoked; which reviewer is passed cannot change a
+    # refusal. Once a holdout exists, write_scorecard needs a real reviewer wired in here.
+    raise AssertionError("reviewer called despite an empty holdout")
+
+
+def write_scorecard(path: Path = DEFAULT_SCORECARD_PATH) -> Scorecard:
+    scorecard = generate_scorecard(_unreachable_reviewer)
+    path.parent.mkdir(parents=True, exist_ok=True)
+    path.write_text(scorecard.model_dump_json(indent=2) + "\n", encoding="utf-8")
+    return scorecard
+
+
+def main() -> int:
+    write_scorecard()
+    print(f"Wrote {DEFAULT_SCORECARD_PATH}")
+    return 0
+
+
+if __name__ == "__main__":
+    raise SystemExit(main())

@@ -1,0 +1,22 @@
+[
+  {
+    "name": "retrieval",
+    "enabled": false,
+    "measurement": "holdout is empty; refusing to report a retrieval comparison"
+  },
+  {
+    "name": "code_graph",
+    "enabled": false,
+    "measurement": "holdout is empty; refusing to report a context-source comparison"
+  },
+  {
+    "name": "specialists",
+    "enabled": false,
+    "measurement": "holdout is empty; refusing to report a specialist comparison"
+  },
+  {
+    "name": "langgraph",
+    "enabled": false,
+    "measurement": "holdout is empty; refusing to report a baseline"
+  }
+]
