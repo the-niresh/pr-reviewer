@@ -1,26 +1,18 @@
 # Blocked: human actions only
 
-Written after Tasks R1 through R7 on 2026-09-01. HEAD should be the Done Means
-audit commit. Nothing is pushed.
+Each item needs a human. Each line is the one action that unblocks it.
 
-Each item is still blocked. Each line is the one action that unblocks it.
+## Frozen eval holdout
 
-| Mark | Meaning |
-|---|---|
-| ❌ | blocked on a human |
-| ❓ | open question |
-
-## ❌ Frozen eval holdout
-
-Phases 7, 8, 9, 16, and 20, plus Task 19's specialist comparison, stop here.
-The harness raises `BaselineBlocked: holdout is empty; refusing to report a baseline`.
+The public dataset has one `dev` case and zero `holdout` cases.
+`run_diff_only_baseline` raises `BaselineBlocked`.
 
 **You need to:** audit the mined FoodSpector candidates and attach a named
-human auditor so holdout rows can exist. About 1 to 2 hours.
+human auditor so holdout rows can exist.
 
-## ❌ Control plane hostname and GitHub App URLs
+## Control plane hostname and GitHub App URLs
 
-Runtime Task 10 and Task 24 cannot start without this.
+Runtime Task 10 and Task 24 cannot start without a public host.
 
 **You need to:**
 
@@ -29,27 +21,21 @@ Runtime Task 10 and Task 24 cannot start without this.
 3. Point GitHub App `4771544` homepage, callback, and webhook URLs at
    `reviewer.niresh.tech`, not the apex.
 
-## ❌ FoodSpector shadow (Task 24)
+## FoodSpector shadow (Task 24)
 
 **You need to:** do the hostname work above, pair the FoodSpector runner with
 auto-post disabled, then collect at least 30 non-draft PRs over at least 14
 days.
 
-## ❌ Leaked Neon URL
+## Task 26 measured quality
 
-A historical `git add -A` put a live Neon URL on GitHub. It is not in the
-current tree. Rotation was forbidden tonight.
+Architecture, screenshots, limits, retention, rollback, Redis rationale, and
+secret scans are on disk. Precision, recall, cost per PR, and shadow totals
+are not.
 
-**You need to:** rotate that Neon credential when you are ready. Do not paste
-it into chat.
+**You need to:** finish the holdout audit first. Do not invent those numbers.
 
-## ❓ After the holdout exists
+## Accepted risk
 
-Task 26's remaining measured README numbers (precision, recall, cost per PR)
-and enabling retrieval or specialists. Not tonight.
-
-## Not blocked on you for local proof
-
-Queue p99 at 4 workers is recorded in `docs/QUEUE_BENCHMARK.md`. Architecture,
-security, demo screenshots, and the hiring README landed in R3 through R6.
-`HOSTED_EXEMPTIONS` is still empty.
+A historical `git add -A` put a live hosted database URL on GitHub. It is not
+in the current tree. This is an accepted risk, not an open action.
