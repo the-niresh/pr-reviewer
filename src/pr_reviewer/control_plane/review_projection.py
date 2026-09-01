@@ -10,7 +10,10 @@ from __future__ import annotations
 from collections.abc import Sequence
 from dataclasses import dataclass
 
+from pydantic import BaseModel, ConfigDict
+
 from pr_reviewer.contracts.finding import Concern, Finding
+from pr_reviewer.control_plane.github_auth import LiveInstallationAssertion
 from pr_reviewer.db.client import connection
 
 
@@ -77,3 +80,96 @@ def project_review(
                 """,
                 (entry.review_job_id, entry.concern, entry.reasoning),
             )
+
+
+class ReviewFindingSummary(BaseModel):
+    model_config = ConfigDict(frozen=True, extra="forbid")
+
+    id: str
+    concern: Concern
+    severity: str
+    category: str
+    file_path: str
+    line_start: int
+    line_end: int
+    title: str
+    rationale: str
+    verified: bool
+    status: str
+
+
+class AgentReasoningSummary(BaseModel):
+    model_config = ConfigDict(frozen=True, extra="forbid")
+
+    concern: Concern
+    reasoning: str
+
+
+class ReviewSummary(BaseModel):
+    model_config = ConfigDict(frozen=True, extra="forbid")
+
+    review_job_id: str
+    pull_request_number: int | None
+    head_sha: str | None
+    status: str
+    findings: list[ReviewFindingSummary]
+    reasoning: list[AgentReasoningSummary]
+
+
+def reviews_for_repository(
+    assertion: LiveInstallationAssertion,
+    installation_id: int,
+    github_repository_id: int,
+) -> list[ReviewSummary] | None:
+    """The web dashboard's read path. None means the viewer may not see this repository: the
+    same outcome whether the installation does not exist, was never controlled by this viewer,
+    or grants a different repository. Telling those apart is itself a cross-tenant leak, the
+    same reason AccessDenialReason in github_auth.py collapses them (a scope miss is a 404).
+    """
+    granted = assertion.installations.get(installation_id)
+    if granted is None or github_repository_id not in granted:
+        return None
+
+    with connection() as conn:
+        job_rows = conn.execute(
+            """
+            select id, pull_request_number, head_sha, status
+            from review_jobs
+            where installation_id = %s and github_repository_id = %s
+            order by created_at desc
+            """,
+            (installation_id, github_repository_id),
+        ).fetchall()
+
+        summaries: list[ReviewSummary] = []
+        for job_row in job_rows:
+            review_job_id = str(job_row["id"])
+            finding_rows = conn.execute(
+                """
+                select id, concern, severity, category, file_path, line_start, line_end,
+                       title, rationale, verified, status
+                from review_findings
+                where review_job_id = %s
+                order by created_at
+                """,
+                (review_job_id,),
+            ).fetchall()
+            reasoning_rows = conn.execute(
+                """
+                select concern, reasoning from agent_reasoning
+                where review_job_id = %s
+                order by created_at
+                """,
+                (review_job_id,),
+            ).fetchall()
+            summaries.append(
+                ReviewSummary(
+                    review_job_id=review_job_id,
+                    pull_request_number=job_row["pull_request_number"],
+                    head_sha=job_row["head_sha"],
+                    status=str(job_row["status"]),
+                    findings=[ReviewFindingSummary(**dict(row)) for row in finding_rows],
+                    reasoning=[AgentReasoningSummary(**dict(row)) for row in reasoning_rows],
+                )
+            )
+    return summaries
