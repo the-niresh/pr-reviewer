@@ -159,7 +159,6 @@
 - Blocked: runtime Task 10. Hosted end-to-end at reviewer.niresh.tech is not live.
 - Skipped:
   - Phase 3: master 24 ⬜, runtime 10 ⬜
-  - Phase 4: master 9 ⚠️, runtime 10 ⬜
   - Phase 6: master 26 ⬜, runtime 10 ⬜
   - Phase 7: master 9 ⚠️, 24 ⬜, 26 ⬜
   - Phase 10: runtime 10 ⬜
@@ -170,3 +169,10 @@
   - Phase 18: master 26 ⬜
   - Phase 19: master 24 ⬜, 26 ⬜, runtime 10 ⬜
   - Phase 20: master 9 ⚠️, 24 ⬜, 26 ⬜
+
+## Phase 4 - ✅ done  2026-09-01T06:46:00+05:30
+- RED: n/a, docs only
+- GREEN: Phase 4 proof suite `79 passed, 1 warning in 4.40s`. Auth test included. ruff 0, mypy 0, boundary doc current, exemptions empty. CLAUDE-IN 2026-09-01T06:26:00+05:30 FIX already on HEAD.
+- Commit: docs: add phase 4 write-up with verified proof gate
+- Decisions: Overnight spec says this gate is runnable tonight. Task 9 holdout is an eval block, not a schema block. Quoted 79 passed. No eval number invented. No down-migration claimed.
+- Blocked: runtime Task 10 is not this gate.
