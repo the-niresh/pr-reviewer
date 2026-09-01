@@ -8,6 +8,7 @@ from textual.app import App, ComposeResult
 from textual.containers import Container, Horizontal
 from textual.widgets import Static
 
+from pr_reviewer.local_store.repo_config import RepoConfigStore, default_repo_config_path
 from pr_reviewer.runner.secrets import SecretStore, get_secret_store
 from pr_reviewer.tui.auth_state import RUNNER_CREDENTIAL_SECRET, is_github_connected
 from pr_reviewer.tui.installation_client import HostedInstallationClient, InstallationClient
@@ -36,6 +37,7 @@ class ReviewerApp(App[None]):
         pairing_client: PairingClient | None = None,
         installation_client: InstallationClient | None = None,
         installation_snapshot: InstallationSnapshot | None = None,
+        repo_config: RepoConfigStore | None = None,
         config_dir: Path | None = None,
     ) -> None:
         super().__init__()
@@ -46,6 +48,9 @@ class ReviewerApp(App[None]):
         self._pairing_client = pairing_client
         self._installation_client = installation_client or HostedInstallationClient()
         self._installation_snapshot = installation_snapshot
+        self._repo_config = repo_config or RepoConfigStore(
+            default_repo_config_path(self._config_dir)
+        )
 
     @property
     def github_connected(self) -> bool:
@@ -113,7 +118,7 @@ class ReviewerApp(App[None]):
             pane.mount(ProfilePanel(snapshot))
             return
         if section_id == "repositories":
-            pane.mount(RepositoriesPanel(snapshot))
+            pane.mount(RepositoriesPanel(snapshot, repo_config=self._repo_config))
             return
         pane.mount(Static(section_id, id="section-placeholder"))
 

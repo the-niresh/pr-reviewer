@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import asyncio
+from pathlib import Path
 
 from pr_reviewer.tui.installation_snapshot import InstallationSnapshot, RepositoryPermission
 from pr_reviewer.tui.screens.repositories import RepositoriesPanel
@@ -39,3 +40,25 @@ def test_repositories_panel_lists_installation_repositories() -> None:
 def test_repositories_panel_matches_installation_snapshot_exactly() -> None:
     assert len(SAMPLE_INSTALLATION.repositories) == 2
     assert SAMPLE_INSTALLATION.repositories[0].name == "in-scope"
+
+
+def test_repositories_panel_shows_persisted_policy(tmp_path: Path) -> None:
+    from textual.app import App, ComposeResult
+
+    from pr_reviewer.local_store.repo_config import RepoConfigStore
+    from pr_reviewer.security.instruction_sources import ReviewPolicy
+
+    store = RepoConfigStore(tmp_path / "repo_config.json")
+    store.set(11, ReviewPolicy(instructions_enabled=True, specialist_mode=True))
+
+    async def exercise() -> None:
+        class Harness(App[None]):
+            def compose(self) -> ComposeResult:
+                yield RepositoriesPanel(SAMPLE_INSTALLATION, repo_config=store)
+
+        async with Harness().run_test() as pilot:
+            row = str(pilot.app.query_one("#repo-11").render())
+            assert "instructions" in row
+            assert "specialists" in row
+
+    asyncio.run(exercise())
