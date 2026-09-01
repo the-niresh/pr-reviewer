@@ -62,3 +62,52 @@ def test_repositories_panel_shows_persisted_policy(tmp_path: Path) -> None:
             assert "specialists" in row
 
     asyncio.run(exercise())
+
+
+def test_repositories_panel_shows_saved_model_choice(tmp_path: Path) -> None:
+    from textual.app import App, ComposeResult
+
+    from pr_reviewer.local_store.repo_config import RepoConfigStore, RepoModelChoice
+
+    store = RepoConfigStore(tmp_path / "repo_config.json")
+    store.set_model_choice(
+        11,
+        RepoModelChoice(provider_id="openai", model_id="gpt-4o-mini"),
+    )
+
+    async def exercise() -> None:
+        class Harness(App[None]):
+            def compose(self) -> ComposeResult:
+                yield RepositoriesPanel(SAMPLE_INSTALLATION, repo_config=store)
+
+        async with Harness().run_test() as pilot:
+            summary = str(pilot.app.query_one("#repo-model-summary-11").render())
+            assert "openai/gpt-4o-mini" in summary
+
+    asyncio.run(exercise())
+
+
+def test_repositories_panel_persists_provider_change(tmp_path: Path) -> None:
+    from textual.app import App, ComposeResult
+    from textual.widgets import Select
+
+    from pr_reviewer.local_store.repo_config import RepoConfigStore
+
+    store = RepoConfigStore(tmp_path / "repo_config.json")
+
+    async def exercise() -> None:
+        class Harness(App[None]):
+            def compose(self) -> ComposeResult:
+                yield RepositoriesPanel(SAMPLE_INSTALLATION, repo_config=store)
+
+        async with Harness().run_test() as pilot:
+            provider = pilot.app.query_one("#repo-provider-11", Select)
+            provider.value = "anthropic"
+            panel = pilot.app.query_one(RepositoriesPanel)
+            panel.on_select_changed(Select.Changed(provider, "anthropic"))
+            saved = store.get_model_choice(11)
+            assert saved.provider_id == "anthropic"
+            summary = str(pilot.app.query_one("#repo-model-summary-11").render())
+            assert summary.startswith("anthropic/")
+
+    asyncio.run(exercise())
