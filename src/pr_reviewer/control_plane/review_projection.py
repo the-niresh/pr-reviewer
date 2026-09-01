@@ -10,10 +10,12 @@ from __future__ import annotations
 from collections.abc import Sequence
 from dataclasses import dataclass
 
+from fastapi import APIRouter, HTTPException, Request
 from pydantic import BaseModel, ConfigDict
 
 from pr_reviewer.contracts.finding import Concern, Finding
 from pr_reviewer.control_plane.github_auth import LiveInstallationAssertion
+from pr_reviewer.control_plane.github_oauth import LIVE_SIGN_IN_COOKIE_NAME, read_live_sign_in
 from pr_reviewer.db.client import connection
 
 
@@ -173,3 +175,72 @@ def reviews_for_repository(
                 )
             )
     return summaries
+
+
+class RepositoryReviews(BaseModel):
+    model_config = ConfigDict(frozen=True, extra="forbid")
+
+    installation_id: int
+    github_repository_id: int
+    repository_name: str
+    reviews: list[ReviewSummary]
+
+
+class ReviewsResponse(BaseModel):
+    model_config = ConfigDict(frozen=True, extra="forbid")
+
+    repositories: list[RepositoryReviews]
+
+
+router = APIRouter(prefix="/api/reviews", tags=["reviews"])
+
+
+@router.get("", response_model=ReviewsResponse)
+def list_reviews(
+    request: Request,
+    installation_id: int | None = None,
+    github_repository_id: int | None = None,
+) -> ReviewsResponse:
+    """The web dashboard's only entry point into review_findings/agent_reasoning.
+
+    No cookie, or a cookie that fails HMAC or has expired, is 401: the viewer is not signed in.
+    A signed-in viewer naming a specific installation and repository they do not control gets
+    404, same as reviews_for_repository's own None -- a scope miss is indistinguishable from
+    not-found, never a distinct "forbidden".
+    """
+    cookie = request.cookies.get(LIVE_SIGN_IN_COOKIE_NAME, "")
+    assertion = read_live_sign_in(cookie)
+    if assertion is None:
+        raise HTTPException(status_code=401, detail="not signed in")
+
+    if installation_id is not None and github_repository_id is not None:
+        reviews = reviews_for_repository(assertion, installation_id, github_repository_id)
+        if reviews is None:
+            raise HTTPException(status_code=404)
+        repository_name = assertion.installations[installation_id][github_repository_id]
+        return ReviewsResponse(
+            repositories=[
+                RepositoryReviews(
+                    installation_id=installation_id,
+                    github_repository_id=github_repository_id,
+                    repository_name=repository_name,
+                    reviews=reviews,
+                )
+            ]
+        )
+
+    repositories: list[RepositoryReviews] = []
+    for granted_installation_id, repos in assertion.installations.items():
+        for granted_repository_id, repository_name in repos.items():
+            reviews = reviews_for_repository(
+                assertion, granted_installation_id, granted_repository_id
+            )
+            repositories.append(
+                RepositoryReviews(
+                    installation_id=granted_installation_id,
+                    github_repository_id=granted_repository_id,
+                    repository_name=repository_name,
+                    reviews=reviews or [],
+                )
+            )
+    return ReviewsResponse(repositories=repositories)
