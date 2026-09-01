@@ -3,11 +3,20 @@
 from __future__ import annotations
 
 import asyncio
+from pathlib import Path
 
 import pytest
 
 from pr_reviewer.tui.app import ReviewerApp
 from pr_reviewer.tui.nav import SECTIONS, SectionNav
+
+
+def connected_secrets(tmp_path: Path):
+    from pr_reviewer.runner.secrets import FileSecretStore
+
+    secrets = FileSecretStore(tmp_path)
+    secrets.set("runner_credential", "test-runner-credential")
+    return secrets
 
 
 @pytest.mark.parametrize("section_id", SECTIONS)
@@ -21,9 +30,9 @@ def test_section_nav_lists_four_sections() -> None:
     assert len(nav.section_ids) == 4
 
 
-def test_reviewer_app_starts_on_repositories() -> None:
+def test_reviewer_app_starts_on_repositories(tmp_path: Path) -> None:
     async def exercise() -> None:
-        app = ReviewerApp()
+        app = ReviewerApp(secrets=connected_secrets(tmp_path))
         async with app.run_test() as pilot:
             nav = app.query_one(SectionNav)
             assert nav.current_section == "repositories"
@@ -33,9 +42,9 @@ def test_reviewer_app_starts_on_repositories() -> None:
     asyncio.run(exercise())
 
 
-def test_current_section_is_visually_distinct_without_focus() -> None:
+def test_current_section_is_visually_distinct_without_focus(tmp_path: Path) -> None:
     async def exercise() -> None:
-        app = ReviewerApp()
+        app = ReviewerApp(secrets=connected_secrets(tmp_path))
         async with app.run_test() as pilot:
             nav = app.query_one(SectionNav)
             current = nav.query_one("#nav-repositories")
@@ -50,9 +59,9 @@ def test_current_section_is_visually_distinct_without_focus() -> None:
     asyncio.run(exercise())
 
 
-def test_selecting_a_section_updates_content_and_indicator() -> None:
+def test_selecting_a_section_updates_content_and_indicator(tmp_path: Path) -> None:
     async def exercise() -> None:
-        app = ReviewerApp()
+        app = ReviewerApp(secrets=connected_secrets(tmp_path))
         async with app.run_test() as pilot:
             await pilot.click("#nav-reviews")
             nav = app.query_one(SectionNav)

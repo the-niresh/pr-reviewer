@@ -4,12 +4,21 @@ from __future__ import annotations
 
 import asyncio
 import sys
+from pathlib import Path
 from types import SimpleNamespace
 
 import pytest
 
 from pr_reviewer.tui.nav import SECTIONS
 from pr_reviewer.tui.theme import REVIEWER_THEME
+
+
+def connected_secrets(tmp_path: Path):
+    from pr_reviewer.runner.secrets import FileSecretStore
+
+    secrets = FileSecretStore(tmp_path)
+    secrets.set("runner_credential", "test-runner-credential")
+    return secrets
 
 
 def test_reviewer_app_is_a_textual_app() -> None:
@@ -64,11 +73,11 @@ def test_reviewer_theme_uses_deliberate_colours() -> None:
     assert REVIEWER_THEME.primary == "#38bdf8"
 
 
-def test_reviewer_app_registers_custom_theme() -> None:
+def test_reviewer_app_registers_custom_theme(tmp_path: Path) -> None:
     async def exercise() -> None:
         from pr_reviewer.tui.app import ReviewerApp
 
-        app = ReviewerApp()
+        app = ReviewerApp(secrets=connected_secrets(tmp_path))
         async with app.run_test():
             assert app.theme == "reviewer"
             assert "reviewer" in app.available_themes
@@ -77,11 +86,11 @@ def test_reviewer_app_registers_custom_theme() -> None:
 
 
 @pytest.mark.parametrize("section_id", SECTIONS)
-def test_each_section_screen_renders_headless(section_id: str) -> None:
+def test_each_section_screen_renders_headless(section_id: str, tmp_path: Path) -> None:
     async def exercise() -> None:
         from pr_reviewer.tui.app import ReviewerApp
 
-        app = ReviewerApp()
+        app = ReviewerApp(secrets=connected_secrets(tmp_path))
         async with app.run_test() as pilot:
             await pilot.click(f"#nav-{section_id}")
             content = pilot.app.query_one("#section-content")
