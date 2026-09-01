@@ -1,0 +1,42 @@
+name: ci
+
+on:
+  pull_request:
+  push:
+    branches: [main]
+
+jobs:
+  checks:
+    runs-on: ubuntu-latest
+    services:
+      postgres:
+        image: pgvector/pgvector@sha256:ccc6e83d6e35e931dc7c5def2022729d5a6c370318d099181995567ff1fb4d6b
+    steps:
+      - uses: actions/checkout@v4
+      - uses: astral-sh/setup-uv@v4
+      - uses: oven-sh/setup-bun@v2
+      - name: lock
+        run: uv lock --check
+      - name: ruff
+        run: uv run ruff check src tests
+      - name: mypy
+        run: uv run mypy src
+      - name: pytest
+        run: flock -w 3600 /tmp/pr-reviewer-pytest.lock uv run pytest -q
+      - name: migration-from-empty
+        run: uv run pr-reviewer-db-migrate
+      - name: migration-upgrade
+        run: uv run pr-reviewer-db-migrate
+      - name: bun tests
+        run: bun test
+        working-directory: apps/web
+      - name: frontend build
+        run: bun run build
+        working-directory: apps/web
+      - name: playwright
+        run: bunx playwright test
+        working-directory: apps/web
+      - name: secret scan
+        run: git grep -nEi 'BEGIN [A-Z ]*PRIVATE KEY' -- ':!*.md' || true
+      - name: generated-file check
+        run: uv run python scripts/generate_data_boundaries_doc.py --check

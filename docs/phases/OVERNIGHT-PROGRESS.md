@@ -115,3 +115,17 @@
 - Commit: none
 - Decisions: none
 - Blocked: -
+
+## Task 23 - ✅ done  2026-09-01T06:18:00+05:30
+- RED: 4 failed, 1 passed, failing for: missing Dockerfile, compose files, and workflows
+- GREEN: 735 passed. ruff 0, mypy 0. `docker build --target api` exit 0. `docker run ... id` is uid=65532.
+- Commit: feat: add ci, release containers, and supply-chain checks
+- Decisions: Root Dockerfile uses the existing busybox digest and four named stages. CI is config plus tests, not a GitHub badge. Workflows are not executed tonight because nothing is pushed.
+- Blocked: -
+
+## Task P1 after 23 - ✅ done  2026-09-01T06:18:00+05:30
+- RED: n/a
+- GREEN: No newly unlocked phase. Phase 3 still needs 25. Phase 10 still needs runtime 10. Phase 14 still needs runtime 10.
+- Commit: none
+- Decisions: none
+- Blocked: -

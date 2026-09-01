@@ -1,0 +1,16 @@
+services:
+  postgres:
+    image: pgvector/pgvector@sha256:ccc6e83d6e35e931dc7c5def2022729d5a6c370318d099181995567ff1fb4d6b
+    user: "70:70"
+    environment:
+      POSTGRES_USER: pr_reviewer
+      POSTGRES_PASSWORD: pr_reviewer
+      POSTGRES_DB: pr_reviewer
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U pr_reviewer -d pr_reviewer"]
+      interval: 2s
+      timeout: 5s
+      retries: 30
+      start_period: 5s
+    ports:
+      - "127.0.0.1:54329:5432"

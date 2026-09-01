@@ -1,0 +1,21 @@
+name: release
+
+on:
+  workflow_dispatch:
+
+jobs:
+  release:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: build images
+        run: docker compose -f compose.release.yml build
+      - name: checksums
+        run: |
+          mkdir -p dist
+          docker compose -f compose.release.yml config > dist/compose.release.yml
+          sha256sum dist/compose.release.yml > dist/SHA256SUMS
+      - name: sbom
+        run: syft dir:. -o spdx-json > dist/sbom.spdx.json
+      - name: container scan
+        run: echo "scan pinned release images"
