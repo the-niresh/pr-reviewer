@@ -54,5 +54,6 @@ def compute_metrics(
         cost_usd=cost_usd,
         needs_human_rate=_ratio(needs_human_cases, case_count),
         reviewed_pr_count=reviewed_pr_count,
+        useful_finding_count=true_positives,
         rule_adherence=dict.fromkeys(_RULE_ARMS, 0.0),
     )

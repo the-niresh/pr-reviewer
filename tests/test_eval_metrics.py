@@ -77,6 +77,7 @@ def test_metrics_cover_precision_recall_and_cost() -> None:
     assert metrics.cost_usd == 0.0
     assert metrics.needs_human_rate == 0.5
     assert metrics.reviewed_pr_count == 2
+    assert metrics.useful_finding_count == 1
 
 
 def test_rule_adherence_is_scored_on_three_arms() -> None:

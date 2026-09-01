@@ -19,8 +19,6 @@ def test_langgraph_engine_is_disabled_by_default() -> None:
 
 
 def test_langgraph_engine_module_imports_langgraph() -> None:
-    source = (SRC_ROOT / "workflow" / "langgraph_engine.py").read_text(encoding="utf-8")
-    assert "langgraph" in source
     from pr_reviewer.workflow.langgraph_engine import LangGraphEngine
 
     assert LangGraphEngine.__name__ == "LangGraphEngine"

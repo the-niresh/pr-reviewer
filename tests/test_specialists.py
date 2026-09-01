@@ -231,7 +231,11 @@ def test_specialist_comparison_is_blocked_on_the_public_dataset() -> None:
 
 def test_specialist_comparison_runs_both_paths_on_a_synthetic_holdout() -> None:
     from pr_reviewer.evals.fixture_reviewer import FixtureReviewer
-    from pr_reviewer.evals.run_eval import run_specialist_comparison, useful_findings_per_dollar
+    from pr_reviewer.evals.run_eval import (
+        BaselineBlocked,
+        run_specialist_comparison,
+        useful_findings_per_dollar,
+    )
     from pr_reviewer.evals.types import EvalCase, EvalLabel
 
     case = EvalCase(
@@ -261,4 +265,5 @@ def test_specialist_comparison_runs_both_paths_on_a_synthetic_holdout() -> None:
     assert one_agent.metrics.false_findings_per_pr == 0.0
     assert specialists.metrics.latency_ms >= 0
     assert specialists.metrics.cost_usd >= 0
-    assert useful_findings_per_dollar(specialists) >= 0.0
+    with pytest.raises(BaselineBlocked, match="cost"):
+        useful_findings_per_dollar(specialists)

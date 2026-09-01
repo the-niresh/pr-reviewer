@@ -45,3 +45,17 @@
 - Commit: docs: add phase 12 write-up with verified proof gate
 - Decisions: none
 - Blocked: -
+
+## Task 19 - ✅ done  2026-09-01T05:34:42+05:30
+- RED: 17 failed, 2 passed, failing for: missing specialist, merge, langgraph, and comparison modules
+- GREEN: 691 passed. ruff 0, mypy 0, boundary doc current, exemptions empty.
+- Commit: 379b358 feat: add specialist reviewers, deterministic merge, and langgraph adapter
+- Decisions: LangGraph 1.2.11 installed. Adapter is off by default. Shared WorkflowEngine tests are parametrized over SimpleEngine and LangGraphEngine. Public holdout comparison raises BaselineBlocked. Synthetic holdout is unit-test only.
+- Blocked: measured one-agent vs specialist numbers. Public dataset has zero holdout cases.
+
+## Task P1 after 19 - ✅ done  2026-09-01T05:34:42+05:30
+- RED: n/a
+- GREEN: no new phase document. Phase 13 maps to master 19 and 20; 20 is still ⬜.
+- Commit: none
+- Decisions: none
+- Blocked: -

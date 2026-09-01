@@ -99,6 +99,7 @@ class EvalMetrics(BaseModel):
     cost_usd: float = Field(ge=0)
     needs_human_rate: float = Field(ge=0, le=1)
     reviewed_pr_count: int = Field(ge=0)
+    useful_finding_count: int = Field(default=0, ge=0)
     rule_adherence: dict[str, float]
 
 

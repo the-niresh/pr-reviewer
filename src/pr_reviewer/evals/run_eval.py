@@ -100,6 +100,11 @@ def run_specialist_comparison(
 
 def useful_findings_per_dollar(run: EvalRun) -> float:
     if run.metrics.cost_usd <= 0:
-        return 0.0
-    useful = run.metrics.precision_per_finding * run.metrics.reviewed_pr_count
-    return useful / run.metrics.cost_usd
+        raise BaselineBlocked(
+            "cost_usd is zero; refusing to report useful findings per dollar"
+        )
+    return run.metrics.useful_finding_count / run.metrics.cost_usd
+
+
+def write_eval_report(run: EvalRun, path: Path) -> None:
+    path.write_text(run.model_dump_json(indent=2), encoding="utf-8")
