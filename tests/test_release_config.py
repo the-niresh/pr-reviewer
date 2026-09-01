@@ -116,7 +116,10 @@ def test_ci_workflow_runs_the_required_gates() -> None:
         "migration-upgrade",
         "bun run build",
         "playwright",
-        "uv lock --check",
+        "scripts/check_supply_chain.py lock",
+        "scripts/check_supply_chain.py secrets",
+        "scripts/check_supply_chain.py containers",
+        "scripts/check_supply_chain.py generated",
     ):
         assert needle in text, needle
 

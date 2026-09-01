@@ -111,6 +111,26 @@ Result: the scan printed matches. Every hit was one of:
 
 No live Neon URL, no GitHub PAT, and no PEM file is tracked. `.env` is gitignored.
 
+## 9 - ✅ Lock, secret, container, and generated-file checks run locally
+
+CI calls `scripts/check_supply_chain.py` for lock, secrets, containers, and
+generated files (`.github/workflows/ci.yml`). The secret step no longer ends
+in `|| true`. The same script runs without GitHub Actions.
+
+Command, run 2026-09-01 against this checkout:
+
+```text
+$ uv run python scripts/check_supply_chain.py all
+Resolved 74 packages in 0.95ms
+lock: uv.lock matches the project
+secret scan: no refused hits in tracked files
+container scan: digest-pinned images in Dockerfile, compose.release.yml, docker-compose.ci.yml, .github/workflows/ci.yml
+/srv/claude/projects/pr-reviewer/docs/DATA_BOUNDARIES.md is up to date.
+```
+
+That is a digest-pin scan of the tracked image refs, not a hosted vulnerability
+scanner. GitHub Actions has not executed these steps. `.env` was not read.
+
 ## Settled - ✅
 
 - ✅ Installation, repository, and runner are distinct axes.
