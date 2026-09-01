@@ -17,7 +17,7 @@ from __future__ import annotations
 import sys
 from collections.abc import Sequence
 
-_USAGE = "usage: reviewer <doctor|trace|start|stop|status|open|update|uninstall> [args...]"
+_USAGE = "usage: reviewer <setup|doctor|trace|start|stop|status|open|update|uninstall> [args...]"
 
 
 def main(argv: Sequence[str] | None = None) -> int:
@@ -27,6 +27,11 @@ def main(argv: Sequence[str] | None = None) -> int:
         return 1
 
     subcommand, rest = args[0], args[1:]
+
+    if subcommand == "setup":
+        from pr_reviewer.cli.main import main as setup_main
+
+        return setup_main(rest)
 
     if subcommand == "doctor":
         from pr_reviewer.runner.cli.doctor import main as doctor_main

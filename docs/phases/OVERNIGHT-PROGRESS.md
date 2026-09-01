@@ -129,3 +129,17 @@
 - Commit: none
 - Decisions: none
 - Blocked: -
+
+## Task 25 - ✅ done  2026-09-01T06:30:57+05:30
+- RED: 10 failed, 1 passed, failing for: missing installer, setup, doctor modules and scripts
+- GREEN: 747 passed. ruff 0, mypy 0, boundary doc current, exemptions empty. CLAUDE-IN FIX: unauthenticated /openapi.json and unknown paths are not 200.
+- Commit: feat: add versioned installer, setup wizard, and doctor
+- Decisions: Guard denies by default. FastAPI docs/redoc/openapi are off. reviewer setup lives in cli/main.py. Docker doctor stays in runner/cli. Uninstall keeps data unless both delete flags are set.
+- Blocked: -
+
+## Task P1 after 25 - ✅ done  2026-09-01T06:30:57+05:30
+- RED: n/a
+- GREEN: Phase 17 mapped tasks 21, 22, 25 and runtime 8 are implemented. Document written after this commit.
+- Commit: see Phase 17
+- Decisions: Phase 18 still needs Task 26.
+- Blocked: -

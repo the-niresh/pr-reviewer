@@ -64,7 +64,12 @@ def create_dashboard_app(
 ) -> FastAPI:
     secret = require_loopback_bind(host, session_secret)
     allowed = frozenset(allowed_repository_ids)
-    app = FastAPI(title="PR Reviewer local dashboard")
+    app = FastAPI(
+        title="PR Reviewer local dashboard",
+        docs_url=None,
+        redoc_url=None,
+        openapi_url=None,
+    )
     app.add_middleware(
         CORSMiddleware,
         allow_origins=list(LOOPBACK_UI_ORIGINS),
@@ -90,7 +95,7 @@ def create_dashboard_app(
             return deny(403, "loopback_only")
         path = request.url.path
         public = path in {"/dashboard/health", "/dashboard/session"} or request.method == "OPTIONS"
-        if path.startswith("/dashboard/") and not public and not session_is_valid(secret, request):
+        if not public and not session_is_valid(secret, request):
             return deny(401, "unauthenticated")
         return await call_next(request)
 

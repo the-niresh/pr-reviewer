@@ -114,7 +114,8 @@ def test_reviewer_cli_routes_update_and_uninstall_through_runner_cli_not_operato
     assert "uninstall" in reviewer_mod._USAGE
     assert "pr_reviewer.cli.update" not in source
     assert "pr_reviewer.cli.uninstall" not in source
-    assert "pr_reviewer.cli.main" not in source
+    assert "pr_reviewer.cli.main" in source
+    assert "setup" in reviewer_mod._USAGE
 
 
 def test_reviewer_uninstall_without_confirm_delete_does_not_remove_data(

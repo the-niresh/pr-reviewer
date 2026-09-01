@@ -233,4 +233,13 @@ def test_dashboard_exposes_no_webhook_route() -> None:
     paths = [getattr(route, "path", "") for route in app.routes]
     assert all("webhook" not in path for path in paths)
     client = _client(app)
-    assert client.post("/webhook").status_code == 404
+    assert client.post("/webhook").status_code != 200
+
+
+def test_unauthenticated_docs_and_unknown_paths_are_not_ok() -> None:
+    client = _client(_app())
+    for path in ("/openapi.json", "/docs", "/missing"):
+        response = client.get(path)
+        assert response.status_code != 200, path
+        if response.headers.get("content-type", "").startswith("application/json"):
+            assert response.json().get("error") == "unauthenticated"
