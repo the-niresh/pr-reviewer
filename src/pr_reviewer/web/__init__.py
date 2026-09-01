@@ -1,3 +1,2 @@
-from pr_reviewer.web.app import app
+"""Hosted webhook re-export lives in the app module. Dashboard modules do not import it."""
 
-__all__ = ["app"]
