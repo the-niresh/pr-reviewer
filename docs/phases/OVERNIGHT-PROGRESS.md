@@ -59,3 +59,24 @@
 - Commit: none
 - Decisions: none
 - Blocked: -
+
+## Task 20 - ✅ done  2026-09-01T05:46:58+05:30
+- RED: 13 failed, 2 passed, failing for: missing regression_gate, feedback_candidates, write_eval_report, EVALS.md
+- GREEN: 708 passed. ruff 0, mypy 0, boundary doc current, exemptions empty.
+- Commit: 0869afd feat: add eval regression gates, feedback candidates, and drift checks
+- Decisions: high-value recall is recall_per_finding. useful_findings_per_dollar now raises BaselineBlocked when cost_usd <= 0 and divides useful_finding_count. CLAUDE-IN FIX applied in this commit. One dispute never rewrites prompts, policy, labels, or routing.
+- Blocked: real baseline numbers. Public holdout is empty. Gates are tested with synthetic EvalRun objects.
+
+## Task P1 after 20 - ✅ done  2026-09-01T05:46:58+05:30
+- RED: n/a
+- GREEN: Phase 13 mapped tasks 19 and 20 are now implemented. Document written.
+- Commit: see Phase 13
+- Decisions: none
+- Blocked: -
+
+## Phase 13 - ⚠️ partial  2026-09-01T05:46:58+05:30
+- RED: n/a
+- GREEN: proof command printed specialists_enabled False, langgraph_engine_enabled False, then `BaselineBlocked: holdout is empty; refusing to report a specialist comparison`
+- Commit: docs: add phase 13 write-up with verified proof gate
+- Decisions: quoted the refusal. No specialist quality number invented.
+- Blocked: frozen holdout does not exist
