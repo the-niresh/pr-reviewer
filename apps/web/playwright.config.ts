@@ -3,6 +3,7 @@ import { defineConfig, devices } from "@playwright/test";
 
 const repoRoot = path.join(__dirname, "../..");
 const localApi = process.env.NEXT_PUBLIC_LOCAL_API_ORIGIN ?? "http://127.0.0.1:8741";
+const dashboardApi = process.env.NEXT_PUBLIC_DASHBOARD_API_ORIGIN ?? "http://127.0.0.1:8742";
 
 export default defineConfig({
   testDir: "./tests",
@@ -25,6 +26,13 @@ export default defineConfig({
         "uv run reviewer start --host 127.0.0.1 --port 8741 --hosted-origin https://control.example.test",
       cwd: repoRoot,
       url: `${localApi}/onboarding/mode`,
+      reuseExistingServer: !process.env.CI,
+      timeout: 120_000,
+    },
+    {
+      command: "uv run python apps/web/tests/dashboard_api_server.py",
+      cwd: repoRoot,
+      url: `${dashboardApi}/dashboard/health`,
       reuseExistingServer: !process.env.CI,
       timeout: 120_000,
     },

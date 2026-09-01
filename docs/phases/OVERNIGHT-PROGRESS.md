@@ -101,3 +101,17 @@
 - Commit: docs: add phase 5 write-up with verified proof gate
 - Decisions: none
 - Blocked: -
+
+## Task 22 - ✅ done  2026-09-01T06:13:00+05:30
+- RED: 1 failed, 12 did not run (serial). `/dashboard` never called the Task 21 API.
+- GREEN: Playwright 17 passed (13 dashboard + 4 onboarding). `bun run build` exit 0. pytest 730 passed. ruff 0, mypy 0, boundary doc current, exemptions empty.
+- Commit: feat: add review dashboard with playwright coverage
+- Decisions: Seeded Task 21 API on 127.0.0.1:8742 for Playwright. Dashboard I/O stays fetch-only against injected Task 21 routes. Mutation tests run last and serial.
+- Blocked: -
+
+## Task P1 after 22 - ✅ done  2026-09-01T06:13:00+05:30
+- RED: n/a
+- GREEN: No newly unlocked phase. Phase 11 still needs 24 and runtime 10. Phase 17 still needs 25.
+- Commit: none
+- Decisions: none
+- Blocked: -

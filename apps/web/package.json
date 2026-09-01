@@ -5,7 +5,8 @@
     "dev": "next dev --hostname 127.0.0.1 --port 3000",
     "build": "next build",
     "start": "next start --hostname 127.0.0.1 --port 3000",
-    "test:e2e": "playwright test"
+    "test:e2e": "playwright test",
+    "test:dashboard": "playwright test tests/dashboard.spec.ts"
   },
   "dependencies": {
     "next": "^15.5.2",
