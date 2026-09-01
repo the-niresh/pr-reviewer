@@ -114,6 +114,7 @@ uv run pr-reviewer-worker
 
 Installer and doctor: `docs/INSTALL.md`. Architecture: `docs/ARCHITECTURE.md`.
 Security: `docs/SECURITY.md`. Demo: `docs/DEMO.md`. Eval commands: `docs/EVALS.md`.
+Failed experiments: `docs/FAILED_EXPERIMENTS.md`.
 
 ## Known limits
 
