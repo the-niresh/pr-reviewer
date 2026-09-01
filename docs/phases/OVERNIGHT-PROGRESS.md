@@ -158,7 +158,6 @@
 - Decisions: Updated the existing design-gate file. Did not invent a new phase. No newly unlocked complete phase after Task 25.
 - Blocked: runtime Task 10. Hosted end-to-end at reviewer.niresh.tech is not live.
 - Skipped:
-  - Phase 7: master 9 ⚠️, 24 ⬜, 26 ⬜
   - Phase 15: master 24 ⬜, 26 ⬜
   - Phase 16: master 24 ⬜, 26 ⬜
   - Phase 18: master 26 ⬜
@@ -206,3 +205,10 @@
 - Commit: docs: add phase 11 write-up with verified proof gate
 - Decisions: HITL routing is this gate. Task 24 and runtime Task 10 are not. Quoted 27 passed. Phase 7 stays skipped because the holdout is empty.
 - Blocked: -
+
+## Phase 7 - ⚠️ partial  2026-09-01T07:18:00+05:30
+- RED: n/a, docs only
+- GREEN: Harness tests `23 passed, 1 warning in 1.31s`. Holdout command raised `BaselineBlocked: holdout is empty; refusing to report a baseline`. CLAUDE-IN 2026-09-01T06:26:00+05:30 FIX already on HEAD.
+- Commit: docs: add phase 7 write-up with verified proof gate
+- Decisions: Quoted the refusal. No precision, recall, latency, or cost invented. Task 9 still ⚠️.
+- Blocked: frozen holdout does not exist
