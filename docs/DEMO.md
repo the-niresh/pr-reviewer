@@ -60,6 +60,20 @@ The dashboard has no webhook route
 (`tests/test_dashboard_auth.py::test_dashboard_exposes_no_webhook_route`).
 GitHub never posts to the user's machine.
 
+## Local webhook to human decision - ✅ local
+
+One test drives the hops that do not need DNS:
+
+```bash
+flock -w 3600 /tmp/pr-reviewer-pytest.lock uv run pytest -q tests/test_local_webhook_to_human_path.py
+```
+
+It asserts: a signed webhook creates one installation-scoped job, a paired
+runner claims it over `/api/runner/jobs/claim`, analysis-only forces human
+approval, the gate holds the finding so mock GitHub stays empty, a human
+`allow_public_post` posts once, and a newer head SHA supersedes the job so a
+stale post does not fire. Runtime Task 10 is still not done.
+
 ## Hosted worker claiming a real job - ❌ needs deployment
 
 A production webhook URL at `https://reviewer.niresh.tech/api/github/webhook`
