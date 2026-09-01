@@ -1,4 +1,4 @@
-# Phase 2 - ✅ Security and Trust Boundaries (design gate)
+# Phase 2 - ⚠️ Security and Trust Boundaries
 
 | Mark | Means |
 |---|---|
@@ -8,12 +8,9 @@
 | ❓ | Open decision, waiting on me |
 | ⚠️ | Known trap. Read before writing the code |
 
-**Status - ✅ DESIGN GATE APPROVED 2026-08-27.** Phases 0 and 1 are approved. Implementation is
-unblocked. The test gate remains open until the end of the build.
-
-⚠️ **This is the design gate only.** Phase 2's full proof gate needs failing-then-passing tests from
-tasks as late as 25, so it cannot close now. Approving this file unblocks implementation. The **test
-gate** closes at the end of the build. Both are listed at the bottom.
+**Status - ⚠️ TEST GATE PARTIAL 2026-09-01.** Design gate approved 2026-08-27. The unit proof
+gate listed below was reproduced on this checkout. Product-runtime Task 10 is still ⬜, so
+the hosted end-to-end half of this phase stays open.
 
 ## 1 - ✅ Assets, ranked by what a breach costs
 
@@ -190,13 +187,61 @@ each control above, and full mode is unavailable until every check passes.
 attacker in section 2 has at least one boundary that stops them, and no secret in section 7 crosses a
 boundary Phase 1 did not declare.
 
-## Test gate - ⬜ deferred
+## Test gate - ⚠️ partial, unit suite reproduced
 
-⬜ Closes at the end of the build, when these all have failing-then-passing tests: HMAC before parsing,
-delivery dedupe, tenant isolation across installations, secret canaries, token expiry and scope,
-runner revocation, unsafe finding routing, injection cannot set a gated field, and host-execution
-denial when Docker is missing. Master Tasks 3, 6 through 8, 10, 10B, 13 through 15, 17, 18, 23, 25 and
-runtime Tasks 1, 1A, 2 through 6, 8 through 10.
+The proof gate is: HMAC, tenant isolation, repository scope, secret canaries, token expiry,
+runner revocation, unsafe finding routing, and host-execution denial all have
+failing-then-passing tests.
+
+Command, run 2026-09-01 against this checkout:
+
+```text
+$ flock -w 3600 /tmp/pr-reviewer-pytest.lock uv run pytest -q tests/test_github_signature.py tests/test_webhook.py tests/test_control_plane_identity.py tests/test_prompt_boundaries.py tests/test_token_broker.py tests/test_runner_offline.py tests/test_notification_policy.py tests/test_docker_sandbox.py tests/test_doctor_docker.py tests/test_dashboard_auth.py
+........................................................................ [ 60%]
+...............................................                          [100%]
+119 passed, 1 warning in 38.27s
+```
+
+What that suite proves, with the code it cites:
+
+- HMAC before parse: `verify_github_signature` (`github/verify_signature.py:11`) runs in
+  `github_webhook` (`control_plane/app.py:53`) before `request.json()`.
+- Delivery dedupe: a replayed `X-GitHub-Delivery` hits `on conflict do nothing` and returns
+  `duplicate` (`jobs/enqueue_review_job.py:38`).
+- Tenant isolation: `authorize_repository` (`control_plane/repository_policy.py:150`) scopes
+  the repository lookup by `installation_id` and `github_repository_id` together. A denial
+  reason is part of the tenancy boundary. Covered by
+  `test_cross_installation_access_is_denied_for_a_repository_registered_elsewhere`.
+- Secret canaries: untrusted markers live only in `security/prompt_boundaries.py`.
+  `wrap_untrusted` (`security/prompt_boundaries.py:34`) is the only string exit from
+  `UntrustedText`. Connector audit still matches a short canary such as `gho_leaked`
+  (`connectors/audit.py:20`).
+- Token expiry and scope: `issue_job_token` (`control_plane/token_broker.py:49`) reuses
+  `invalid_or_expired` for a wrong, expired, superseded, or finished lease, then
+  re-checks `authorize_repository`. Tokens are contents-read and pull_requests-read only
+  (`control_plane/token_broker.py:38`).
+- Runner revocation: `test_runner_revocation_is_a_timestamp_not_a_delete` and
+  `test_revoked_runner_fails_authorization`. The daemon treats `revoked_runner` as a stop
+  (`runner/daemon.py:127`).
+- Unsafe finding routing: `route_finding` (`notifications/gate.py:36`) is system-owned.
+  Critical and high security findings stay private.
+- Injection cannot set a gated field: `UntrustedText.__str__` raises
+  (`security/prompt_boundaries.py:18`). Prompt assembly must call `wrap_untrusted`.
+- Host-execution denial: missing or unready Docker returns inconclusive and routes to a
+  person (`verification/docker_sandbox.py:110`). `SandboxSpec` has no shell-string field
+  (`containers/runtime.py:11`).
+- Dashboard deny-by-default: `create_dashboard_app` passes `docs_url=None`,
+  `redoc_url=None`, `openapi_url=None` (`web/dashboard_api.py:69`). The guard is
+  `if not public and not session_is_valid(...)` (`web/dashboard_api.py:98`). An
+  unauthenticated loopback GET of `/openapi.json` or `/missing` is not 200.
+
+⚠️ Still open: product-runtime Task 10. That is the hosted end-to-end proof at
+`https://reviewer.niresh.tech`. The subdomain is not live tonight. This file does not
+claim that half.
+
+Master Tasks 3, 6 through 8, 10, 10B, 13 through 15, 17, 18, 23, and 25, and
+runtime Tasks 1, 1A, 2 through 6, 8, and 9 are treated as implemented at HEAD. Runtime
+Task 10 stays ⬜.
 
 ## Settled - ✅
 
@@ -213,4 +258,5 @@ already approved, not new calls, so they are applied rather than asked:
 
 ## Open Decisions - ❓
 
-- ❓ None. The remaining Phase 2 work is the deferred test gate above, which is task work, not a decision.
+- ❓ None for the unit proof. Runtime Task 10 remains the hosted end-to-end half and is
+  morning work, not a design choice.

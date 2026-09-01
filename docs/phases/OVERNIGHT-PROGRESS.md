@@ -150,3 +150,23 @@
 - Commit: docs: add phase 17 write-up with verified proof gate
 - Decisions: quoted the Playwright count. No quality number invented.
 - Blocked: -
+
+## Phase 2 test gate - ⚠️ partial  2026-09-01T06:41:39+05:30
+- RED: n/a, docs only
+- GREEN: Phase 2 proof suite `119 passed, 1 warning in 38.27s`. Full suite 747 passed. ruff 0, mypy 0, boundary doc current, exemptions empty. CLAUDE-IN 2026-09-01T06:26:00+05:30 FIX already on HEAD (`web/dashboard_api.py:69` and `:98`).
+- Commit: docs: add phase 2 write-up with verified proof gate
+- Decisions: Updated the existing design-gate file. Did not invent a new phase. No newly unlocked complete phase after Task 25.
+- Blocked: runtime Task 10. Hosted end-to-end at reviewer.niresh.tech is not live.
+- Skipped:
+  - Phase 3: master 24 ⬜, runtime 10 ⬜
+  - Phase 4: master 9 ⚠️, runtime 10 ⬜
+  - Phase 6: master 26 ⬜, runtime 10 ⬜
+  - Phase 7: master 9 ⚠️, 24 ⬜, 26 ⬜
+  - Phase 10: runtime 10 ⬜
+  - Phase 11: master 24 ⬜, runtime 10 ⬜
+  - Phase 14: runtime 10 ⬜
+  - Phase 15: master 24 ⬜, 26 ⬜
+  - Phase 16: master 24 ⬜, 26 ⬜
+  - Phase 18: master 26 ⬜
+  - Phase 19: master 24 ⬜, 26 ⬜, runtime 10 ⬜
+  - Phase 20: master 9 ⚠️, 24 ⬜, 26 ⬜
