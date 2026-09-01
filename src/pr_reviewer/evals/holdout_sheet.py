@@ -9,13 +9,22 @@ from __future__ import annotations
 import argparse
 import json
 import sys
+from collections.abc import Sequence
 from dataclasses import dataclass
 from datetime import date
 from pathlib import Path
-from typing import TextIO
+from typing import TextIO, get_args
 
 from pr_reviewer.evals.mine_candidates import estimate_diff_tokens, mine_eval_candidates
-from pr_reviewer.evals.types import EvalCase, EvalLabel, EvalSplit, assign_time_split
+from pr_reviewer.evals.types import (
+    Concern,
+    EvalCase,
+    EvalLabel,
+    EvalSplit,
+    assign_time_split,
+)
+
+CONCERN_CHOICES: tuple[str, ...] = get_args(Concern)
 
 
 class HoldoutUnjudged(Exception):
@@ -165,26 +174,182 @@ def _show_diff(diff: str, *, stdin: TextIO, stdout: TextIO) -> None:
                 return
 
 
-def _prompt_labels(stdin: TextIO, stdout: TextIO) -> list[dict[str, object]] | None:
+def _pick_numbered(raw: str, options: Sequence[str]) -> str | None:
+    try:
+        index = int(raw.strip())
+    except ValueError:
+        return None
+    if index < 1 or index > len(options):
+        return None
+    return options[index - 1]
+
+
+def _parse_line_range(raw: str) -> tuple[int, int] | None:
+    text = raw.strip()
+    if not text:
+        return None
+    if "-" in text:
+        left, _sep, right = text.partition("-")
+        if not right or "-" in right:
+            return None
+        try:
+            start = int(left.strip())
+            end = int(right.strip())
+        except ValueError:
+            return None
+    else:
+        try:
+            start = end = int(text)
+        except ValueError:
+            return None
+    if start < 1 or end < start:
+        return None
+    return start, end
+
+
+def _parse_json_labels(raw: str) -> list[dict[str, object]] | None:
+    try:
+        parsed = json.loads(raw)
+    except json.JSONDecodeError:
+        return None
+    if not isinstance(parsed, list) or not parsed:
+        return None
+    try:
+        labels = [EvalLabel.model_validate(item) for item in parsed]
+    except Exception:
+        return None
+    return [label.model_dump() for label in labels]
+
+
+def _prompt_concern(
+    stdin: TextIO, stdout: TextIO, *, allow_json: bool
+) -> str | list[dict[str, object]] | None:
     while True:
-        stdout.write("labels json (array of EvalLabel, empty rejected):\n")
+        stdout.write("concern (1-5, or a labels JSON array starting with [):\n")
+        for index, name in enumerate(CONCERN_CHOICES, start=1):
+            stdout.write(f"{index}. {name}\n")
         stdout.flush()
         raw = _read_line(stdin)
         if raw is None:
             return None
-        if raw.strip() == "":
+        stripped = raw.strip()
+        if allow_json and stripped.startswith("["):
+            parsed = _parse_json_labels(stripped)
+            if parsed is None:
+                continue
+            return parsed
+        picked = _pick_numbered(stripped, CONCERN_CHOICES)
+        if picked is None:
             continue
-        try:
-            parsed = json.loads(raw)
-        except json.JSONDecodeError:
+        return picked
+
+
+def _prompt_category(stdin: TextIO, stdout: TextIO) -> str | None:
+    while True:
+        stdout.write("category:\n")
+        stdout.flush()
+        raw = _read_line(stdin)
+        if raw is None:
+            return None
+        value = raw.strip()
+        if value:
+            return value
+
+
+def _prompt_file_path(
+    stdin: TextIO, stdout: TextIO, *, files: Sequence[str]
+) -> str | None:
+    paths = tuple(path for path in files if path.strip())
+    while True:
+        stdout.write("file:\n")
+        for index, path in enumerate(paths, start=1):
+            stdout.write(f"{index}. {path}\n")
+        stdout.flush()
+        raw = _read_line(stdin)
+        if raw is None:
+            return None
+        if not paths:
             continue
-        if not isinstance(parsed, list) or not parsed:
+        picked = _pick_numbered(raw.strip(), paths)
+        if picked is None:
             continue
-        try:
-            labels = [EvalLabel.model_validate(item) for item in parsed]
-        except Exception:
+        return picked
+
+
+def _prompt_line_range(stdin: TextIO, stdout: TextIO) -> tuple[int, int] | None:
+    while True:
+        stdout.write("line (14 or 14-20):\n")
+        stdout.flush()
+        raw = _read_line(stdin)
+        if raw is None:
+            return None
+        parsed = _parse_line_range(raw)
+        if parsed is None:
             continue
-        return [label.model_dump() for label in labels]
+        return parsed
+
+
+def _prompt_one_label(
+    stdin: TextIO,
+    stdout: TextIO,
+    *,
+    files: Sequence[str],
+    allow_json: bool,
+) -> dict[str, object] | list[dict[str, object]] | None:
+    concern = _prompt_concern(stdin, stdout, allow_json=allow_json)
+    if concern is None:
+        return None
+    if isinstance(concern, list):
+        return concern
+    category = _prompt_category(stdin, stdout)
+    if category is None:
+        return None
+    file_path = _prompt_file_path(stdin, stdout, files=files)
+    if file_path is None:
+        return None
+    lines = _prompt_line_range(stdin, stdout)
+    if lines is None:
+        return None
+    label = EvalLabel(
+        concern=concern,  # type: ignore[arg-type]
+        category=category,
+        file_path=file_path,
+        line_start=lines[0],
+        line_end=lines[1],
+    )
+    return label.model_dump()
+
+
+def _prompt_add_another(stdin: TextIO, stdout: TextIO) -> bool | None:
+    while True:
+        stdout.write("add another label? (y/n):\n")
+        stdout.flush()
+        raw = _read_line(stdin)
+        if raw is None:
+            return None
+        token = raw.strip().lower()
+        if token in {"y", "yes"}:
+            return True
+        if token in {"n", "no"}:
+            return False
+
+
+def _prompt_labels(
+    stdin: TextIO, stdout: TextIO, *, files: Sequence[str]
+) -> list[dict[str, object]] | None:
+    labels: list[dict[str, object]] = []
+    while True:
+        one = _prompt_one_label(stdin, stdout, files=files, allow_json=not labels)
+        if one is None:
+            return None
+        if isinstance(one, list):
+            return one
+        labels.append(one)
+        add_another = _prompt_add_another(stdin, stdout)
+        if add_another is None:
+            return None
+        if not add_another:
+            return labels
 
 
 def _prompt_split(stdin: TextIO, stdout: TextIO) -> EvalSplit | None:
@@ -267,7 +432,13 @@ def review_sheet(
             index += 1
             continue
         if token in {"i", "include"}:
-            labels = _prompt_labels(stdin, stdout)
+            files_raw = row.get("files") or []
+            file_paths = (
+                tuple(str(path) for path in files_raw)
+                if isinstance(files_raw, list | tuple)
+                else ()
+            )
+            labels = _prompt_labels(stdin, stdout, files=file_paths)
             if labels is None:
                 return 0
             if split_after is not None:
