@@ -82,12 +82,15 @@ class LiveInstallationAssertion(BaseModel):
     This is the outcome of one /user/installations call, not the OAuth token used to make it.
     github_user_id and the installation/repository map are data the user already sees on the
     dashboard. expires_at is the assertion's own expiry: HMAC authenticity is not a substitute
-    for freshness.
+    for freshness. login is the GitHub username from the same sign-in response; it is optional
+    (defaults to None) purely so a cookie issued before this field existed still decodes -- a
+    fresh sign-in always sets it.
     """
 
     model_config = ConfigDict(frozen=True)
 
     github_user_id: int
+    login: str | None = None
     installations: dict[int, dict[int, str]]
     expires_at: int
 

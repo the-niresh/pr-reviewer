@@ -13,6 +13,8 @@ import type { ReactNode } from "react";
 const NAV = [
   { href: "/dashboard", label: "Dashboard" },
   { href: "/dashboard/reviews", label: "Reviews" },
+  { href: "/dashboard/profile", label: "Profile" },
+  { href: "/dashboard/settings", label: "Settings" },
 ] as const;
 
 export function DashboardShell({ children }: { children: ReactNode }) {

@@ -182,6 +182,7 @@ def capture_live_assertion(
         }
     return LiveInstallationAssertion(
         github_user_id=user.github_user_id,
+        login=user.login,
         installations=installations,
         expires_at=int(time.time()) + STATE_TTL_SECONDS,
     )
@@ -256,6 +257,7 @@ def issue_live_sign_in(assertion: LiveInstallationAssertion) -> str:
     """
     payload = {
         "github_user_id": assertion.github_user_id,
+        "login": assertion.login,
         "installations": {
             str(installation_id): {str(repo_id): name for repo_id, name in repos.items()}
             for installation_id, repos in assertion.installations.items()
@@ -278,6 +280,10 @@ def read_live_sign_in(cookie: str) -> LiveInstallationAssertion | None:
         payload = json.loads(_b64decode(raw).decode("utf-8"))
         expires_at = int(payload["expires_at"])
         github_user_id = int(payload["github_user_id"])
+        # .get, not [...]: a cookie issued before this field existed has no "login" key at
+        # all, and that must decode to None rather than fail closed on every existing session.
+        login_value = payload.get("login")
+        login = str(login_value) if login_value is not None else None
         installations = _installations_from_payload(payload["installations"])
     except (ValueError, KeyError, TypeError, json.JSONDecodeError):
         return None
@@ -285,6 +291,7 @@ def read_live_sign_in(cookie: str) -> LiveInstallationAssertion | None:
         return None
     return LiveInstallationAssertion(
         github_user_id=github_user_id,
+        login=login,
         installations=installations,
         expires_at=expires_at,
     )
