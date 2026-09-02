@@ -10,7 +10,6 @@ import pytest
 from pr_reviewer.contracts.finding import Finding
 from pr_reviewer.control_plane.github_auth import LiveInstallationAssertion
 from pr_reviewer.control_plane.review_projection import (
-    AgentReasoningEntry,
     ReceiptContextSourceInput,
     ReceiptInput,
     project_review,
@@ -114,24 +113,6 @@ def test_project_review_writes_a_finding_row() -> None:
     assert row["status"] == "posted"
 
 
-def test_project_review_writes_agent_reasoning_rows() -> None:
-    review_job_id = _create_review_job()
-    entry = AgentReasoningEntry(
-        review_job_id=review_job_id,
-        concern="security",
-        reasoning="Checked for injected shell metacharacters in the new subprocess call.",
-    )
-
-    project_review(review_job_id, [], [entry])
-
-    with connection() as conn:
-        rows = conn.execute(
-            "select concern, reasoning from agent_reasoning where review_job_id = %s",
-            (review_job_id,),
-        ).fetchall()
-    assert [dict(row) for row in rows] == [{"concern": "security", "reasoning": entry.reasoning}]
-
-
 def test_project_review_never_writes_the_evidence_field() -> None:
     review_job_id = _create_review_job()
     finding = _finding(review_job_id)
@@ -159,10 +140,7 @@ def test_reviews_for_repository_returns_data_for_a_granted_repository() -> None:
     github_repository_id = _random_id()
     review_job_id = _create_review_job_for_repo(installation_id, github_repository_id)
     finding = _finding(review_job_id)
-    reasoning = AgentReasoningEntry(
-        review_job_id=review_job_id, concern="security", reasoning="Checked the new query."
-    )
-    project_review(review_job_id, [finding], [reasoning])
+    project_review(review_job_id, [finding])
 
     assertion = LiveInstallationAssertion(
         github_user_id=1,
@@ -178,7 +156,6 @@ def test_reviews_for_repository_returns_data_for_a_granted_repository() -> None:
     assert review.review_job_id == review_job_id
     assert review.pull_request_number == 7
     assert review.findings[0].title == finding.title
-    assert review.reasoning[0].reasoning == reasoning.reasoning
 
 
 def test_reviews_for_repository_is_none_when_the_repository_is_not_granted() -> None:

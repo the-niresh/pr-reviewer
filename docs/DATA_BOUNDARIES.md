@@ -24,8 +24,6 @@ must stay that way -- see Exemptions below.
 |---|---|---|
 | `agent_events` | `event_type` | Lifecycle event name from a fixed, code-controlled set (e.g. review_job_failed, model_call.recorded), never derived from repository or review content. |
 | `agent_events` | `payload` | Redacted lifecycle event detail only: identifiers, enums, and aggregate token/cost numbers. agent_events_payload_is_flat (migration 202608291930_rescope_hosted_events.sql) rejects a nested object or array at the database layer, and record_event.serialize_json_object rejects one at the application layer, so this column cannot hold a findings list, a diff, or a sandbox log. |
-| `agent_reasoning` | `concern` | Fixed enum, the same closed set as review_findings.concern, enforced by a check constraint. |
-| `agent_reasoning` | `reasoning` | Per-agent reasoning text, explicitly allowed by requirements.md's 'What reaches the server' list. No writer exists yet -- Phase 26's local persistence and review_projection.py land after this migration -- so this entry states the column type is allowed, not that a real writer has been proved safe yet. |
 | `connector_circuits` | `connector` | Connector name from a fixed set (e.g. github), an operational identifier, not review content. |
 | `connector_circuits` | `last_error_kind` | Closed-set error class name for the last failure that opened the circuit, never a stack trace or response body. |
 | `connector_circuits` | `state` | Fixed enum ('closed', 'open', 'half_open'), the circuit breaker state. Unknown reads are treated as open in application code. |

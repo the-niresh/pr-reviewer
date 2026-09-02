@@ -22,13 +22,6 @@ from pr_reviewer.db.client import Row, connection
 
 
 @dataclass(frozen=True)
-class AgentReasoningEntry:
-    review_job_id: str
-    concern: Concern
-    reasoning: str
-
-
-@dataclass(frozen=True)
 class ReceiptContextSourceInput:
     kind: Literal["diff", "retrieval", "profile", "graph"]
     name: str
@@ -60,19 +53,12 @@ class ReceiptInput:
 def project_review(
     review_job_id: str,
     findings: Sequence[Finding],
-    reasoning_entries: Sequence[AgentReasoningEntry] = (),
     receipts: Sequence[ReceiptInput] = (),
 ) -> None:
     for finding in findings:
         if finding.review_job_id != review_job_id:
             raise ValueError(
                 f"finding {finding.id} belongs to review_job_id {finding.review_job_id}, "
-                f"not {review_job_id}"
-            )
-    for entry in reasoning_entries:
-        if entry.review_job_id != review_job_id:
-            raise ValueError(
-                f"reasoning entry belongs to review_job_id {entry.review_job_id}, "
                 f"not {review_job_id}"
             )
     for validated_receipt in receipts:
@@ -163,14 +149,6 @@ def project_review(
                         (finding.id, source.kind, source.name, source.reference),
                     )
 
-        for entry in reasoning_entries:
-            conn.execute(
-                """
-                insert into agent_reasoning (review_job_id, concern, reasoning)
-                values (%s, %s, %s)
-                """,
-                (entry.review_job_id, entry.concern, entry.reasoning),
-            )
 
 
 class ReceiptContextSourceSummary(BaseModel):
@@ -221,13 +199,6 @@ class ReviewFindingSummary(BaseModel):
     receipt: FindingReceiptSummary | None
 
 
-class AgentReasoningSummary(BaseModel):
-    model_config = ConfigDict(frozen=True, extra="forbid")
-
-    concern: Concern
-    reasoning: str
-
-
 class ReviewSummary(BaseModel):
     model_config = ConfigDict(frozen=True, extra="forbid")
 
@@ -236,7 +207,6 @@ class ReviewSummary(BaseModel):
     head_sha: str | None
     status: str
     findings: list[ReviewFindingSummary]
-    reasoning: list[AgentReasoningSummary]
 
 
 def _finding_summary(conn: Connection[Row], row: Row) -> ReviewFindingSummary:
@@ -324,14 +294,6 @@ def reviews_for_repository(
                 """,
                 (review_job_id,),
             ).fetchall()
-            reasoning_rows = conn.execute(
-                """
-                select concern, reasoning from agent_reasoning
-                where review_job_id = %s
-                order by created_at
-                """,
-                (review_job_id,),
-            ).fetchall()
             findings = [_finding_summary(conn, row) for row in finding_rows]
             summaries.append(
                 ReviewSummary(
@@ -340,7 +302,6 @@ def reviews_for_repository(
                     head_sha=job_row["head_sha"],
                     status=str(job_row["status"]),
                     findings=findings,
-                    reasoning=[AgentReasoningSummary(**dict(row)) for row in reasoning_rows],
                 )
             )
     return summaries

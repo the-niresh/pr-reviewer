@@ -10,7 +10,7 @@ from pr_reviewer.contracts.finding import Finding
 from pr_reviewer.control_plane.app import app
 from pr_reviewer.control_plane.github_auth import LiveInstallationAssertion
 from pr_reviewer.control_plane.github_oauth import LIVE_SIGN_IN_COOKIE_NAME, issue_live_sign_in
-from pr_reviewer.control_plane.review_projection import AgentReasoningEntry, project_review
+from pr_reviewer.control_plane.review_projection import project_review
 from pr_reviewer.db.client import connection
 
 
@@ -76,7 +76,7 @@ def test_signed_in_with_no_installations_returns_an_empty_list() -> None:
     assert response.json() == {"repositories": []}
 
 
-def test_signed_in_viewer_sees_their_own_repositorys_findings_and_reasoning() -> None:
+def test_signed_in_viewer_sees_their_own_repositorys_findings() -> None:
     installation_id = _create_installation()
     github_repository_id = _random_id()
     review_job_id = _create_review_job_for_repo(installation_id, github_repository_id)
@@ -98,10 +98,7 @@ def test_signed_in_viewer_sees_their_own_repositorys_findings_and_reasoning() ->
         public_safe=True,
         status="posted",
     )
-    reasoning = AgentReasoningEntry(
-        review_job_id=review_job_id, concern="security", reasoning="Traced the input to argv."
-    )
-    project_review(review_job_id, [finding], [reasoning])
+    project_review(review_job_id, [finding])
 
     cookie = _signed_in_cookie({installation_id: {github_repository_id: "octocat/widget"}})
     response = _client(cookie).get("/api/reviews")
@@ -115,7 +112,6 @@ def test_signed_in_viewer_sees_their_own_repositorys_findings_and_reasoning() ->
     review = repo["reviews"][0]
     assert review["pull_request_number"] == 3
     assert review["findings"][0]["title"] == "Unsanitized shell call"
-    assert review["reasoning"][0]["reasoning"] == reasoning.reasoning
     assert "evidence" not in review["findings"][0]
 
 

@@ -259,16 +259,6 @@ ALLOWLIST: dict[tuple[str, str], str] = {
         "A pointer into a context source (e.g. a chunk id or graph node id), an identifier, "
         "never the chunk's own text or the diff itself."
     ),
-    ("agent_reasoning", "concern"): (
-        "Fixed enum, the same closed set as review_findings.concern, enforced by a check "
-        "constraint."
-    ),
-    ("agent_reasoning", "reasoning"): (
-        "Per-agent reasoning text, explicitly allowed by requirements.md's 'What reaches the "
-        "server' list. No writer exists yet -- Phase 26's local persistence and "
-        "review_projection.py land after this migration -- so this entry states the column type "
-        "is allowed, not that a real writer has been proved safe yet."
-    ),
 }
 
 

@@ -11,7 +11,7 @@ import pytest
 from pr_reviewer.control_plane.boundary import HostedSchemaViolation, assert_no_private_columns
 from pr_reviewer.db.client import connection
 
-WIDENED_TABLES = ("review_findings", "agent_reasoning")
+WIDENED_TABLES = ("review_findings",)
 FORBIDDEN_COLUMN_NAME_FRAGMENTS = ("diff", "patch", "hunk", "source", "sandbox_log", "embedding")
 
 
@@ -48,15 +48,15 @@ def test_adding_a_diff_column_to_review_findings_is_still_rejected() -> None:
             conn.commit()
 
 
-def test_adding_a_source_column_to_agent_reasoning_is_still_rejected() -> None:
+def test_adding_a_source_column_to_review_findings_is_still_rejected() -> None:
     with connection() as conn:
-        conn.execute("alter table agent_reasoning add column source_snippet text")
+        conn.execute("alter table review_findings add column source_snippet text")
         conn.commit()
         try:
             with pytest.raises(HostedSchemaViolation):
                 assert_no_private_columns(conn)
         finally:
-            conn.execute("alter table agent_reasoning drop column source_snippet")
+            conn.execute("alter table review_findings drop column source_snippet")
             conn.commit()
 
 
