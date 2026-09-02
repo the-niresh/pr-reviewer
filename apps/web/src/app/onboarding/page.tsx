@@ -1,7 +1,7 @@
 "use client";
 
-import { FormEvent, useEffect, useState } from "react";
-import { CheckCircle2, CircleAlert, ShieldCheck } from "lucide-react";
+import { useEffect, useState } from "react";
+import { CircleAlert, ShieldCheck } from "lucide-react";
 
 import { GithubMark } from "@/components/github-mark";
 
@@ -14,7 +14,6 @@ import {
   CardHeader,
   CardTitle,
 } from "@/components/ui/card";
-import { Input } from "@/components/ui/input";
 
 const LOCAL_API = process.env.NEXT_PUBLIC_LOCAL_API_ORIGIN ?? "http://127.0.0.1:8741";
 
@@ -36,9 +35,6 @@ const STEPS = [
 ] as const;
 
 export default function OnboardingPage() {
-  const [modelKey, setModelKey] = useState("");
-  const [saved, setSaved] = useState(false);
-  const [csrf, setCsrf] = useState("");
   const [mode, setMode] = useState<ModePayload | null>(null);
   const [modeError, setModeError] = useState(false);
 
@@ -55,10 +51,8 @@ export default function OnboardingPage() {
           throw new Error("onboarding API unavailable");
         }
         const payload = (await modeResponse.json()) as ModePayload;
-        const session = (await sessionResponse.json()) as { csrf_token: string };
         if (!cancelled) {
           setMode(payload);
-          setCsrf(session.csrf_token);
         }
       } catch {
         if (!cancelled) {
@@ -72,29 +66,6 @@ export default function OnboardingPage() {
       cancelled = true;
     };
   }, []);
-
-  async function onSave(event: FormEvent<HTMLFormElement>) {
-    event.preventDefault();
-    setSaved(false);
-    try {
-      const response = await fetch(`${LOCAL_API}/onboarding/model-key`, {
-        method: "POST",
-        credentials: "include",
-        headers: {
-          "Content-Type": "application/json",
-          "X-CSRF-Token": csrf,
-        },
-        body: JSON.stringify({ provider: "openai", key: modelKey }),
-      });
-      if (!response.ok) {
-        return;
-      }
-      setModelKey("");
-      setSaved(true);
-    } catch {
-      setSaved(false);
-    }
-  }
 
   const daemonUp = mode !== null;
 
@@ -145,39 +116,18 @@ export default function OnboardingPage() {
           <CardHeader>
             <CardTitle>Model key</CardTitle>
             <CardDescription>
-              Bring your own key. It is stored on this machine and never sent to the
-              hosted control plane.
+              Add your provider key in the TUI, not here. It is written to this
+              machine's keychain and never sent to this site, so there is nothing for
+              the web to collect.
             </CardDescription>
           </CardHeader>
           <CardContent>
-            <form onSubmit={onSave} className="flex flex-wrap items-end gap-3">
-              <div className="min-w-56 flex-1">
-                <label
-                  htmlFor="model-key"
-                  className="mb-1.5 block text-sm font-medium"
-                >
-                  API key
-                </label>
-                <Input
-                  id="model-key"
-                  name="model-key"
-                  type="password"
-                  autoComplete="off"
-                  placeholder="sk-..."
-                  value={modelKey}
-                  onChange={(event) => setModelKey(event.target.value)}
-                />
-              </div>
-              <Button type="submit" disabled={!csrf}>
-                Save
-              </Button>
-            </form>
-            {saved ? (
-              <p className="text-primary mt-3 inline-flex items-center gap-1.5 text-sm">
-                <CheckCircle2 aria-hidden="true" />
-                API key saved
-              </p>
-            ) : null}
+            <p className="bg-muted/50 rounded-md px-3 py-2 font-mono text-xs">
+              reviewer
+            </p>
+            <p className="text-muted-foreground mt-2 text-sm">
+              Open the TUI and go to profile.
+            </p>
           </CardContent>
         </Card>
 
