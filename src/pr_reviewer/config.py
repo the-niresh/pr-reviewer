@@ -33,6 +33,11 @@ class Settings:
     github_oauth_client_secret: str
     github_app_id: str
     github_app_private_key: str
+    # Where this control plane is reachable from the public internet. Behind a TLS
+    # terminating proxy request.base_url reports http, so anything that must hand an
+    # absolute URL to GitHub reads this instead. Defaults empty so a caller that needs
+    # it fails loudly rather than emitting a relative or http URL.
+    hosted_origin: str = ""
 
 
 def get_settings() -> Settings:
@@ -46,6 +51,7 @@ def get_settings() -> Settings:
         github_oauth_client_secret=os.environ.get("GITHUB_OAUTH_CLIENT_SECRET", ""),
         github_app_id=os.environ.get("GITHUB_APP_ID", ""),
         github_app_private_key=os.environ.get("GITHUB_APP_PRIVATE_KEY", ""),
+        hosted_origin=os.environ.get("PR_REVIEWER_HOSTED_ORIGIN", "").strip().rstrip("/"),
     )
 
 

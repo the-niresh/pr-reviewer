@@ -38,7 +38,15 @@ def begin_sign_in_route(return_to: str, request: Request) -> RedirectResponse:
     if isinstance(challenge, ReturnToRejected):
         raise HTTPException(status_code=400, detail=challenge.reason)
 
-    redirect_uri = str(request.base_url).rstrip("/") + CALLBACK_PATH
+    # request.base_url reports http behind Traefik, which terminates TLS and forwards
+    # plain HTTP, so GitHub would receive an http redirect_uri that does not match the
+    # App's https callback. The hosted origin is the authoritative answer, it is
+    # validated as https and non-loopback, and unlike a Host header it cannot be
+    # spoofed by the caller.
+    origin = get_settings().hosted_origin
+    if not origin.startswith("https://"):
+        raise HTTPException(status_code=500, detail="hosted_origin_not_configured")
+    redirect_uri = origin + CALLBACK_PATH
     query = urlencode(
         {
             "client_id": get_settings().github_oauth_client_id,
