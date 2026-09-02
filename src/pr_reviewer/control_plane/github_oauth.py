@@ -52,7 +52,7 @@ STATE_TTL_SECONDS = 600
 # means the value the callback later redirects to was never taken on anyone's word: an
 # unvalidated return_to on an OAuth callback is an open redirect, and an open redirect here is a
 # code-leak path. This list is expected to grow as real post-sign-in destinations are built.
-ALLOWED_RETURN_TO_PATHS = frozenset({"/dashboard"})
+ALLOWED_RETURN_TO_PATHS = frozenset({"/dashboard", "/dashboard/reviews"})
 LIVE_SIGN_IN_COOKIE_NAME = "gh_live_sign_in"
 
 

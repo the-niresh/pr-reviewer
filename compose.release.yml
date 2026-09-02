@@ -37,4 +37,5 @@ services:
     user: "65532:65532"
     environment:
       NEXT_PUBLIC_CONTROL_PLANE_ORIGIN: ${PR_REVIEWER_HOSTED_ORIGIN:?PR_REVIEWER_HOSTED_ORIGIN must be set}
+      NEXT_PUBLIC_GITHUB_APP_SLUG: ${GITHUB_APP_SLUG:?GITHUB_APP_SLUG must be set}
     stop_grace_period: 15s

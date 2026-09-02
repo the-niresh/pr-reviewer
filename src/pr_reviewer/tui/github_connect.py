@@ -5,7 +5,7 @@ from __future__ import annotations
 import os
 from urllib.parse import urlencode
 
-ALLOWED_RETURN_TO_PATHS = frozenset({"/dashboard"})
+ALLOWED_RETURN_TO_PATHS = frozenset({"/dashboard", "/dashboard/reviews"})
 GITHUB_APP_INSTALL_URL = "https://github.com/apps/{app_slug}/installations/new"
 GITHUB_SIGN_IN_PATH = "/api/auth/github/sign-in"
 
@@ -24,7 +24,9 @@ def normalize_hosted_origin(origin: str) -> str:
     return cleaned
 
 
-def build_github_sign_in_url(hosted_origin: str, *, return_to: str = "/dashboard") -> str:
+def build_github_sign_in_url(
+    hosted_origin: str, *, return_to: str = "/dashboard/reviews"
+) -> str:
     if return_to not in ALLOWED_RETURN_TO_PATHS:
         raise HostedOriginError(f"return_to {return_to!r} is not allowlisted")
     origin = normalize_hosted_origin(hosted_origin)
@@ -43,7 +45,7 @@ def build_github_connect_urls(
     hosted_origin: str,
     *,
     app_slug: str,
-    return_to: str = "/dashboard",
+    return_to: str = "/dashboard/reviews",
 ) -> tuple[str, str]:
     """Return (app_install_url, authorize_url) for the TUI connect step."""
 

@@ -11,6 +11,13 @@ type SessionState = {
   ready: boolean;
 };
 
+const NAV = [
+  { href: "/dashboard/reviews", label: "Reviews" },
+  { href: "/dashboard", label: "Approvals" },
+  { href: "/dashboard/evals", label: "Evals" },
+  { href: "/dashboard/connectors", label: "Connectors" },
+] as const;
+
 const SessionContext = createContext<SessionState>({ csrf: "", runnerId: "", ready: false });
 
 export function useDashboardSession(): SessionState {
@@ -49,13 +56,26 @@ export function DashboardShell({ children }: { children: ReactNode }) {
 
   return (
     <SessionContext.Provider value={{ csrf, runnerId, ready }}>
-      <header>
-        <p data-testid="dashboard-account">{runnerId}</p>
-        <nav>
-          <Link href="/dashboard">Approvals</Link>
-          <Link href="/dashboard/evals">Evals</Link>
-          <Link href="/dashboard/connectors">Connectors</Link>
-        </nav>
+      <header className="border-b">
+        <div className="mx-auto flex w-full max-w-4xl flex-wrap items-center gap-x-6 gap-y-2 px-6 py-3">
+          <nav aria-label="Dashboard" className="flex items-center gap-1">
+            {NAV.map((item) => (
+              <Link
+                key={item.href}
+                href={item.href}
+                className="text-muted-foreground hover:text-foreground hover:bg-secondary rounded-md px-3 py-1.5 text-sm transition-colors focus-visible:ring-[3px] focus-visible:ring-ring/50 focus-visible:outline-none"
+              >
+                {item.label}
+              </Link>
+            ))}
+          </nav>
+          <p
+            data-testid="dashboard-account"
+            className="text-muted-foreground ml-auto font-mono text-xs"
+          >
+            {runnerId}
+          </p>
+        </div>
       </header>
       {children}
     </SessionContext.Provider>

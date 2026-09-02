@@ -5,6 +5,14 @@ import { Badge } from "@/components/ui/badge";
 const CONTROL_PLANE_ORIGIN =
   process.env.NEXT_PUBLIC_CONTROL_PLANE_ORIGIN ?? "http://127.0.0.1:8000";
 
+// GitHub cannot show a repository to an App that is not installed on it, so an
+// installation is unavoidable. What is avoidable is making people find that out
+// themselves: once signed in with no repositories, the page asks for it directly.
+const APP_SLUG = process.env.NEXT_PUBLIC_GITHUB_APP_SLUG ?? "";
+const INSTALL_URL = APP_SLUG
+  ? `https://github.com/apps/${APP_SLUG}/installations/new`
+  : "";
+
 type ReceiptContextSource = {
   kind: string;
   name: string;
@@ -83,6 +91,12 @@ export default async function ReviewsPage() {
       <main className="mx-auto w-full max-w-4xl px-6 py-14">
         <h1 className="text-3xl font-semibold tracking-tight">Reviews</h1>
         <p className="text-muted-foreground mt-3">Sign in with GitHub to see your reviews.</p>
+        <a
+          href="/api/auth/github/sign-in?return_to=/dashboard/reviews"
+          className="bg-primary text-primary-foreground hover:bg-primary/90 mt-6 inline-flex h-10 items-center rounded-md px-6 text-sm font-medium"
+        >
+          Sign in with GitHub
+        </a>
       </main>
     );
   }
@@ -93,7 +107,26 @@ export default async function ReviewsPage() {
     <main className="mx-auto w-full max-w-4xl px-6 py-14">
       <h1 className="text-3xl font-semibold tracking-tight">Reviews</h1>
       {data.repositories.length === 0 ? (
-        <p className="text-muted-foreground mt-3">No repositories yet.</p>
+        <div className="bg-card mt-8 rounded-lg border p-6">
+          <h2 className="text-lg font-semibold tracking-tight">Connect GitHub</h2>
+          <p className="text-muted-foreground mt-2 max-w-prose text-sm leading-relaxed">
+            No repositories yet. GitHub only lets this App see repositories you pick, so
+            choose them once and reviews start arriving here.
+          </p>
+          {INSTALL_URL ? (
+            <a
+              href={INSTALL_URL}
+              className="bg-primary text-primary-foreground hover:bg-primary/90 mt-5 inline-flex h-10 items-center rounded-md px-6 text-sm font-medium"
+            >
+              Choose repositories on GitHub
+            </a>
+          ) : (
+            <p className="text-muted-foreground mt-5 text-sm italic">
+              The install link is unavailable because the App slug is not configured on
+              this deployment.
+            </p>
+          )}
+        </div>
       ) : null}
 
       <div className="mt-10 flex flex-col gap-10">
