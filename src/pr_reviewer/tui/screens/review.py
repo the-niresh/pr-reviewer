@@ -19,6 +19,12 @@ from pr_reviewer.local_store.review_log import ReviewLogStore
 from pr_reviewer.reviewer.receipt import FindingReceipt, SandboxVerification
 from pr_reviewer.reviewer.remediation import RemediationPrompt
 from pr_reviewer.reviewer.specialists import SPECIALIST_CONCERNS
+from pr_reviewer.tui.push_review_summary import (
+    PushReviewSummaryResult,
+    ReviewSummaryClient,
+    ReviewSummaryPush,
+    push_review_summary,
+)
 from pr_reviewer.tui.widgets.cost_meter import CostMeter
 
 ReviewPhase = Literal["diffs", "agents"]
@@ -109,6 +115,7 @@ class ReviewPanel(Widget):
         reasoning_feed: Iterable[AgentReasoningChunk] | None = None,
         stream_immediately: bool = False,
         reasoning_stream_interval: float = 0.05,
+        summary_client: ReviewSummaryClient | None = None,
         id: str | None = None,
     ) -> None:
         super().__init__(id=id)
@@ -118,10 +125,13 @@ class ReviewPanel(Widget):
         self._reasoning_feed = tuple(reasoning_feed or default_reasoning_feed())
         self._stream_immediately = stream_immediately
         self._reasoning_stream_interval = reasoning_stream_interval
+        self._summary_client = summary_client
         self._pending_chunks: list[AgentReasoningChunk] = []
         self._streamed_concerns: list[str] = []
         self._reasoning_timer: Any = None
         self._remediation_prompts: dict[str, str] = {}
+        self._summary_client: ReviewSummaryClient | None = None
+        self._last_push_result: PushReviewSummaryResult | None = None
 
     def compose(self) -> ComposeResult:
         diff_rows: list[Widget] = [
@@ -211,6 +221,23 @@ class ReviewPanel(Widget):
                 chunk.concern,
                 chunk.text,
             )
+
+
+    def complete_review(self, summary: ReviewSummaryPush) -> PushReviewSummaryResult | None:
+        if self._summary_client is None:
+            return None
+        result = push_review_summary(self._summary_client, summary)
+        self._last_push_result = result
+        if not result.ok:
+            self.notify(
+                f"Could not save review to the hosted plane: {result.error}",
+                severity="warning",
+            )
+        return result
+
+    @property
+    def last_push_result(self) -> PushReviewSummaryResult | None:
+        return self._last_push_result
 
     def set_undetermined(self, packed: PackedDiff) -> None:
         """A first-class panel for what the review could not determine, not a footnote:
