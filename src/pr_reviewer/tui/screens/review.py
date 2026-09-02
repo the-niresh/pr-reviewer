@@ -202,6 +202,12 @@ class ReviewPanel(Widget):
             detail = receipt.verification.reason
         container = self.query_one("#review-findings-stream", Vertical)
         location = f"{finding.file_path}:{finding.line_start}"
+        model_call = receipt.model_call
+        sources = ", ".join(f"{source.kind}:{source.name}" for source in receipt.context_sources)
+        meta = (
+            f"{model_call.provider}/{model_call.model} (prompt {receipt.prompt_version_id}, "
+            f"{model_call.tokens.total_tokens} tokens, ${model_call.cost_usd}) - {sources}"
+        )
         container.mount(
             Vertical(
                 Label(
@@ -209,6 +215,7 @@ class ReviewPanel(Widget):
                     classes=f"finding-badge {status_class}",
                 ),
                 Static(f"{location} - {detail}", classes="finding-detail"),
+                Static(meta, classes="finding-meta"),
                 classes="finding-row",
                 id=f"finding-{finding.id}",
             )
