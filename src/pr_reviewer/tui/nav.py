@@ -20,7 +20,14 @@ class SectionSelected(Message):
 
 
 class SectionNav(Widget):
-    """Persistent sidebar with a always-visible current section."""
+    """Persistent sidebar with a always-visible current section.
+
+    Three states, three treatments, kept distinct even in combination: a plain unselected
+    item, a keyboard-focused item (temporary, moves with tab/up/down), and the current
+    section (persistent, set by selection, independent of focus). The pane itself also
+    shows a heavy accent border while it holds focus, so which of the two panes is "live"
+    is never only a hover effect.
+    """
 
     DEFAULT_CSS = """
     SectionNav {
@@ -30,9 +37,14 @@ class SectionNav(Widget):
         padding: 1 0;
     }
 
+    SectionNav:focus-within {
+        border-right: heavy $accent;
+    }
+
     SectionNav Button.nav-item {
         width: 100%;
         border: none;
+        border-left: thick transparent;
         background: transparent;
         color: $text;
         text-align: left;
@@ -41,17 +53,22 @@ class SectionNav(Widget):
     }
 
     SectionNav Button.nav-item--current {
-        background: $primary 30%;
-        color: $text;
+        background: $panel;
+        color: $primary;
         text-style: bold;
+        border-left: thick $primary;
     }
 
     SectionNav Button.nav-item:focus {
-        background: $primary 20%;
+        background: $accent 25%;
+        text-style: bold;
     }
 
     SectionNav Button.nav-item--current:focus {
-        background: $primary 30%;
+        background: $panel;
+        color: $primary;
+        text-style: bold;
+        border-left: thick $accent;
     }
     """
 

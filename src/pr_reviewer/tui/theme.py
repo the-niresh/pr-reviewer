@@ -50,5 +50,10 @@ Screen {
     color: $foreground;
     padding: 1 2;
     width: 1fr;
+    border-left: heavy transparent;
+}
+
+#section-content:focus-within {
+    border-left: heavy $accent;
 }
 """

@@ -8,8 +8,11 @@ from pathlib import Path
 from typing import Any
 
 from textual.app import App, ComposeResult
+from textual.binding import Binding
 from textual.containers import Container, Horizontal
-from textual.widgets import Static
+from textual.css.query import NoMatches
+from textual.widget import Widget
+from textual.widgets import Footer, Static
 
 from pr_reviewer.local_store.repo_config import RepoConfigStore, default_repo_config_path
 from pr_reviewer.local_store.review_log import ReviewLogStore, default_review_log_path
@@ -42,9 +45,47 @@ from pr_reviewer.tui.screens.review import ReviewDiffItem, ReviewPanel
 from pr_reviewer.tui.theme import REVIEWER_CSS, REVIEWER_THEME
 
 
+class MainLayout(Horizontal):
+    """Holds the sidebar and the content pane.
+
+    Screen binds tab/shift+tab to its own app.focus_next/focus_previous (see
+    textual/screen.py), and that binding sits closer to a focused widget than the App's own
+    BINDINGS -- so without this, tab only ever walks the flat, whole-app focus order and the
+    App-level pane-switch actions below never run. Binding tab/shift+tab again here, one
+    level above both panes, intercepts before Screen's default and makes the crossing
+    pane-aware instead of accidental.
+    """
+
+    BINDINGS = [
+        ("tab", "app.focus_next_pane", "Next pane"),
+        ("shift+tab", "app.focus_previous_pane", "Prev pane"),
+    ]
+
+
 class ReviewerApp(App[None]):
     TITLE = "reviewer"
     CSS = REVIEWER_CSS
+
+    # tab/shift+tab already move focus between widgets (Screen binds them to
+    # app.focus_next/focus_previous), but that alone treats the sidebar and the content
+    # pane as one flat list of buttons -- nothing marks "you just crossed into the other
+    # pane". These bindings make that crossing a first-class, visible action: the footer
+    # names every key, and the CSS above gives the pane that holds focus a heavy accent
+    # border so the crossing is never only a hover effect.
+    BINDINGS = [
+        Binding("tab", "focus_next_pane", "Next pane", show=True),
+        Binding("shift+tab", "focus_previous_pane", "Prev pane", show=True),
+        Binding("down", "focus_down", "Down", show=True),
+        Binding("up", "focus_up", "Up", show=True),
+        Binding("enter", "activate_focused", "Open", show=True),
+        Binding("escape", "go_back", "Back", show=True),
+        Binding("1", "jump_section(0)", SECTIONS[0], show=True),
+        Binding("2", "jump_section(1)", SECTIONS[1], show=True),
+        Binding("3", "jump_section(2)", SECTIONS[2], show=True),
+        Binding("4", "jump_section(3)", SECTIONS[3], show=True),
+        Binding("question_mark", "show_help", "Help", show=True),
+        Binding("q", "quit", "Quit", show=True),
+    ]
 
     def __init__(
         self,
@@ -101,14 +142,15 @@ class ReviewerApp(App[None]):
 
     def compose(self) -> ComposeResult:
         if self.github_connected:
-            yield Horizontal(
+            yield MainLayout(
                 SectionNav(id="section-nav"),
                 Container(id="section-content"),
                 id="main-layout",
             )
+            yield Footer()
             return
 
-        yield Horizontal(
+        yield MainLayout(
             SectionNav(id="section-nav"),
             ConnectPanel(
                 pairing_client=self._pairing_client,
@@ -119,6 +161,7 @@ class ReviewerApp(App[None]):
             ),
             id="main-layout",
         )
+        yield Footer()
 
     def on_mount(self) -> None:
         if not self.github_connected:
@@ -329,6 +372,102 @@ class ReviewerApp(App[None]):
             )
             return
         pane.mount(Static(section_id, id="section-placeholder"))
+
+    # -- keyboard model: move focus between the sidebar and the content pane, move within
+    # whichever pane holds focus, jump straight to a section, and help/quit. tab/shift+tab
+    # already move focus widget-by-widget (Screen binds those to focus_next/focus_previous),
+    # but that treats the whole app as one flat list -- these actions instead treat the
+    # sidebar and the content pane as exactly two panes, and only ever move within or
+    # between those two, so "which pane is live" stays a deliberate, visible choice (see the
+    # :focus-within borders in theme.py and nav.py) rather than an accident of tab order.
+
+    def _panes(self) -> tuple[Widget, Widget] | None:
+        try:
+            nav = self.query_one("#section-nav", Widget)
+            content = self.query_one("#section-content", Widget)
+        except NoMatches:
+            return None
+        return nav, content
+
+    def _focusables(self, pane: Widget) -> list[Widget]:
+        return [widget for widget in pane.query("*") if widget.can_focus]
+
+    def _pane_holding_focus(self) -> Widget | None:
+        panes = self._panes()
+        focused = self.focused
+        if panes is None or focused is None:
+            return None
+        for pane in panes:
+            if any(focused is widget for widget in pane.query("*")):
+                return pane
+        return None
+
+    def action_focus_next_pane(self) -> None:
+        self._switch_pane()
+
+    def action_focus_previous_pane(self) -> None:
+        self._switch_pane()
+
+    def _switch_pane(self) -> None:
+        panes = self._panes()
+        if panes is None:
+            return
+        nav, content = panes
+        current = self._pane_holding_focus()
+        target = content if current is nav else nav
+        focusables = self._focusables(target)
+        if focusables:
+            focusables[0].focus()
+
+    def action_focus_down(self) -> None:
+        self._move_within_pane(1)
+
+    def action_focus_up(self) -> None:
+        self._move_within_pane(-1)
+
+    def _move_within_pane(self, offset: int) -> None:
+        pane = self._pane_holding_focus()
+        if pane is None:
+            return
+        focusables = self._focusables(pane)
+        if not focusables:
+            return
+        focused = self.focused
+        try:
+            index = next(i for i, widget in enumerate(focusables) if widget is focused)
+        except StopIteration:
+            index = 0
+        focusables[(index + offset) % len(focusables)].focus()
+
+    def action_activate_focused(self) -> None:
+        focused = self.focused
+        if focused is not None and hasattr(focused, "press"):
+            focused.press()
+
+    def action_go_back(self) -> None:
+        panes = self._panes()
+        if panes is None:
+            return
+        nav, _content = panes
+        focusables = self._focusables(nav)
+        if focusables:
+            focusables[0].focus()
+
+    def action_jump_section(self, index: int) -> None:
+        if not 0 <= index < len(SECTIONS):
+            return
+        try:
+            self.query_one(SectionNav).select_section(SECTIONS[index])
+        except NoMatches:
+            return
+
+    def action_show_help(self) -> None:
+        self.notify(
+            "tab/shift+tab: switch pane  up/down: move  enter: open  escape: back to nav  "
+            "1-4: jump to a section  q: quit",
+            title="Keys",
+            timeout=8,
+        )
 
 
 def _hosted_origin_from_env() -> str | None:
