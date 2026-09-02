@@ -275,6 +275,37 @@ def _finding_summary(conn: Connection[Row], row: Row) -> ReviewFindingSummary:
     )
 
 
+def _review_summary_for_job(conn: Connection[Row], job_row: Row) -> ReviewSummary:
+    review_job_id = str(job_row["id"])
+    finding_rows = conn.execute(
+        """
+        select rf.id, rf.concern, rf.severity, rf.category, rf.file_path,
+               rf.line_start, rf.line_end, rf.title, rf.rationale, rf.verified,
+               rf.status, rf.verification_reason, rf.sandbox_run_id, rf.command_id,
+               rf.verification_detail, mc.provider, mc.model_name, mc.prompt_version_id,
+               mc.input_tokens, mc.output_tokens, mc.cost_usd
+        from review_findings rf
+        left join model_calls mc on mc.id = rf.model_call_id
+        where rf.review_job_id = %s
+        order by rf.created_at
+        """,
+        (review_job_id,),
+    ).fetchall()
+    findings = [_finding_summary(conn, row) for row in finding_rows]
+    status = str(job_row["status"])
+    stopped_early = status == "stopped_early"
+    return ReviewSummary(
+        review_job_id=review_job_id,
+        pull_request_number=job_row["pull_request_number"],
+        head_sha=job_row["head_sha"],
+        status=status,
+        stopped_early=stopped_early,
+        stopped_early_message=STOPPED_EARLY_MESSAGE if stopped_early else None,
+        created_at=job_row["created_at"],
+        findings=findings,
+    )
+
+
 def reviews_for_repository(
     assertion: LiveInstallationAssertion,
     installation_id: int,
@@ -300,39 +331,38 @@ def reviews_for_repository(
             (installation_id, github_repository_id),
         ).fetchall()
 
-        summaries: list[ReviewSummary] = []
-        for job_row in job_rows:
-            review_job_id = str(job_row["id"])
-            finding_rows = conn.execute(
-                """
-                select rf.id, rf.concern, rf.severity, rf.category, rf.file_path,
-                       rf.line_start, rf.line_end, rf.title, rf.rationale, rf.verified,
-                       rf.status, rf.verification_reason, rf.sandbox_run_id, rf.command_id,
-                       rf.verification_detail, mc.provider, mc.model_name, mc.prompt_version_id,
-                       mc.input_tokens, mc.output_tokens, mc.cost_usd
-                from review_findings rf
-                left join model_calls mc on mc.id = rf.model_call_id
-                where rf.review_job_id = %s
-                order by rf.created_at
-                """,
-                (review_job_id,),
-            ).fetchall()
-            findings = [_finding_summary(conn, row) for row in finding_rows]
-            status = str(job_row["status"])
-            stopped_early = status == "stopped_early"
-            summaries.append(
-                ReviewSummary(
-                    review_job_id=review_job_id,
-                    pull_request_number=job_row["pull_request_number"],
-                    head_sha=job_row["head_sha"],
-                    status=status,
-                    stopped_early=stopped_early,
-                    stopped_early_message=STOPPED_EARLY_MESSAGE if stopped_early else None,
-                    created_at=job_row["created_at"],
-                    findings=findings,
-                )
-            )
+        summaries = [_review_summary_for_job(conn, job_row) for job_row in job_rows]
     return summaries
+
+
+def review_by_id(assertion: LiveInstallationAssertion, review_job_id: str) -> ReviewSummary | None:
+    """The single-review read path behind /dashboard/reviews/[reviewJobId]. Same 404-not-403
+    scoping as reviews_for_repository: a review that exists but belongs to a repository this
+    viewer's installations do not grant is indistinguishable from a review that never existed.
+    """
+    try:
+        parsed_id = uuid.UUID(review_job_id)
+    except ValueError:
+        return None
+
+    with connection() as conn:
+        job_row = conn.execute(
+            """
+            select id, installation_id, github_repository_id, pull_request_number, head_sha,
+                   status, created_at
+            from review_jobs
+            where id = %s
+            """,
+            (str(parsed_id),),
+        ).fetchone()
+        if job_row is None:
+            return None
+
+        granted = assertion.installations.get(job_row["installation_id"])
+        if granted is None or job_row["github_repository_id"] not in granted:
+            return None
+
+        return _review_summary_for_job(conn, job_row)
 
 
 class RepositoryReviews(BaseModel):
@@ -402,6 +432,23 @@ def list_reviews(
                 )
             )
     return ReviewsResponse(repositories=repositories)
+
+
+@router.get("/{review_job_id}", response_model=ReviewSummary)
+def get_review_route(review_job_id: str, request: Request) -> ReviewSummary:
+    """Backs /dashboard/reviews/[reviewJobId]: one review in full, scoped the same way
+    list_reviews is. Same 401/404 split -- not signed in is 401, signed in but the review
+    belongs to a repository this viewer's installations do not grant is 404, never 403.
+    """
+    cookie = request.cookies.get(LIVE_SIGN_IN_COOKIE_NAME, "")
+    assertion = read_live_sign_in(cookie)
+    if assertion is None:
+        raise HTTPException(status_code=401, detail="not signed in")
+
+    review = review_by_id(assertion, review_job_id)
+    if review is None:
+        raise HTTPException(status_code=404)
+    return review
 
 
 # Task 33.A4: the receiving end of tui/push_review_summary.py. That module's ALLOWED_FINDING_FIELDS

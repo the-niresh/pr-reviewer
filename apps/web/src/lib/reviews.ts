@@ -100,6 +100,12 @@ export type FetchReviewsResult =
   | { kind: "error" }
   | { kind: "ok"; data: ReviewsResponse };
 
+export type FetchReviewResult =
+  | { kind: "unauthenticated" }
+  | { kind: "not_found" }
+  | { kind: "error" }
+  | { kind: "ok"; review: ReviewSummary };
+
 /** The one place that calls GET /api/reviews with the viewer's own session cookie. A
  *  network failure or a non-401 error status is reported as "error", never silently
  *  reshaped into an empty result: an empty dashboard and a broken one must never look
@@ -122,4 +128,36 @@ export async function fetchReviews(cookieHeader: string): Promise<FetchReviewsRe
   }
   const data = (await response.json()) as ReviewsResponse;
   return { kind: "ok", data };
+}
+
+/** Backs /dashboard/reviews/[reviewJobId]. 404 is a real, distinct outcome here (the review
+ *  does not exist, or exists but belongs to a repository this viewer's installations do not
+ *  grant -- the control plane collapses those on purpose), never folded into "error". */
+export async function fetchReview(
+  cookieHeader: string,
+  reviewJobId: string,
+): Promise<FetchReviewResult> {
+  let response: Response;
+  try {
+    response = await fetch(
+      `${CONTROL_PLANE_ORIGIN}/api/reviews/${encodeURIComponent(reviewJobId)}`,
+      {
+        headers: { cookie: cookieHeader },
+        cache: "no-store",
+      },
+    );
+  } catch {
+    return { kind: "error" };
+  }
+  if (response.status === 401) {
+    return { kind: "unauthenticated" };
+  }
+  if (response.status === 404) {
+    return { kind: "not_found" };
+  }
+  if (!response.ok) {
+    return { kind: "error" };
+  }
+  const review = (await response.json()) as ReviewSummary;
+  return { kind: "ok", review };
 }

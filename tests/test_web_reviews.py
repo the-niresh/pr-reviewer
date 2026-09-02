@@ -139,3 +139,58 @@ def test_an_uncontrolled_installation_is_404_not_403() -> None:
         params={"installation_id": installation_id, "github_repository_id": github_repository_id},
     )
     assert response.status_code == 404
+
+
+# Task 33.C7: /api/reviews/{review_job_id} backs the single-review page. It must follow the
+# exact same tenancy rule as the list endpoint above: a viewer may only read a review that
+# belongs to a repository one of their own installations grants.
+def test_signed_in_viewer_can_read_their_own_review_by_id() -> None:
+    installation_id = _create_installation()
+    github_repository_id = _random_id()
+    review_job_id = _create_review_job_for_repo(installation_id, github_repository_id)
+
+    cookie = _signed_in_cookie({installation_id: {github_repository_id: "octocat/widget"}})
+    response = _client(cookie).get(f"/api/reviews/{review_job_id}")
+
+    assert response.status_code == 200
+    body = response.json()
+    assert body["review_job_id"] == review_job_id
+    assert body["pull_request_number"] == 3
+
+
+def test_a_viewer_cannot_read_another_installations_review_by_id() -> None:
+    """The guard this task asked for: a viewer with no grant on the review's own repository
+    must never be able to read it by id, even knowing the id itself."""
+    other_installation_id = _create_installation()
+    other_github_repository_id = _random_id()
+    other_review_job_id = _create_review_job_for_repo(
+        other_installation_id, other_github_repository_id
+    )
+
+    my_installation_id = _create_installation()
+    my_github_repository_id = _random_id()
+    cookie = _signed_in_cookie({my_installation_id: {my_github_repository_id: "octocat/mine"}})
+
+    response = _client(cookie).get(f"/api/reviews/{other_review_job_id}")
+    assert response.status_code == 404
+
+
+def test_no_cookie_reading_a_review_by_id_is_401() -> None:
+    installation_id = _create_installation()
+    github_repository_id = _random_id()
+    review_job_id = _create_review_job_for_repo(installation_id, github_repository_id)
+
+    response = _client().get(f"/api/reviews/{review_job_id}")
+    assert response.status_code == 401
+
+
+def test_an_unknown_review_id_is_404() -> None:
+    cookie = _signed_in_cookie({})
+    response = _client(cookie).get(f"/api/reviews/{uuid.uuid4()}")
+    assert response.status_code == 404
+
+
+def test_a_malformed_review_id_is_404_not_500() -> None:
+    cookie = _signed_in_cookie({})
+    response = _client(cookie).get("/api/reviews/not-a-uuid")
+    assert response.status_code == 404

@@ -1,9 +1,15 @@
-"""Task 33.E2: the web reviews page must say plainly when tokens ran out, never a raw error.
+"""Task 33.E2: the web reviews surface must say plainly when tokens ran out, never a raw error.
 
 Follows tests/test_web_reviews.py's harness: a real review_jobs row read back through the same
 GET /api/reviews route apps/web/src/app/dashboard/reviews/page.tsx fetches from. Also guards
-page.tsx's own source the way test_web_never_accepts_a_key.py guards other pages, so a regression
-in the component -- not just the API payload -- turns this test red too.
+the pages' own source the way test_web_never_accepts_a_key.py guards other pages, so a
+regression in a component -- not just the API payload -- turns this test red too.
+
+Task 33.C7 split the reviews list into a table (this page, a summary per row) and a new
+per-review detail page. The badge distinguishing stopped_early from every other status
+stays on the table (a viewer must see it before opening anything); the full plain-words
+explanation moved to the detail page, since a table row has no room for prose. Both are
+guarded below, at the page that actually claims to carry each one now.
 """
 
 from __future__ import annotations
@@ -27,6 +33,18 @@ PAGE = (
     / "app"
     / "dashboard"
     / "reviews"
+    / "page.tsx"
+)
+
+DETAIL_PAGE = (
+    Path(__file__).resolve().parent.parent
+    / "apps"
+    / "web"
+    / "src"
+    / "app"
+    / "dashboard"
+    / "reviews"
+    / "[reviewJobId]"
     / "page.tsx"
 )
 
@@ -128,8 +146,8 @@ def test_the_page_marks_stopped_early_distinctly_from_every_other_status() -> No
     )
 
 
-def test_the_page_renders_the_plain_words_message_for_a_stopped_early_review() -> None:
-    source = PAGE.read_text(encoding="utf-8")
+def test_the_detail_page_renders_the_plain_words_message_for_a_stopped_early_review() -> None:
+    source = DETAIL_PAGE.read_text(encoding="utf-8")
     assert "stopped_early_message" in source
     assert "review.reason" not in source
     assert "finding.reason" not in source
