@@ -12,6 +12,11 @@ from fastapi import APIRouter, Header, HTTPException
 from pydantic import BaseModel
 
 from pr_reviewer.contracts.runner import AssignmentRefused, PairingDenied, RunnerAuthDenied
+from pr_reviewer.control_plane.installation_token import (
+    RunnerInstallationToken,
+    RunnerInstallationTokenDenied,
+    issue_runner_installation_token,
+)
 from pr_reviewer.control_plane.pairing import (
     create_pairing_code,
     exchange_pairing_code,
@@ -77,3 +82,20 @@ def rotate_runner_credential_route(
     if isinstance(result, RunnerAuthDenied):
         raise HTTPException(status_code=401, detail=result.reason)
     return {"runner_id": str(result.runner_id), "credential": result.credential}
+
+
+@router.post("/installations/{installation_id}/token")
+def issue_installation_token_route(
+    installation_id: int,
+    authorization: str | None = Header(default=None),
+) -> RunnerInstallationToken:
+    if authorization is None or not authorization.startswith("Bearer "):
+        raise HTTPException(status_code=401, detail="missing bearer credential")
+    credential = authorization.removeprefix("Bearer ")
+    authenticated = authenticate_runner(credential)
+    if isinstance(authenticated, RunnerAuthDenied):
+        raise HTTPException(status_code=401, detail=authenticated.reason)
+    try:
+        return issue_runner_installation_token(authenticated.runner_id, installation_id)
+    except RunnerInstallationTokenDenied as denied:
+        raise HTTPException(status_code=403, detail=denied.reason) from denied
