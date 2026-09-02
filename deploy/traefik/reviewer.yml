@@ -1,18 +1,40 @@
-# Traefik v2.11 file-provider form of the reviewer.niresh.tech router.
-# This host's Traefik process uses the Docker provider only. This file is
-# not loaded. The apply path is docker-compose.hosted.yml labels.
+# Traefik v2.11 file-provider form of the reviewer.niresh.tech routers.
+# This host's Traefik process uses the Docker provider only, so this file is not
+# loaded. The applied path is docker-compose.hosted.yml labels. It is kept in sync
+# with those labels by tests/test_hosted_traefik.py so the two cannot drift.
+#
+# Priority is explicit rather than left to Traefik's rule-length default:
+#   reviewer-api (100) takes /api, /health and /ready
+#   reviewer-ui  (1)   takes everything else, the landing page and docs
 
 http:
   routers:
-    reviewer:
-      rule: Host(`reviewer.niresh.tech`)
+    reviewer-api:
+      rule: Host(`reviewer.niresh.tech`) && (PathPrefix(`/api`) || Path(`/health`) || Path(`/ready`))
+      priority: 100
       entryPoints:
         - websecure
-      service: reviewer
+      service: reviewer-api
+      tls:
+        certResolver: letsencrypt
+    reviewer-ui:
+      rule: Host(`reviewer.niresh.tech`)
+      priority: 1
+      entryPoints:
+        - websecure
+      service: reviewer-ui
       tls:
         certResolver: letsencrypt
   services:
-    reviewer:
+    reviewer-api:
       loadBalancer:
         servers:
           - url: "http://api:8000"
+        healthCheck:
+          path: /ready
+          interval: 10s
+          timeout: 3s
+    reviewer-ui:
+      loadBalancer:
+        servers:
+          - url: "http://ui:3000"

@@ -42,8 +42,16 @@ def test_hosted_compose_labels_match_the_traefik_file() -> None:
     text = (REPO / "docker-compose.hosted.yml").read_text(encoding="utf-8")
     assert "Host(`reviewer.niresh.tech`)" in text
     assert "n8n-mkvx_proxy" in text
-    assert 'traefik.http.services.reviewer.loadbalancer.server.port: "8000"' in text
-    assert "up" not in text.split()
+    assert 'traefik.http.services.reviewer-api.loadbalancer.server.port: "8000"' in text
+    assert 'traefik.http.services.reviewer-ui.loadbalancer.server.port: "3000"' in text
+    # Two routers share the host, so the split must be pinned by explicit priority.
+    # Traefik's default orders by rule length, which silently reorders when a rule
+    # is edited and would hand /api to the UI.
+    assert 'traefik.http.routers.reviewer-api.priority: "100"' in text
+    assert 'traefik.http.routers.reviewer-ui.priority: "1"' in text
+    # The api route must be withdrawn when the database is unreachable, not left
+    # serving requests the application cannot answer.
+    assert "traefik.http.services.reviewer-api.loadbalancer.healthcheck.path: /ready" in text
     assert not any(marker in text for marker in SECRET_MARKERS)
 
 
