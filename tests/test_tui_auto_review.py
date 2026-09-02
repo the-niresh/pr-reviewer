@@ -157,8 +157,6 @@ def test_run_tui_prints_closed_message_when_auto_review_was_running(
 
 
 def test_tui_polls_events_and_opens_review_section(tmp_path: Path) -> None:
-    from textual.widgets import Select
-
     from pr_reviewer.tui.app import ReviewerApp
     from pr_reviewer.tui.nav import SectionNav
     from pr_reviewer.tui.screens.review import ReviewPanel

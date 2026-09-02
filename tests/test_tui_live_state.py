@@ -83,8 +83,6 @@ async def wait_until(
 def test_tui_reflects_pr_events_live_without_restart(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
-    from textual.widgets import Select
-
     from pr_reviewer.tui.app import ReviewerApp
     from pr_reviewer.tui.nav import SectionNav
     from pr_reviewer.tui.screens.review import ReviewPanel

@@ -9,7 +9,7 @@ from textual.app import App, ComposeResult
 
 from pr_reviewer.runner.secrets import FileSecretStore
 from pr_reviewer.tui.app import ReviewerApp
-from pr_reviewer.tui.screens.connect import ConnectConfig, ConnectPanel, can_start_review
+from pr_reviewer.tui.screens.connect import ConnectPanel, can_start_review
 
 
 class ConnectHarness(App[None]):

@@ -15,8 +15,8 @@ from pr_reviewer.models.provider import (
 from pr_reviewer.runner.secrets import FileSecretStore
 from pr_reviewer.tui.auth_state import MODEL_KEY_SECRET, has_model_key
 from pr_reviewer.tui.screens.byok import ByokPanel, ModelKeyChecker
-from pr_reviewer.tui.screens.model_access import ModelAccessPanel, ModelKeyStored
 from pr_reviewer.tui.screens.connect import can_start_review
+from pr_reviewer.tui.screens.model_access import ModelAccessPanel, ModelKeyStored
 
 API_KEY = "sk-byok-test-must-not-appear-on-screen"
 
