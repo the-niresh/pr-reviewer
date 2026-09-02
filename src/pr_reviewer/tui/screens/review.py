@@ -19,6 +19,7 @@ from pr_reviewer.local_store.review_log import ReviewLogStore
 from pr_reviewer.reviewer.receipt import FindingReceipt, SandboxVerification
 from pr_reviewer.reviewer.remediation import RemediationPrompt
 from pr_reviewer.reviewer.specialists import SPECIALIST_CONCERNS
+from pr_reviewer.tui.out_of_tokens import OutOfTokensState, out_of_tokens_message
 from pr_reviewer.tui.push_review_summary import (
     PushReviewSummaryResult,
     ReviewSummaryClient,
@@ -130,7 +131,6 @@ class ReviewPanel(Widget):
         self._streamed_concerns: list[str] = []
         self._reasoning_timer: Any = None
         self._remediation_prompts: dict[str, str] = {}
-        self._summary_client: ReviewSummaryClient | None = None
         self._last_push_result: PushReviewSummaryResult | None = None
 
     def compose(self) -> ComposeResult:
@@ -222,6 +222,14 @@ class ReviewPanel(Widget):
                 chunk.text,
             )
 
+    def show_out_of_tokens(self, state: OutOfTokensState) -> None:
+        """Terminal state for a review: no timer keeps running, no stack trace, no raw
+        provider payload -- just the plain-words message from out_of_tokens_message.
+        """
+        self._stop_reasoning_stream()
+        message = out_of_tokens_message(state.provider)
+        panel = self.query_one("#review-reasoning-stream", Vertical)
+        panel.mount(Static(message, id="review-out-of-tokens", classes="reasoning-line"))
 
     def complete_review(self, summary: ReviewSummaryPush) -> PushReviewSummaryResult | None:
         if self._summary_client is None:
