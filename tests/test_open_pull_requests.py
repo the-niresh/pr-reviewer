@@ -8,7 +8,11 @@ def test_lists_open_non_draft_pull_requests_newest_first() -> None:
 
     def handler(request: httpx.Request) -> httpx.Response:
         assert request.url.path == "/repositories/801/pulls"
-        assert request.url.params == {"state": "open", "sort": "updated", "direction": "desc"}
+        assert dict(request.url.params) == {
+            "state": "open",
+            "sort": "updated",
+            "direction": "desc",
+        }
         return httpx.Response(
             200,
             json=[
