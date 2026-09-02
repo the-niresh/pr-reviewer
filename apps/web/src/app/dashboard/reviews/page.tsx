@@ -45,18 +45,12 @@ type ReviewFinding = {
   receipt: FindingReceipt | null;
 };
 
-type AgentReasoning = {
-  concern: string;
-  reasoning: string;
-};
-
 type ReviewSummary = {
   review_job_id: string;
   pull_request_number: number | null;
   head_sha: string | null;
   status: string;
   findings: ReviewFinding[];
-  reasoning: AgentReasoning[];
 };
 
 type RepositoryReviews = {
@@ -204,18 +198,6 @@ export default async function ReviewsPage() {
                           </div>
                         ) : null}
                       </div>
-                    ))}
-
-                    {review.reasoning.map((entry, index) => (
-                      <p
-                        key={`${entry.concern}-${index}`}
-                        className="text-muted-foreground border-t px-4 py-3 text-sm leading-relaxed"
-                      >
-                        <span className="text-foreground mr-2 font-mono text-xs">
-                          {entry.concern}
-                        </span>
-                        {entry.reasoning}
-                      </p>
                     ))}
                   </article>
                 ))}
