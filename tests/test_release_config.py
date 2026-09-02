@@ -92,18 +92,44 @@ def test_root_dockerfile_is_non_root_and_digest_pinned() -> None:
     refs = _from_refs(text)
     assert refs, "Dockerfile needs a FROM line"
     assert all(_is_pinned(ref) for ref in refs), refs
+    assert "uv sync --locked --no-dev" in text
+    assert 'ENTRYPOINT ["/app/.venv/bin/pr-reviewer-api"]' in text
+    assert 'ENTRYPOINT ["/app/.venv/bin/pr-reviewer-worker"]' in text
+    assert "bun run build" in text
+    assert ".env" not in "\n".join(
+        line for line in text.splitlines() if line.strip().startswith("COPY")
+    )
     for arg in ARG_LINE.findall(text):
         name = arg.split("=")[0]
         assert not any(marker in name.upper() for marker in SECRET_BUILD_MARKERS), name
 
 
-def test_compose_release_and_ci_are_non_root_healthy_and_pinned() -> None:
-    for relative in ("docker-compose.ci.yml", "compose.release.yml"):
-        text = _read(relative)
-        assert "user:" in text
-        assert "healthcheck:" in text
-        assert all(_is_pinned(ref) for ref in _image_refs(text)), relative
-        assert not any(marker in text for marker in SECRET_BUILD_MARKERS), relative
+def test_compose_release_uses_runtime_secrets_and_a_real_api_healthcheck() -> None:
+    text = _read("compose.release.yml")
+    assert text.count('user: "65532:65532"') == 3
+    assert "sleep" not in text
+    assert '["CMD", "true"]' not in text
+    assert "urllib.request.urlopen('http://127.0.0.1:8000/health'" in text
+    for name in (
+        "DATABASE_URL",
+        "GITHUB_APP_ID",
+        "GITHUB_APP_PRIVATE_KEY",
+        "GITHUB_OAUTH_CLIENT_ID",
+        "GITHUB_OAUTH_CLIENT_SECRET",
+        "GITHUB_WEBHOOK_SECRET",
+        "PR_REVIEWER_HOSTED_ORIGIN",
+    ):
+        assert f"{name}: ${{{name}:?" in text
+    assert ".env" not in text
+    assert ":latest" not in text
+
+
+def test_ci_compose_is_non_root_healthy_and_pinned() -> None:
+    text = _read("docker-compose.ci.yml")
+    assert "user:" in text
+    assert "healthcheck:" in text
+    assert all(_is_pinned(ref) for ref in _image_refs(text))
+    assert not any(marker in text for marker in SECRET_BUILD_MARKERS)
 
 
 def test_ci_workflow_runs_the_required_gates() -> None:

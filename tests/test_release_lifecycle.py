@@ -9,6 +9,7 @@ is stop then start again on the same pinned digest.
 from __future__ import annotations
 
 import json
+import os
 import shutil
 import subprocess
 import time
@@ -48,6 +49,16 @@ def _compose(*args: str, check: bool = True) -> subprocess.CompletedProcess[str]
         text=True,
         timeout=WAIT_SECONDS,
         cwd=REPO,
+        env={
+            **os.environ,
+            "DATABASE_URL": "not-used-by-health-check",
+            "GITHUB_APP_ID": "test-app",
+            "GITHUB_APP_PRIVATE_KEY": "not-used-by-health-check",
+            "GITHUB_OAUTH_CLIENT_ID": "test-client-id",
+            "GITHUB_OAUTH_CLIENT_SECRET": "test-client-secret",
+            "GITHUB_WEBHOOK_SECRET": "test-webhook-secret",
+            "PR_REVIEWER_HOSTED_ORIGIN": "https://reviewer.example.test",
+        },
     )
     if check and result.returncode != 0:
         raise AssertionError(
@@ -76,15 +87,39 @@ def _ps() -> list[dict[str, object]]:
     return rows
 
 
-def _all_healthy(rows: list[dict[str, object]]) -> bool:
-    if len(rows) < 4:
+def _api_container_id() -> str:
+    result = _compose("ps", "-q", "api")
+    container_id = result.stdout.strip()
+    assert container_id, "release API has no running container"
+    return container_id
+
+
+def _api_health() -> None:
+    result = subprocess.run(
+        [
+            _docker(),
+            "exec",
+            _api_container_id(),
+            "python",
+            "-c",
+            "import urllib.request; print(urllib.request.urlopen('http://127.0.0.1:8000/health').read().decode())",
+        ],
+        check=False,
+        capture_output=True,
+        text=True,
+        timeout=WAIT_SECONDS,
+    )
+    assert result.returncode == 0, result.stderr + result.stdout
+    assert json.loads(result.stdout) == {"status": "ok"}
+
+
+def _api_is_healthy(rows: list[dict[str, object]]) -> bool:
+    if len(rows) != 1:
         return False
-    for row in rows:
-        health = str(row.get("Health") or "")
-        state = str(row.get("State") or "")
-        if health.lower() != "healthy" and "healthy" not in state.lower():
-            return False
-    return True
+    row = rows[0]
+    health = str(row.get("Health") or "")
+    state = str(row.get("State") or "")
+    return health.lower() == "healthy" or "healthy" in state.lower()
 
 
 def _none_running(rows: list[dict[str, object]]) -> bool:
@@ -115,27 +150,28 @@ def release_stack() -> Iterator[None]:
     _compose("down", "--remove-orphans", check=False)
 
 
-def test_release_compose_starts_reports_healthy_and_stops_gracefully(
+def test_release_compose_api_starts_reports_healthy_and_stops_gracefully(
     release_stack: None,
 ) -> None:
-    _compose("up", "-d", "--no-build")
-    _wait_until(_all_healthy, message="release stack did not become healthy")
+    _compose("up", "-d", "--build", "api")
+    _wait_until(_api_is_healthy, message="release API did not become healthy")
+    _api_health()
     _compose("stop", "-t", "5")
     _wait_until(_none_running, message="release stack did not stop")
 
 
-def test_release_compose_stop_then_start_again_on_the_same_digest(
+def test_release_compose_api_stop_then_start_again(
     release_stack: None,
 ) -> None:
-    """Same pinned digest after stop. Not a prior GitHub release image."""
+    """Restart the locally built API image without rebuilding it."""
     text = COMPOSE_FILE.read_text(encoding="utf-8")
-    assert "@sha256:" in text
     assert ":latest" not in text
-    _compose("up", "-d", "--no-build")
-    _wait_until(_all_healthy, message="first start was not healthy")
+    _compose("build", "api")
+    _compose("up", "-d", "--no-build", "api")
+    _wait_until(_api_is_healthy, message="first start was not healthy")
     _compose("stop", "-t", "5")
     _wait_until(_none_running, message="first stop did not complete")
-    _compose("up", "-d", "--no-build")
-    _wait_until(_all_healthy, message="restart on the same digest was not healthy")
+    _compose("up", "-d", "--no-build", "api")
+    _wait_until(_api_is_healthy, message="restart was not healthy")
     _compose("stop", "-t", "5")
     _wait_until(_none_running, message="final stop did not complete")

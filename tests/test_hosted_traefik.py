@@ -60,6 +60,7 @@ def test_hosted_compose_config_renders_offline() -> None:
             "-f",
             str(REPO / "docker-compose.hosted.yml"),
             "config",
+            "--no-interpolate",
         ],
         check=False,
         capture_output=True,

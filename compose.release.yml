@@ -3,58 +3,38 @@ services:
     build:
       context: .
       target: api
-    image: busybox@sha256:73aaf090f3d85aa34ee199857f03fa3a95c8ede2ffd4cc2cdb5b94e566b11662
     user: "65532:65532"
-    command: ["sleep", "3600"]
-    stop_grace_period: 5s
+    environment:
+      DATABASE_URL: ${DATABASE_URL:?DATABASE_URL must be set}
+      GITHUB_APP_ID: ${GITHUB_APP_ID:?GITHUB_APP_ID must be set}
+      GITHUB_APP_PRIVATE_KEY: ${GITHUB_APP_PRIVATE_KEY:?GITHUB_APP_PRIVATE_KEY must be set}
+      GITHUB_OAUTH_CLIENT_ID: ${GITHUB_OAUTH_CLIENT_ID:?GITHUB_OAUTH_CLIENT_ID must be set}
+      GITHUB_OAUTH_CLIENT_SECRET: ${GITHUB_OAUTH_CLIENT_SECRET:?GITHUB_OAUTH_CLIENT_SECRET must be set}
+      GITHUB_WEBHOOK_SECRET: ${GITHUB_WEBHOOK_SECRET:?GITHUB_WEBHOOK_SECRET must be set}
+      PR_REVIEWER_HOSTED_ORIGIN: ${PR_REVIEWER_HOSTED_ORIGIN:?PR_REVIEWER_HOSTED_ORIGIN must be set}
+    stop_grace_period: 30s
     healthcheck:
-      test: ["CMD", "true"]
-      interval: 2s
+      test:
+        ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://127.0.0.1:8000/health', timeout=2).read()"]
+      interval: 10s
       timeout: 3s
-      retries: 3
-      start_period: 1s
+      retries: 6
+      start_period: 10s
 
   worker:
     build:
       context: .
       target: worker
-    image: busybox@sha256:73aaf090f3d85aa34ee199857f03fa3a95c8ede2ffd4cc2cdb5b94e566b11662
     user: "65532:65532"
-    command: ["sleep", "3600"]
-    stop_grace_period: 5s
-    healthcheck:
-      test: ["CMD", "true"]
-      interval: 2s
-      timeout: 3s
-      retries: 3
-      start_period: 1s
+    environment:
+      DATABASE_URL: ${DATABASE_URL:?DATABASE_URL must be set}
+    stop_grace_period: 30s
 
   ui:
     build:
       context: .
       target: ui
-    image: busybox@sha256:73aaf090f3d85aa34ee199857f03fa3a95c8ede2ffd4cc2cdb5b94e566b11662
     user: "65532:65532"
-    command: ["sleep", "3600"]
-    stop_grace_period: 5s
-    healthcheck:
-      test: ["CMD", "true"]
-      interval: 2s
-      timeout: 3s
-      retries: 3
-      start_period: 1s
-
-  sandbox:
-    build:
-      context: .
-      target: sandbox
-    image: busybox@sha256:73aaf090f3d85aa34ee199857f03fa3a95c8ede2ffd4cc2cdb5b94e566b11662
-    user: "65532:65532"
-    command: ["sleep", "3600"]
-    stop_grace_period: 5s
-    healthcheck:
-      test: ["CMD", "true"]
-      interval: 2s
-      timeout: 3s
-      retries: 3
-      start_period: 1s
+    environment:
+      NEXT_PUBLIC_CONTROL_PLANE_ORIGIN: ${PR_REVIEWER_HOSTED_ORIGIN:?PR_REVIEWER_HOSTED_ORIGIN must be set}
+    stop_grace_period: 15s
