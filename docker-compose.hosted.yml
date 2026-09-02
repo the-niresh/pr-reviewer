@@ -1,7 +1,11 @@
-# Overlay for reviewer.niresh.tech. Not applied. Use with compose.release.yml:
-#   docker compose -f compose.release.yml -f docker-compose.hosted.yml config
-# Do not run up. Traefik on this VPS is v2.11 with the Docker provider and
-# network n8n-mkvx_proxy.
+# Overlay for reviewer.niresh.tech. Use with compose.release.yml:
+#   docker compose -f compose.release.yml -f docker-compose.hosted.yml up -d
+# Traefik on this VPS is v2.11 with the Docker provider and network n8n-mkvx_proxy.
+#
+# Two routers share the host. Priority is explicit rather than left to Traefik's
+# rule-length default, so the split cannot drift when a rule is edited:
+#   api (priority 100) takes /api, /health and /ready
+#   ui  (priority 1)   takes everything else, which is the landing page and docs
 
 services:
   api:
@@ -11,16 +15,34 @@ services:
     labels:
       traefik.enable: "true"
       traefik.docker.network: n8n-mkvx_proxy
-      traefik.http.routers.reviewer.rule: Host(`reviewer.niresh.tech`)
-      traefik.http.routers.reviewer.entrypoints: websecure
-      traefik.http.routers.reviewer.tls.certresolver: letsencrypt
-      traefik.http.services.reviewer.loadbalancer.server.port: "8000"
+      traefik.http.routers.reviewer-api.rule: >-
+        Host(`reviewer.niresh.tech`) &&
+        (PathPrefix(`/api`) || Path(`/health`) || Path(`/ready`))
+      traefik.http.routers.reviewer-api.priority: "100"
+      traefik.http.routers.reviewer-api.entrypoints: websecure
+      traefik.http.routers.reviewer-api.tls.certresolver: letsencrypt
+      traefik.http.routers.reviewer-api.service: reviewer-api
+      traefik.http.services.reviewer-api.loadbalancer.server.port: "8000"
       # Liveness is Docker's job (/health, no database, restart on failure).
       # Readiness is Traefik's (/ready runs select 1). If Neon is unreachable the
       # route is withdrawn instead of serving traffic the app cannot answer.
-      traefik.http.services.reviewer.loadbalancer.healthcheck.path: /ready
-      traefik.http.services.reviewer.loadbalancer.healthcheck.interval: 10s
-      traefik.http.services.reviewer.loadbalancer.healthcheck.timeout: 3s
+      traefik.http.services.reviewer-api.loadbalancer.healthcheck.path: /ready
+      traefik.http.services.reviewer-api.loadbalancer.healthcheck.interval: 10s
+      traefik.http.services.reviewer-api.loadbalancer.healthcheck.timeout: 3s
+
+  ui:
+    networks:
+      - default
+      - proxy
+    labels:
+      traefik.enable: "true"
+      traefik.docker.network: n8n-mkvx_proxy
+      traefik.http.routers.reviewer-ui.rule: Host(`reviewer.niresh.tech`)
+      traefik.http.routers.reviewer-ui.priority: "1"
+      traefik.http.routers.reviewer-ui.entrypoints: websecure
+      traefik.http.routers.reviewer-ui.tls.certresolver: letsencrypt
+      traefik.http.routers.reviewer-ui.service: reviewer-ui
+      traefik.http.services.reviewer-ui.loadbalancer.server.port: "3000"
 
 networks:
   proxy:

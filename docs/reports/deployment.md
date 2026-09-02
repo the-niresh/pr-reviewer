@@ -56,6 +56,14 @@ The first drops a column. Before applying it, `review_jobs` held 40 rows and
 `select draft, count(*) group by draft` returned a single group, `(None, 40)`, so the
 column carried no data and had no writer in `src/`.
 
+## Routing
+
+Both surfaces are routed on the same host, split by explicit Traefik priority rather
+than rule-length defaults: `reviewer-api` (priority 100) takes `/api`, `/health` and
+`/ready`; `reviewer-ui` (priority 1) takes everything else. Measured from outside:
+`/` 200 serving the landing page, `/docs` 200, `/health` 200, `/ready` 200, and
+`/api/reviews` 401 rather than data, which is the fail-closed default.
+
 ## Not done, and why
 
 - **GitHub App 4771544 still points at the apex.** Homepage, callback
@@ -66,8 +74,6 @@ column carried no data and had no writer in `src/`.
 - **No webhook delivery has been observed.** This report does not claim one. The URL is
   stable and HTTPS, which is what the phase 19 step asks for, but proof of a real
   delivery belongs to the shadow run.
-- **The ui service is not routed.** Only the api carries Traefik labels. The web
-  dashboard is reachable only inside the compose network today.
 
 ## Rollback
 
