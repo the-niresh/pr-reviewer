@@ -110,6 +110,48 @@ def _try_installation_token_provider() -> InstallationTokenProvider | None:
     )
 
 
+@dataclass(frozen=True)
+class ReaderUnavailable:
+    """Returned instead of a reader when the hosted plane cannot be reached yet.
+
+    Carries the reason in plain words so a caller can show it on screen. Never returned once
+    a reader has been minted successfully: from that point on, an empty result is either a
+    genuinely empty answer from GitHub or an exception the caller must handle on its own.
+    """
+
+    reason: str
+
+
+def _reader_unavailable_reason() -> str:
+    try:
+        hosted_origin_from_env()
+    except HostedOriginError:
+        return (
+            "Not connected to the hosted plane: set PR_REVIEWER_HOSTED_ORIGIN and pair this "
+            "runner before repositories can be listed."
+        )
+    credential = _default_runner_credential()
+    if not credential or not credential.strip():
+        return "This runner is not paired yet: connect GitHub before repositories can be listed."
+    return "Could not reach the hosted plane to list repositories."
+
+
+def resolve_installation_repositories_reader() -> (
+    InstallationRepositoriesReader | ReaderUnavailable
+):
+    reader = try_real_installation_repositories_reader()
+    if reader is not None:
+        return reader
+    return ReaderUnavailable(_reader_unavailable_reason())
+
+
+def resolve_open_pull_requests_reader() -> OpenPullRequestsReader | ReaderUnavailable:
+    reader = try_real_open_pull_requests_reader()
+    if reader is not None:
+        return reader
+    return ReaderUnavailable(_reader_unavailable_reason())
+
+
 def try_real_installation_repositories_reader() -> InstallationRepositoriesReader | None:
     try:
         module = importlib.import_module("pr_reviewer.github.installation_repositories")

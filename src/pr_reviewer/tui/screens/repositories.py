@@ -10,14 +10,13 @@ from textual.widget import Widget
 from textual.widgets import Button, Label, Static
 
 from pr_reviewer.tui.github_reads import (
-    FakeInstallationRepositoriesReader,
-    FakeOpenPullRequestsReader,
     InstallationRepositoriesReader,
     OpenPullRequest,
     OpenPullRequestsReader,
     PermittedRepository,
-    try_real_installation_repositories_reader,
-    try_real_open_pull_requests_reader,
+    ReaderUnavailable,
+    resolve_installation_repositories_reader,
+    resolve_open_pull_requests_reader,
 )
 
 
@@ -64,21 +63,48 @@ class RepositoriesPanel(Widget):
     ) -> None:
         super().__init__(id=id)
         self._installation_id = installation_id
-        self._repositories_reader = (
-            repositories_reader
-            or try_real_installation_repositories_reader()
-            or FakeInstallationRepositoriesReader()
-        )
-        self._pull_requests_reader = (
-            pull_requests_reader
-            or try_real_open_pull_requests_reader()
-            or FakeOpenPullRequestsReader()
-        )
-        self._repositories = self._repositories_reader.list_repositories(installation_id)
+
+        # An injected reader (tests, or a caller that already resolved one) is used as-is.
+        # Otherwise this must go through the hosted plane for real -- and if that cannot
+        # happen yet, the reason is kept so compose() can say so on screen, never silently
+        # rendering an empty list that looks identical to "this installation has zero repos".
+        self._pull_requests_reader: OpenPullRequestsReader | None = pull_requests_reader
+        self._pull_requests_unavailable_reason: str | None = None
+        if pull_requests_reader is None:
+            resolved_pull_requests = resolve_open_pull_requests_reader()
+            if isinstance(resolved_pull_requests, ReaderUnavailable):
+                self._pull_requests_unavailable_reason = resolved_pull_requests.reason
+            else:
+                self._pull_requests_reader = resolved_pull_requests
+
+        repositories_source: InstallationRepositoriesReader | None = repositories_reader
+        self._repositories_unavailable_reason: str | None = None
+        if repositories_source is None:
+            resolved_repositories = resolve_installation_repositories_reader()
+            if isinstance(resolved_repositories, ReaderUnavailable):
+                self._repositories_unavailable_reason = resolved_repositories.reason
+            else:
+                repositories_source = resolved_repositories
+
+        self._repositories: tuple[PermittedRepository, ...] = ()
+        if repositories_source is not None:
+            try:
+                self._repositories = repositories_source.list_repositories(installation_id)
+            except Exception as exc:  # hosted plane or GitHub call failed after all
+                self._repositories_unavailable_reason = f"Could not load repositories: {exc}"
+
         self._selected_repository: PermittedRepository | None = None
         self._pull_requests: tuple[OpenPullRequest, ...] = ()
+        self._pull_requests_error: str | None = None
 
     def compose(self) -> ComposeResult:
+        if self._repositories_unavailable_reason is not None:
+            yield Vertical(
+                Label("Repositories", classes="repositories-heading", id="repositories-heading"),
+                Static(self._repositories_unavailable_reason, id="repositories-unavailable"),
+            )
+            return
+
         if not self._repositories:
             yield Vertical(
                 Label("Repositories", classes="repositories-heading", id="repositories-heading"),
@@ -95,7 +121,9 @@ class RepositoriesPanel(Widget):
                 Label(f"Pull requests for {repo.full_name}", classes="repositories-heading"),
                 Button("Back to repositories", id="repositories-back"),
             ]
-            if not self._pull_requests:
+            if self._pull_requests_error is not None:
+                rows.append(Static(self._pull_requests_error, id="pull-requests-unavailable"))
+            elif not self._pull_requests:
                 rows.append(
                     Static(
                         f"No open pull requests on {repo.full_name}.",
@@ -140,7 +168,20 @@ class RepositoriesPanel(Widget):
             selected = next(repo for repo in self._repositories if repo.id == repo_id)
             owner, _, name = selected.full_name.partition("/")
             self._selected_repository = selected
-            self._pull_requests = self._pull_requests_reader.list_open_pull_requests(owner, name)
+            if self._pull_requests_reader is None:
+                self._pull_requests = ()
+                self._pull_requests_error = (
+                    self._pull_requests_unavailable_reason or "Could not load pull requests."
+                )
+            else:
+                try:
+                    self._pull_requests = self._pull_requests_reader.list_open_pull_requests(
+                        owner, name
+                    )
+                    self._pull_requests_error = None
+                except Exception as exc:  # hosted plane or GitHub call failed after all
+                    self._pull_requests = ()
+                    self._pull_requests_error = f"Could not load pull requests: {exc}"
             self.view = "pull_requests"
             self.refresh(recompose=True)
             return
