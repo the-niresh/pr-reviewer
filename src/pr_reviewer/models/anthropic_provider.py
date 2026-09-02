@@ -15,6 +15,7 @@ from pr_reviewer.models.provider import (
     raise_for_provider_status,
     render_untrusted_user_message,
 )
+from pr_reviewer.models.providers import provider_auth_headers
 
 
 class AnthropicProvider:
@@ -38,10 +39,7 @@ class AnthropicProvider:
             response = self._http.post(
                 "/v1/messages",
                 json=body,
-                headers={
-                    "x-api-key": self._api_key,
-                    "anthropic-version": "2023-06-01",
-                },
+                headers=provider_auth_headers("anthropic", self._api_key),
                 timeout=request.timeout_seconds,
             )
         except httpx.TimeoutException as exc:

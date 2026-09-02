@@ -15,6 +15,7 @@ import httpx
 from pydantic import BaseModel, ConfigDict, Field, ValidationError
 
 from pr_reviewer.contracts.finding_candidate import FindingCandidate
+from pr_reviewer.models.providers import provider_auth_headers
 from pr_reviewer.security.prompt_boundaries import UntrustedText, wrap_untrusted
 
 ModelVendor = Literal["openai", "anthropic"]
@@ -188,17 +189,14 @@ def verify_provider_api_key(
         client = http if http is not None else httpx.Client(base_url="https://api.openai.com")
         response = client.get(
             "/v1/models",
-            headers={"authorization": f"Bearer {api_key}"},
+            headers=provider_auth_headers("openai", api_key),
             timeout=10.0,
         )
     else:
         client = http if http is not None else httpx.Client(base_url="https://api.anthropic.com")
         response = client.get(
             "/v1/models",
-            headers={
-                "x-api-key": api_key,
-                "anthropic-version": "2023-06-01",
-            },
+            headers=provider_auth_headers("anthropic", api_key),
             timeout=10.0,
         )
     if response.status_code in {401, 403}:

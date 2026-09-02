@@ -15,6 +15,7 @@ from pr_reviewer.models.provider import (
     raise_for_provider_status,
     render_untrusted_user_message,
 )
+from pr_reviewer.models.providers import provider_auth_headers
 
 
 class OpenAIProvider:
@@ -37,7 +38,7 @@ class OpenAIProvider:
             response = self._http.post(
                 "/v1/chat/completions",
                 json=body,
-                headers={"authorization": f"Bearer {self._api_key}"},
+                headers=provider_auth_headers("openai", self._api_key),
                 timeout=request.timeout_seconds,
             )
         except httpx.TimeoutException as exc:
