@@ -17,6 +17,7 @@ from pr_reviewer.contracts.review_context import PackedDiff
 from pr_reviewer.local_store.budget import BudgetStatus
 from pr_reviewer.local_store.review_log import ReviewLogStore
 from pr_reviewer.reviewer.receipt import FindingReceipt, SandboxVerification
+from pr_reviewer.reviewer.remediation import RemediationPrompt
 from pr_reviewer.reviewer.specialists import SPECIALIST_CONCERNS
 from pr_reviewer.tui.widgets.cost_meter import CostMeter
 
@@ -118,6 +119,7 @@ class ReviewPanel(Widget):
         self._pending_chunks: list[AgentReasoningChunk] = []
         self._streamed_concerns: list[str] = []
         self._reasoning_timer: Any = None
+        self._remediation_prompts: dict[str, str] = {}
 
     def compose(self) -> ComposeResult:
         diff_rows: list[Widget] = [
@@ -159,8 +161,15 @@ class ReviewPanel(Widget):
         self._sync_phase_visibility()
 
     def on_button_pressed(self, event: Button.Pressed) -> None:
-        if event.button.id == "review-continue":
+        button_id = event.button.id or ""
+        if button_id == "review-continue":
             self.start_agent_reasoning()
+            return
+        if button_id.startswith("copy-remediation-"):
+            finding_id = button_id.removeprefix("copy-remediation-")
+            prompt = self._remediation_prompts.get(finding_id)
+            if prompt is not None:
+                self.app.copy_to_clipboard(prompt)
 
     def start_agent_reasoning(
         self,
@@ -220,7 +229,12 @@ class ReviewPanel(Widget):
     def set_budget_status(self, status: BudgetStatus | None) -> None:
         self.query_one("#review-budget-meter", CostMeter).update_status(status)
 
-    def add_finding(self, finding: Finding, receipt: FindingReceipt) -> None:
+    def add_finding(
+        self,
+        finding: Finding,
+        receipt: FindingReceipt,
+        remediation_prompt: RemediationPrompt | None = None,
+    ) -> None:
         """Render a finding beside its receipt. receipt.verified (receipt.py:115) is the only
         source of the verified/asserted split: a finding is never styled verified because a
         sandbox run was not actually cited.
@@ -239,14 +253,26 @@ class ReviewPanel(Widget):
             f"{model_call.provider}/{model_call.model} (prompt {receipt.prompt_version_id}, "
             f"{model_call.tokens.total_tokens} tokens, ${model_call.cost_usd}) - {sources}"
         )
+        row_children: list[Widget] = [
+            Label(
+                f"{receipt.verification.status.upper()} - {finding.title}",
+                classes=f"finding-badge {status_class}",
+            ),
+            Static(f"{location} - {detail}", classes="finding-detail"),
+            Static(meta, classes="finding-meta"),
+        ]
+        if remediation_prompt is not None:
+            self._remediation_prompts[finding.id] = remediation_prompt.prompt
+            row_children.append(
+                Button(
+                    "Copy remediation prompt",
+                    id=f"copy-remediation-{finding.id}",
+                    classes="finding-remediation-button",
+                )
+            )
         container.mount(
             Vertical(
-                Label(
-                    f"{receipt.verification.status.upper()} - {finding.title}",
-                    classes=f"finding-badge {status_class}",
-                ),
-                Static(f"{location} - {detail}", classes="finding-detail"),
-                Static(meta, classes="finding-meta"),
+                *row_children,
                 classes="finding-row",
                 id=f"finding-{finding.id}",
             )
