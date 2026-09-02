@@ -10,6 +10,7 @@ from __future__ import annotations
 import uuid
 from collections.abc import Sequence
 from dataclasses import dataclass
+from datetime import datetime
 from typing import Literal
 
 from fastapi import APIRouter, Header, HTTPException, Request
@@ -227,6 +228,7 @@ class ReviewSummary(BaseModel):
     status: str
     stopped_early: bool
     stopped_early_message: str | None
+    created_at: datetime
     findings: list[ReviewFindingSummary]
 
 
@@ -290,7 +292,7 @@ def reviews_for_repository(
     with connection() as conn:
         job_rows = conn.execute(
             """
-            select id, pull_request_number, head_sha, status
+            select id, pull_request_number, head_sha, status, created_at
             from review_jobs
             where installation_id = %s and github_repository_id = %s
             order by created_at desc
@@ -326,6 +328,7 @@ def reviews_for_repository(
                     status=status,
                     stopped_early=stopped_early,
                     stopped_early_message=STOPPED_EARLY_MESSAGE if stopped_early else None,
+                    created_at=job_row["created_at"],
                     findings=findings,
                 )
             )
