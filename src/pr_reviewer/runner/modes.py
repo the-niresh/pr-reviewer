@@ -24,7 +24,7 @@ from dataclasses import dataclass
 from pr_reviewer.containers.runtime import ContainerProbe
 from pr_reviewer.contracts.runner import RunnerMode
 
-# RunnerMode already names the two modes docs/superpowers/plans/2026-08-27-hosted-control-plane-
+# RunnerMode already names the two modes docs/phases/2026-08-27-hosted-control-plane-
 # local-runner.md defines (full, analysis_only). This alias exists only so this module's public
 # interface reads as the plan names it -- RuntimeMode -- without a second, competing Literal.
 RuntimeMode = RunnerMode

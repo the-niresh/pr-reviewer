@@ -21,7 +21,6 @@ __pycache__/
 *.pem
 *.key
 secrets/
-docs/superpowers/
-docs/specs/
+docs/phases/
 datasets/private/
 graphify-out/

@@ -10,7 +10,7 @@ its own.
 This tool needs both a Postgres connection (DATABASE_URL) and a path to the runner's local SQLite
 file. The shipped end-user runner never holds both at once -- it only ever has the local file, by
 the same design that keeps Neon credentials off the runner entirely (see
-docs/superpowers/plans/2026-08-27-hosted-control-plane-local-runner.md's Non-Goals). So this is a
+docs/phases/2026-08-27-hosted-control-plane-local-runner.md's Non-Goals). So this is a
 developer/support-side tool run against a copy of, or direct access to, both stores, not a command
 the shipped runner binary exposes to an end user.
 
