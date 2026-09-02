@@ -3,9 +3,13 @@
 from __future__ import annotations
 
 import asyncio
+import time
+from collections.abc import Callable
 from pathlib import Path
+from typing import TYPE_CHECKING, Any
 
 import pytest
+from textual.pilot import Pilot
 
 from pr_reviewer.tui.auto_review import (
     TUI_CLOSED_AUTO_REVIEW_MESSAGE,
@@ -13,6 +17,32 @@ from pr_reviewer.tui.auto_review import (
     PullRequestSyncEvent,
 )
 from pr_reviewer.tui.installation_snapshot import InstallationSnapshot, RepositoryPermission
+
+if TYPE_CHECKING:
+    from pr_reviewer.runner.secrets import FileSecretStore
+
+WAIT_TIMEOUT_SECONDS = 2.0
+
+
+async def wait_until(
+    pilot: Pilot[Any],
+    condition: Callable[[], bool],
+    *,
+    description: str,
+    timeout: float = WAIT_TIMEOUT_SECONDS,
+) -> None:
+    """Pump the Textual event loop until `condition` holds or `timeout` elapses.
+
+    A bare `pilot.pause()` only proves a queued message was processed, not that the
+    condition it was meant to produce actually landed - that gap is what made this test
+    flaky. Looping on the observable condition itself removes the race entirely.
+    """
+    deadline = time.monotonic() + timeout
+    while time.monotonic() < deadline:
+        if condition():
+            return
+        await pilot.pause()
+    raise AssertionError(f"timed out after {timeout}s waiting for {description}")
 
 SAMPLE_INSTALLATION = InstallationSnapshot(
     github_login="the-niresh",
@@ -25,7 +55,7 @@ HEAD_SHA = "b" * 40
 NEWER_HEAD_SHA = "c" * 40
 
 
-def _connected_secrets(tmp_path: Path):
+def _connected_secrets(tmp_path: Path) -> FileSecretStore:
     from pr_reviewer.runner.secrets import FileSecretStore
 
     secrets = FileSecretStore(tmp_path)
@@ -126,11 +156,13 @@ def test_run_tui_prints_closed_message_when_auto_review_was_running(
 
 
 def test_tui_polls_events_and_opens_review_section(tmp_path: Path) -> None:
+    from textual.widgets import Select
+
     from pr_reviewer.tui.app import ReviewerApp
+    from pr_reviewer.tui.nav import SectionNav
     from pr_reviewer.tui.screens.review import ReviewPanel
 
     source = FakeAutoReviewEventSource()
-    source.push(_opened_event())
 
     async def exercise() -> None:
         app = ReviewerApp(
@@ -140,11 +172,37 @@ def test_tui_polls_events_and_opens_review_section(tmp_path: Path) -> None:
             auto_review_poll_interval=0.01,
         )
         async with app.run_test() as pilot:
-            await pilot.pause()
-            await pilot.pause()
+            nav = app.query_one("#section-nav", SectionNav)
+
+            def default_section_settled() -> bool:
+                # The default "repositories" section's own Select widgets finish
+                # mounting themselves (each grows a "#label" child) asynchronously,
+                # after RepositoriesPanel itself is already in the tree. Pushing the
+                # auto-review event before that finishes lets _show_section() rip the
+                # pane out from under a Select mid-mount, which crashes the app - that
+                # was the real nondeterminism here, not the poll interval.
+                selects = list(app.query(Select))
+                return bool(selects) and all(bool(select.query("#label")) for select in selects)
+
+            await wait_until(
+                pilot,
+                default_section_settled,
+                description="the default repositories section to finish mounting",
+            )
+
+            source.push(_opened_event())
+
+            def review_section_open() -> bool:
+                return nav.current_section == "reviews" and bool(app.query(ReviewPanel))
+
+            await wait_until(
+                pilot,
+                review_section_open,
+                description="the auto-review poll to open the reviews section",
+            )
+
             review = app.query_one(ReviewPanel)
             assert review is not None
-            nav = app.query_one("#section-nav")
             assert nav.current_section == "reviews"
 
     asyncio.run(exercise())

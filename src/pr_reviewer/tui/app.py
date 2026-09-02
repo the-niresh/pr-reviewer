@@ -217,7 +217,11 @@ class ReviewerApp(App[None]):
         if snapshot is None:
             return
         if "section-nav" in {widget.id for widget in self.query("#section-nav")}:
-            self.query_one(SectionNav).select_section("reviews")
+            # Set the reactive directly rather than select_section(): that also posts
+            # SectionSelected, which on_section_selected would handle by calling
+            # _show_section again with the default review_id, clobbering the
+            # PR-scoped ReviewPanel this method is about to mount below.
+            self.query_one(SectionNav).current_section = "reviews"
         self._show_section("reviews", snapshot, review_id=f"pr-{outcome.pull_request_number}")
 
     def _show_section(
