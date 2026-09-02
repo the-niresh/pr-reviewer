@@ -137,6 +137,12 @@ class ReviewPanel(Widget):
         )
         yield Vertical(*diff_rows, id="review-diffs-panel")
         yield Vertical(
+            Label("What this review could not determine", id="review-undetermined-heading"),
+            Vertical(id="review-undetermined-panel"),
+            classes="review-undetermined",
+            id="review-undetermined",
+        )
+        yield Vertical(
             Label("Agent reasoning", id="review-agents-heading"),
             Vertical(id="review-reasoning-stream"),
             Label("Findings", id="review-findings-heading"),
@@ -189,6 +195,25 @@ class ReviewPanel(Widget):
                 self._review_id,
                 chunk.concern,
                 chunk.text,
+            )
+
+    def set_undetermined(self, packed: PackedDiff) -> None:
+        """A first-class panel for what the review could not determine, not a footnote:
+        every omitted file with its real reason (diff_budget.py), shown even when the answer
+        is "nothing was omitted" rather than leaving the panel silently empty.
+        """
+        container = self.query_one("#review-undetermined-panel", Vertical)
+        container.remove_children()
+        if not packed.omitted_files:
+            container.mount(Static("Full coverage: every changed file was reviewed."))
+            return
+        for item in packed.omitted_files:
+            container.mount(
+                Static(
+                    f"{item.path} ({item.change_size} bytes) - omitted: {item.reason}",
+                    classes="undetermined-item",
+                    id=f"undetermined-{item.path.replace('/', '-').replace('.', '_')}",
+                )
             )
 
     def set_budget_status(self, status: BudgetStatus | None) -> None:
