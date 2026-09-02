@@ -3,8 +3,21 @@
 from __future__ import annotations
 
 import importlib
+from collections.abc import Callable
 from dataclasses import dataclass
+from pathlib import Path
 from typing import Any, Protocol
+
+import httpx
+
+from pr_reviewer.runner.secrets import get_secret_store
+from pr_reviewer.tui.auth_state import RUNNER_CREDENTIAL_SECRET
+from pr_reviewer.tui.github_connect import HostedOriginError, hosted_origin_from_env
+
+# The reader never keeps its own copy of a runner credential or a minted token: both are read
+# fresh on every call (secret store) or minted fresh on every call (hosted endpoint), matching
+# runner/secrets.py's own "no cache" rule for the credential this token is minted from.
+InstallationTokenProvider = Callable[[int], str]
 
 
 @dataclass(frozen=True)
@@ -57,12 +70,55 @@ class FakeOpenPullRequestsReader:
         return self.pull_requests
 
 
+def _default_runner_credential() -> str | None:
+    config_dir = Path.home() / ".config" / "pr-reviewer"
+    return get_secret_store(file_fallback_directory=config_dir).get(RUNNER_CREDENTIAL_SECRET)
+
+
+def _mint_installation_token(hosted_origin: str, credential: str, installation_id: int) -> str:
+    response = httpx.post(
+        f"{hosted_origin}/api/runner/installations/{installation_id}/token",
+        headers={"authorization": f"Bearer {credential}"},
+        timeout=30.0,
+    )
+    response.raise_for_status()
+    payload = response.json()
+    token = payload.get("token") if isinstance(payload, dict) else None
+    if not isinstance(token, str) or not token:
+        # No placeholder, no default: a hosted response with no usable token is a hosted bug or
+        # an outage, and the caller must see that immediately, never a silent empty string that
+        # would turn into an unauthenticated (and therefore rate-limited or refused) GitHub call.
+        raise RuntimeError("installation token response did not include a token")
+    return token
+
+
+def _try_installation_token_provider() -> InstallationTokenProvider | None:
+    """None only means "not configured to reach the hosted plane yet" (no hosted origin, or no
+    paired runner credential) -- the same graceful degradation _resolve_installation_snapshot
+    already applies in tui/app.py. Once both are present, a failure to mint a real token always
+    raises out of the returned callable; it never falls back to an empty or placeholder token.
+    """
+    try:
+        hosted_origin = hosted_origin_from_env()
+    except HostedOriginError:
+        return None
+    credential = _default_runner_credential()
+    if not credential or not credential.strip():
+        return None
+    return lambda installation_id: _mint_installation_token(
+        hosted_origin, credential, installation_id
+    )
+
+
 def try_real_installation_repositories_reader() -> InstallationRepositoriesReader | None:
     try:
         module = importlib.import_module("pr_reviewer.github.installation_repositories")
     except ImportError:
         return None
-    return _RealInstallationRepositoriesReader(module)
+    token_provider = _try_installation_token_provider()
+    if token_provider is None:
+        return None
+    return _RealInstallationRepositoriesReader(module, token_provider)
 
 
 def try_real_open_pull_requests_reader() -> OpenPullRequestsReader | None:
@@ -70,15 +126,21 @@ def try_real_open_pull_requests_reader() -> OpenPullRequestsReader | None:
         module = importlib.import_module("pr_reviewer.github.open_pull_requests")
     except ImportError:
         return None
-    return _RealOpenPullRequestsReader(module)
+    token_provider = _try_installation_token_provider()
+    if token_provider is None:
+        return None
+    return _RealOpenPullRequestsReader(module, token_provider)
 
 
 class _RealInstallationRepositoriesReader:
-    def __init__(self, module: Any) -> None:
+    def __init__(self, module: Any, token_provider: InstallationTokenProvider) -> None:
         self._module = module
+        self._token_provider = token_provider
 
     def list_repositories(self, installation_id: int) -> tuple[PermittedRepository, ...]:
-        rows = self._module.list_installation_repositories(installation_id)
+        rows = self._module.list_installation_repositories(
+            installation_id, token_provider=self._token_provider
+        )
         return tuple(
             PermittedRepository(id=row.id, full_name=row.full_name, private=row.private)
             for row in rows
@@ -86,15 +148,18 @@ class _RealInstallationRepositoriesReader:
 
 
 class _RealOpenPullRequestsReader:
-    def __init__(self, module: Any) -> None:
+    def __init__(self, module: Any, token_provider: InstallationTokenProvider) -> None:
         self._module = module
+        self._token_provider = token_provider
 
     def list_open_pull_requests(
         self,
         owner: str,
         repository: str,
     ) -> tuple[OpenPullRequest, ...]:
-        rows = self._module.list_open_pull_requests(owner, repository)
+        rows = self._module.list_open_pull_requests(
+            owner, repository, token_provider=self._token_provider
+        )
         return tuple(
             OpenPullRequest(
                 number=row.number,
