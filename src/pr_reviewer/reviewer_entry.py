@@ -21,6 +21,15 @@ _USAGE = "usage: reviewer <setup|doctor|trace|start|stop|status|open|update|unin
 
 
 def main(argv: Sequence[str] | None = None) -> int:
+    # config.get_settings() loads .env, but the TUI connect path reads os.environ
+    # directly and never calls it, so PR_REVIEWER_HOSTED_ORIGIN and GITHUB_APP_SLUG
+    # were invisible and the connect screen could only ever raise. Loading here, at
+    # the one entry every subcommand and the TUI share, fixes all of them at once.
+    # load_dotenv does not overwrite variables already in the environment.
+    from dotenv import load_dotenv
+
+    load_dotenv()
+
     args = list(sys.argv[1:] if argv is None else argv)
     if not args:
         if sys.stdin.isatty():
