@@ -93,8 +93,28 @@ def test_bare_reviewer_without_a_tty_does_not_start_the_tui(
 
 def test_reviewer_theme_uses_deliberate_colours() -> None:
     assert REVIEWER_THEME.name == "reviewer"
-    assert REVIEWER_THEME.background == "#0f172a"
-    assert REVIEWER_THEME.primary == "#38bdf8"
+    assert REVIEWER_THEME.background == "#0b0b0d"
+    assert REVIEWER_THEME.primary == "#e8a33d"
+
+
+def test_reviewer_theme_is_not_the_stock_tailwind_default() -> None:
+    # The defect this guards: the theme shipped as the unmodified Tailwind sky/slate
+    # palette (#38bdf8 on #0f172a). Any reintroduction of those exact values is the bug.
+    assert REVIEWER_THEME.primary != "#38bdf8"
+    assert REVIEWER_THEME.background != "#0f172a"
+
+
+def test_severity_colours_are_separate_from_the_brand_accent() -> None:
+    from pr_reviewer.tui.theme import SEVERITY_COLORS
+
+    assert SEVERITY_COLORS == {
+        "critical": "#e5484d",
+        "high": "#f76808",
+        "medium": "#e8a33d",
+        "low": "#8b8578",
+    }
+    # "critical" must never read as "this is just our brand colour".
+    assert SEVERITY_COLORS["critical"] != REVIEWER_THEME.accent
 
 
 def test_reviewer_app_registers_custom_theme(tmp_path: Path) -> None:
