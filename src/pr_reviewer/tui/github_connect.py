@@ -9,6 +9,11 @@ ALLOWED_RETURN_TO_PATHS = frozenset({"/dashboard", "/dashboard/reviews"})
 GITHUB_APP_INSTALL_URL = "https://github.com/apps/{app_slug}/installations/new"
 GITHUB_SIGN_IN_PATH = "/api/auth/github/sign-in"
 
+# A real install has no .env and nothing to configure: this is the one hosted control plane
+# the terminal talks to. PR_REVIEWER_HOSTED_ORIGIN stays readable so a developer can point the
+# terminal at a non-production control plane, but it is an override, never a requirement.
+DEFAULT_HOSTED_ORIGIN = "https://reviewer.niresh.tech"
+
 
 class HostedOriginError(ValueError):
     """The hosted origin or connect parameters are invalid."""
@@ -59,6 +64,17 @@ def hosted_origin_from_env() -> str:
     if not origin:
         raise HostedOriginError("PR_REVIEWER_HOSTED_ORIGIN is not set")
     return normalize_hosted_origin(origin)
+
+
+def resolved_hosted_origin() -> str:
+    """The hosted origin the sign-in screen talks to.
+
+    A real install never sets PR_REVIEWER_HOSTED_ORIGIN -- there is no .env to find, so this
+    must resolve on its own rather than raising. The environment variable is kept only as a
+    development override, to point the terminal at a non-production control plane.
+    """
+    origin = os.environ.get("PR_REVIEWER_HOSTED_ORIGIN", "").strip()
+    return normalize_hosted_origin(origin or DEFAULT_HOSTED_ORIGIN)
 
 
 def app_slug_from_env() -> str:
