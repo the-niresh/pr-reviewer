@@ -29,10 +29,11 @@ BLOCKING_EXEMPT_SUBSTRINGS = ("async", "defer", "module")
 
 # manifest key -> static HTML file relative to .next/server/app, or None if server-rendered
 # per request and therefore has no prerendered HTML to inspect.
+#
+# /dashboard, /dashboard/connectors and /dashboard/evals moved off the hosted site (task
+# 33.C5, see tests/test_hosted_build_has_no_local_runner_pages.py): they called the local
+# runner's own loopback API, which a hosted https origin can never reach.
 DASHBOARD_ROUTES: dict[str, str | None] = {
-    "/dashboard/page": "dashboard.html",
-    "/dashboard/connectors/page": "dashboard/connectors.html",
-    "/dashboard/evals/page": "dashboard/evals.html",
     "/dashboard/reviews/page": None,
 }
 
