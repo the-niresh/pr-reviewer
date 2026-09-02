@@ -77,6 +77,6 @@ def test_pairing_completes_unattended(tmp_path: Path) -> None:
                 lambda: app.github_connected,
                 description="github connection after pairing",
             )
-            assert app.query_one("#byok-screen") is not None
+            assert app.query_one("#model-access-screen") is not None
 
     asyncio.run(exercise())

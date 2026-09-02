@@ -32,8 +32,8 @@ from pr_reviewer.tui.installation_snapshot import (
 from pr_reviewer.tui.nav import SECTIONS, SectionNav, SectionSelected
 from pr_reviewer.tui.pairing_client import PairingClient
 from pr_reviewer.tui.pairing_wait import HttpLocalPairingStatusClient, LocalPairingStatusClient
-from pr_reviewer.tui.screens.byok import ByokPanel, ModelKeyStored
 from pr_reviewer.tui.screens.connect import ConnectPanel, PairingExchangeable, can_start_review
+from pr_reviewer.tui.screens.model_access import ModelAccessPanel, ModelKeyStored
 from pr_reviewer.tui.screens.profile import ProfilePanel
 from pr_reviewer.tui.screens.prompts import AgentPromptsPanel
 from pr_reviewer.tui.screens.repositories import RepositoriesPanel
@@ -119,7 +119,7 @@ class ReviewerApp(App[None]):
         if not self.github_connected:
             return
         if not self.model_key_configured:
-            self._mount_byok_panel()
+            self._mount_model_access_panel()
             return
         self._mount_default_section()
         self._start_auto_review()
@@ -141,7 +141,7 @@ class ReviewerApp(App[None]):
         self.query_one("#connect-screen").remove()
         layout.mount(Container(id="section-content"))
         if not self.model_key_configured:
-            self._mount_byok_panel()
+            self._mount_model_access_panel()
             return
         self._mount_default_section()
         self._start_auto_review()
@@ -169,9 +169,9 @@ class ReviewerApp(App[None]):
             return
         self._show_section(message.section_id, snapshot)
 
-    def _mount_byok_panel(self) -> None:
+    def _mount_model_access_panel(self) -> None:
         self.query_one("#section-content", Container).mount(
-            ByokPanel(secrets=self._secrets, id="byok-screen")
+            ModelAccessPanel(secrets=self._secrets, id="model-access-screen")
         )
 
     def _mount_default_section(self) -> None:
