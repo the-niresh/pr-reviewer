@@ -30,6 +30,10 @@ def test_local_versioned_asset_installs_in_clean_linux_container(tmp_path: Path)
     sums = dest / "SHA256SUMS"
     assert asset.is_file()
     assert ASSET_NAME in sums.read_text(encoding="utf-8")
+    asset_text = asset.read_text(encoding="utf-8")
+    assert "${DATABASE_URL:?DATABASE_URL must be set}" in asset_text
+    assert "${GITHUB_APP_PRIVATE_KEY:?GITHUB_APP_PRIVATE_KEY must be set}" in asset_text
+    assert "${GITHUB_WEBHOOK_SECRET:?GITHUB_WEBHOOK_SECRET must be set}" in asset_text
     result = subprocess.run(
         [
             "docker",
