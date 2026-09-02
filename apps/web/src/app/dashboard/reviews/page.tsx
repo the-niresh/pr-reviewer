@@ -1,6 +1,6 @@
 import { cookies } from "next/headers";
 
-import styles from "./page.module.css";
+import { Badge } from "@/components/ui/badge";
 
 const CONTROL_PLANE_ORIGIN =
   process.env.NEXT_PUBLIC_CONTROL_PLANE_ORIGIN ?? "http://127.0.0.1:8000";
@@ -62,6 +62,15 @@ type ReviewsResponse = {
   repositories: RepositoryReviews[];
 };
 
+/** Severity is semantic and deliberately separate from the brand accent, so
+ *  "critical" can never read as "this is fine, it is just our colour". */
+function severityTone(severity: string): "danger" | "warning" | "muted" {
+  const s = severity.toLowerCase();
+  if (s === "critical" || s === "high") return "danger";
+  if (s === "medium") return "warning";
+  return "muted";
+}
+
 export default async function ReviewsPage() {
   const cookieStore = await cookies();
   const response = await fetch(`${CONTROL_PLANE_ORIGIN}/api/reviews`, {
@@ -71,9 +80,9 @@ export default async function ReviewsPage() {
 
   if (response.status === 401) {
     return (
-      <main className={styles.wrap}>
-        <h1 className={styles.title}>Reviews</h1>
-        <p className={styles.intro}>Sign in with GitHub to see your reviews.</p>
+      <main className="mx-auto w-full max-w-4xl px-6 py-14">
+        <h1 className="text-3xl font-semibold tracking-tight">Reviews</h1>
+        <p className="text-muted-foreground mt-3">Sign in with GitHub to see your reviews.</p>
       </main>
     );
   }
@@ -81,79 +90,107 @@ export default async function ReviewsPage() {
   const data = (await response.json()) as ReviewsResponse;
 
   return (
-    <main className={styles.wrap}>
-      <h1 className={styles.title}>Reviews</h1>
+    <main className="mx-auto w-full max-w-4xl px-6 py-14">
+      <h1 className="text-3xl font-semibold tracking-tight">Reviews</h1>
       {data.repositories.length === 0 ? (
-        <p className={styles.intro}>No repositories yet.</p>
+        <p className="text-muted-foreground mt-3">No repositories yet.</p>
       ) : null}
-      {data.repositories.map((repo) => (
-        <section
-          key={`${repo.installation_id}-${repo.github_repository_id}`}
-          className={styles.repo}
-        >
-          <h2 className={styles.repoName}>{repo.repository_name}</h2>
-          {repo.reviews.length === 0 ? (
-            <p className={styles.empty}>No reviews yet.</p>
-          ) : (
-            repo.reviews.map((review) => (
-              <article key={review.review_job_id} className={styles.review}>
-                <p className={styles.reviewMeta}>
-                  <span>PR #{review.pull_request_number ?? "?"}</span>
-                  <span className={styles.reviewStatus}>{review.status}</span>
-                </p>
-                {review.findings.map((finding) => (
-                  <div key={finding.id} className={styles.finding}>
-                    <p className={styles.findingTitle}>
-                      <span className={styles.severity} data-severity={finding.severity}>
-                        {finding.severity}
+
+      <div className="mt-10 flex flex-col gap-10">
+        {data.repositories.map((repo) => (
+          <section key={`${repo.installation_id}-${repo.github_repository_id}`}>
+            <h2 className="font-mono text-sm font-semibold tracking-tight">
+              {repo.repository_name}
+            </h2>
+
+            {repo.reviews.length === 0 ? (
+              <p className="text-muted-foreground mt-2 text-sm">No reviews yet.</p>
+            ) : (
+              <div className="mt-4 flex flex-col gap-5">
+                {repo.reviews.map((review) => (
+                  <article
+                    key={review.review_job_id}
+                    className="bg-card overflow-hidden rounded-lg border"
+                  >
+                    <p className="bg-muted/40 flex items-center justify-between gap-3 border-b px-4 py-2.5 text-sm">
+                      <span className="font-medium">
+                        PR #{review.pull_request_number ?? "?"}
                       </span>
-                      {finding.title}
+                      <Badge variant="muted">{review.status}</Badge>
                     </p>
-                    <p className={styles.findingLocation}>
-                      {finding.file_path}:{finding.line_start}
-                    </p>
-                    <p className={styles.findingRationale}>{finding.rationale}</p>
-                    {finding.receipt ? (
-                      <div className={styles.receipt}>
-                        <span
-                          className={styles.receiptBadge}
-                          data-verification={finding.receipt.verification_status}
-                        >
-                          {finding.receipt.verification_status}
-                        </span>
-                        {finding.receipt.verification_status === "verified" ? (
-                          <span className={styles.receiptDetail}>
-                            {finding.receipt.verification_detail}
-                            {finding.receipt.sandbox_run_id
-                              ? ` (run ${finding.receipt.sandbox_run_id})`
-                              : ""}
-                          </span>
-                        ) : (
-                          <span className={styles.receiptDetail}>
-                            {finding.receipt.verification_reason}
-                          </span>
-                        )}
-                        {finding.receipt.model ? (
-                          <span className={styles.receiptMeta}>
-                            {finding.receipt.provider}/{finding.receipt.model}
-                            {finding.receipt.cost_usd ? ` · $${finding.receipt.cost_usd}` : ""}
-                          </span>
+
+                    {review.findings.map((finding) => (
+                      <div key={finding.id} className="border-b px-4 py-4 last:border-b-0">
+                        <p className="flex flex-wrap items-center gap-2 text-sm font-medium">
+                          <Badge variant={severityTone(finding.severity)}>
+                            {finding.severity}
+                          </Badge>
+                          {finding.title}
+                        </p>
+                        <p className="text-muted-foreground mt-1.5 font-mono text-xs">
+                          {finding.file_path}:{finding.line_start}
+                        </p>
+                        <p className="text-muted-foreground mt-2 max-w-prose text-sm leading-relaxed">
+                          {finding.rationale}
+                        </p>
+
+                        {finding.receipt ? (
+                          <div className="mt-3 flex flex-wrap items-center gap-x-3 gap-y-1.5 border-t pt-3">
+                            {/* Verified and asserted must be tellable apart at a
+                                glance, not by reading the label. */}
+                            <Badge
+                              variant={
+                                finding.receipt.verification_status === "verified"
+                                  ? "default"
+                                  : "outline"
+                              }
+                              data-verification={finding.receipt.verification_status}
+                            >
+                              {finding.receipt.verification_status}
+                            </Badge>
+                            {finding.receipt.verification_status === "verified" ? (
+                              <span className="text-muted-foreground text-xs">
+                                {finding.receipt.verification_detail}
+                                {finding.receipt.sandbox_run_id
+                                  ? ` (run ${finding.receipt.sandbox_run_id})`
+                                  : ""}
+                              </span>
+                            ) : (
+                              <span className="text-muted-foreground text-xs italic">
+                                {finding.receipt.verification_reason}
+                              </span>
+                            )}
+                            {finding.receipt.model ? (
+                              <span className="text-muted-foreground ml-auto font-mono text-xs tabular-nums">
+                                {finding.receipt.provider}/{finding.receipt.model}
+                                {finding.receipt.cost_usd
+                                  ? ` · $${finding.receipt.cost_usd}`
+                                  : ""}
+                              </span>
+                            ) : null}
+                          </div>
                         ) : null}
                       </div>
-                    ) : null}
-                  </div>
+                    ))}
+
+                    {review.reasoning.map((entry, index) => (
+                      <p
+                        key={`${entry.concern}-${index}`}
+                        className="text-muted-foreground border-t px-4 py-3 text-sm leading-relaxed"
+                      >
+                        <span className="text-foreground mr-2 font-mono text-xs">
+                          {entry.concern}
+                        </span>
+                        {entry.reasoning}
+                      </p>
+                    ))}
+                  </article>
                 ))}
-                {review.reasoning.map((entry, index) => (
-                  <p className={styles.reasoning} key={`${entry.concern}-${index}`}>
-                    <span className={styles.reasoningConcern}>{entry.concern}</span>
-                    {entry.reasoning}
-                  </p>
-                ))}
-              </article>
-            ))
-          )}
-        </section>
-      ))}
+              </div>
+            )}
+          </section>
+        ))}
+      </div>
     </main>
   );
 }

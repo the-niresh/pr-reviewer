@@ -1,7 +1,5 @@
 import Link from "next/link";
 
-import styles from "./page.module.css";
-
 const SECTIONS = [
   {
     tag: "Install",
@@ -27,21 +25,35 @@ const SECTIONS = [
 
 export default function DocsPage() {
   return (
-    <main className={styles.wrap}>
-      <h1 className={styles.title}>Docs</h1>
-      <p className={styles.intro}>
+    <main className="mx-auto w-full max-w-3xl px-6 py-14">
+      <h1 className="text-3xl font-semibold tracking-tight">Docs</h1>
+      <p className="text-muted-foreground mt-3 max-w-prose leading-relaxed">
         Everything the runner does, in the order you will hit it.
       </p>
-      {SECTIONS.map((section) => (
-        <section key={section.tag} className={styles.section}>
-          <p className={styles.sectionTag}>{section.tag}</p>
-          <h2 className={styles.sectionTitle}>{section.title}</h2>
-          <p className={styles.sectionBody}>{section.body}</p>
-          {section.tag === "Agent plugin" ? (
-            <Link href="/docs/agents">See the four surfaces</Link>
-          ) : null}
-        </section>
-      ))}
+      <div className="mt-12 flex flex-col">
+        {SECTIONS.map((section) => (
+          <section
+            key={section.tag}
+            className="border-t py-8 first:border-t-0 first:pt-0"
+          >
+            <p className="text-primary font-mono text-xs tracking-[0.14em] uppercase">
+              {section.tag}
+            </p>
+            <h2 className="mt-2 text-xl font-semibold tracking-tight">{section.title}</h2>
+            <p className="text-muted-foreground mt-3 max-w-prose leading-relaxed">
+              {section.body}
+            </p>
+            {section.tag === "Agent plugin" ? (
+              <Link
+                href="/docs/agents"
+                className="text-primary mt-4 inline-block rounded-sm text-sm underline-offset-4 hover:underline focus-visible:ring-[3px] focus-visible:ring-ring/50 focus-visible:outline-none"
+              >
+                See the four surfaces
+              </Link>
+            ) : null}
+          </section>
+        ))}
+      </div>
     </main>
   );
 }

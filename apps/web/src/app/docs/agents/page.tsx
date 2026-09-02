@@ -1,5 +1,3 @@
-import styles from "./page.module.css";
-
 const SURFACES = [
   {
     tag: "MCP",
@@ -44,27 +42,38 @@ const SURFACES = [
 
 export default function AgentSurfacesPage() {
   return (
-    <main className={styles.wrap}>
-      <h1 className={styles.title}>Agent surfaces</h1>
-      <p className={styles.intro}>
+    <main className="mx-auto w-full max-w-3xl px-6 py-14">
+      <h1 className="text-3xl font-semibold tracking-tight">Agent surfaces</h1>
+      <p className="text-muted-foreground mt-3 max-w-prose leading-relaxed">
         One core, four adapters. A parity test keeps them from drifting apart, so the same
         review and the same findings come back no matter which surface asked.
       </p>
-      {SURFACES.map((surface) => (
-        <section key={surface.tag} className={styles.section}>
-          <p className={styles.sectionTag}>{surface.tag}</p>
-          <h2 className={styles.sectionTitle}>{surface.title}</h2>
-          <p className={styles.sectionBody}>{surface.body}</p>
-          <ul className={styles.commands}>
-            {surface.commands.map((command) => (
-              <li key={command}>{command}</li>
-            ))}
-          </ul>
-        </section>
-      ))}
-      <p className={styles.refusalNote}>
-        Every surface refuses the same way when GitHub is not connected: a typed refusal naming
-        the reason, never a guess and never a degraded review.
+      <div className="mt-12 flex flex-col gap-5">
+        {SURFACES.map((surface) => (
+          <section key={surface.tag} className="bg-card rounded-lg border p-5">
+            <p className="text-primary font-mono text-xs tracking-[0.14em] uppercase">
+              {surface.tag}
+            </p>
+            <h2 className="mt-2 text-lg font-semibold tracking-tight">{surface.title}</h2>
+            <p className="text-muted-foreground mt-2 max-w-prose text-sm leading-relaxed">
+              {surface.body}
+            </p>
+            <ul className="mt-4 flex flex-col gap-1.5 overflow-x-auto">
+              {surface.commands.map((command) => (
+                <li
+                  key={command}
+                  className="bg-muted/50 rounded-md px-3 py-2 font-mono text-xs whitespace-pre"
+                >
+                  {command}
+                </li>
+              ))}
+            </ul>
+          </section>
+        ))}
+      </div>
+      <p className="text-muted-foreground border-primary/50 mt-10 max-w-prose border-l-2 pl-4 text-sm leading-relaxed">
+        Every surface refuses the same way when GitHub is not connected: a typed refusal
+        naming the reason, never a guess and never a degraded review.
       </p>
     </main>
   );

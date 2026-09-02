@@ -1,7 +1,7 @@
 import { readFileSync } from "node:fs";
 import path from "node:path";
 
-import styles from "./page.module.css";
+import { Badge } from "@/components/ui/badge";
 
 type Scorecard = {
   precision_per_finding: number | string;
@@ -47,49 +47,70 @@ export default function ScorecardPage() {
   const metricKeys = Object.keys(METRIC_LABELS) as (keyof Scorecard)[];
 
   return (
-    <main className={styles.wrap}>
-      <h1 className={styles.title}>Scorecard</h1>
-      <p className={styles.intro}>
+    <main className="mx-auto w-full max-w-3xl px-6 py-14">
+      <h1 className="text-3xl font-semibold tracking-tight">Scorecard</h1>
+      <p className="text-muted-foreground mt-3 max-w-prose leading-relaxed">
         Measured quality, or the real refusal. Nothing below is a placeholder.
       </p>
 
-      <h2 className={styles.sectionTitle}>Quality</h2>
-      <dl className={styles.metrics}>
+      <h2 className="mt-12 mb-4 text-xs font-medium tracking-[0.14em] uppercase">
+        Quality
+      </h2>
+      <dl className="overflow-hidden rounded-lg border">
         {metricKeys.map((key) => {
           const value = scorecard[key];
+          // A refusal is not a dimmed number, it is a different kind of answer,
+          // so it is set in prose while a real measurement is set in tabular mono.
           const isRefusal = typeof value === "string";
           return (
-            <div className={styles.metricRow} key={key}>
-              <dt>{METRIC_LABELS[key]}</dt>
-              <dd className={isRefusal ? styles.refusal : styles.value}>{value}</dd>
+            <div
+              key={key}
+              className="bg-card flex flex-wrap items-baseline justify-between gap-x-6 gap-y-1 border-b px-4 py-3 last:border-b-0"
+            >
+              <dt className="text-sm">{METRIC_LABELS[key]}</dt>
+              <dd
+                className={
+                  isRefusal
+                    ? "text-muted-foreground max-w-prose text-sm italic"
+                    : "font-mono text-sm tabular-nums"
+                }
+              >
+                {value}
+              </dd>
             </div>
           );
         })}
       </dl>
 
-      <h2 className={styles.sectionTitle}>Feature flags</h2>
-      <table className={styles.table}>
-        <thead>
-          <tr>
-            <th>Feature</th>
-            <th>Status</th>
-            <th>Measurement</th>
-          </tr>
-        </thead>
-        <tbody>
-          {flags.map((flag) => (
-            <tr key={flag.name}>
-              <td>{FLAG_LABELS[flag.name] ?? flag.name}</td>
-              <td>
-                <span className={flag.enabled ? styles.on : styles.off}>
-                  {flag.enabled ? "On" : "Off"}
-                </span>
-              </td>
-              <td className={styles.refusal}>{flag.measurement}</td>
+      <h2 className="mt-12 mb-4 text-xs font-medium tracking-[0.14em] uppercase">
+        Feature flags
+      </h2>
+      <div className="overflow-x-auto rounded-lg border">
+        <table className="w-full border-collapse text-sm">
+          <thead>
+            <tr className="bg-muted/40 text-muted-foreground text-left">
+              <th className="px-4 py-2.5 font-medium">Feature</th>
+              <th className="px-4 py-2.5 font-medium">Status</th>
+              <th className="px-4 py-2.5 font-medium">Measurement</th>
             </tr>
-          ))}
-        </tbody>
-      </table>
+          </thead>
+          <tbody>
+            {flags.map((flag) => (
+              <tr key={flag.name} className="bg-card border-t">
+                <td className="px-4 py-3">{FLAG_LABELS[flag.name] ?? flag.name}</td>
+                <td className="px-4 py-3">
+                  <Badge variant={flag.enabled ? "default" : "muted"}>
+                    {flag.enabled ? "On" : "Off"}
+                  </Badge>
+                </td>
+                <td className="text-muted-foreground px-4 py-3 italic">
+                  {flag.measurement}
+                </td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      </div>
     </main>
   );
 }

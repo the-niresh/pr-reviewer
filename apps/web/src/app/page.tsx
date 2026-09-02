@@ -1,6 +1,7 @@
 import Link from "next/link";
 
-import styles from "./page.module.css";
+import { buttonVariants } from "@/components/ui/button";
+import { cn } from "@/lib/utils";
 
 const PILLARS = [
   {
@@ -19,31 +20,41 @@ const PILLARS = [
 
 export default function HomePage() {
   return (
-    <main>
-      <section className={styles.hero}>
-        <span className={styles.eyebrow}>pr-reviewer</span>
-        <h1 className={styles.headline}>
-          The PR reviewer that <em>never leaves</em> your laptop
+    <main className="mx-auto w-full max-w-5xl px-6">
+      <section className="border-b py-[var(--space-section)]">
+        <span className="text-primary font-mono text-xs tracking-[0.2em] uppercase">
+          pr-reviewer
+        </span>
+        <h1 className="mt-5 max-w-[16ch] text-5xl leading-[1.05] font-semibold tracking-tight text-balance sm:text-6xl lg:text-7xl">
+          The PR reviewer that{" "}
+          <em className="text-primary not-italic">never leaves</em> your laptop
         </h1>
-        <p className={styles.subhead}>
-          Findings, reasoning, and cost show up on the web. Your source, your diffs, and your
-          model keys stay exactly where they are.
+        <p className="text-muted-foreground mt-6 max-w-prose text-lg leading-relaxed">
+          Findings, reasoning, and cost show up on the web. Your source, your diffs, and
+          your model keys stay exactly where they are.
         </p>
-        <Link href="/onboarding" className={styles.cta}>
+        <Link
+          href="/onboarding"
+          className={cn(buttonVariants({ size: "lg" }), "mt-9")}
+        >
           Connect GitHub
         </Link>
       </section>
 
-      <section className={styles.pillars}>
+      <section className="grid gap-px border-x-0 py-[var(--space-section)] sm:grid-cols-3 sm:gap-8">
         {PILLARS.map((pillar) => (
-          <article key={pillar.title} className={styles.pillar}>
-            <h2 className={styles.pillarTitle}>{pillar.title}</h2>
-            <p className={styles.pillarBody}>{pillar.body}</p>
+          <article key={pillar.title} className="sm:border-l sm:pl-6 sm:first:border-l-0 sm:first:pl-0">
+            <h2 className="text-base font-semibold">{pillar.title}</h2>
+            <p className="text-muted-foreground mt-2 text-sm leading-relaxed">
+              {pillar.body}
+            </p>
           </article>
         ))}
       </section>
 
-      <footer className={styles.footer}>reviewer.niresh.tech</footer>
+      <footer className="text-muted-foreground border-t py-8 font-mono text-xs">
+        reviewer.niresh.tech
+      </footer>
     </main>
   );
 }

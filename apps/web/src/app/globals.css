@@ -1,13 +1,44 @@
-:root {
-  color-scheme: dark;
+@import "tailwindcss";
+@import "tw-animate-css";
 
-  --color-bg: oklch(16% 0.014 260);
-  --color-surface: oklch(21% 0.018 260);
-  --color-border: oklch(30% 0.02 260);
-  --color-text: oklch(95% 0.006 260);
-  --color-muted: oklch(72% 0.02 260);
-  --color-accent: oklch(80% 0.17 155);
-  --color-accent-ink: oklch(18% 0.03 155);
+@custom-variant dark (&:is(.dark *));
+
+/* The palette predates Tailwind here and is kept deliberately: a deep blue-black
+   ground with a single green accent. It is mapped onto shadcn's token names so
+   components inherit this identity instead of stock slate. */
+:root {
+  --radius: 0.5rem;
+
+  --background: oklch(16% 0.014 260);
+  --foreground: oklch(95% 0.006 260);
+
+  --card: oklch(21% 0.018 260);
+  --card-foreground: oklch(95% 0.006 260);
+  --popover: oklch(21% 0.018 260);
+  --popover-foreground: oklch(95% 0.006 260);
+
+  --primary: oklch(80% 0.17 155);
+  --primary-foreground: oklch(18% 0.03 155);
+
+  --secondary: oklch(26% 0.02 260);
+  --secondary-foreground: oklch(95% 0.006 260);
+
+  --muted: oklch(24% 0.018 260);
+  --muted-foreground: oklch(72% 0.02 260);
+
+  --accent: oklch(26% 0.02 260);
+  --accent-foreground: oklch(95% 0.006 260);
+
+  /* Semantic, and deliberately separate from the green accent so "this needs
+     attention" never reads as "this is the brand colour". */
+  --destructive: oklch(64% 0.19 25);
+  --destructive-foreground: oklch(97% 0.01 25);
+  --warning: oklch(78% 0.15 75);
+  --success: oklch(80% 0.17 155);
+
+  --border: oklch(30% 0.02 260);
+  --input: oklch(30% 0.02 260);
+  --ring: oklch(80% 0.17 155);
 
   --font-sans:
     ui-sans-serif, system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
@@ -17,27 +48,60 @@
   --space-section: clamp(3.5rem, 3rem + 4vw, 7rem);
 }
 
-* {
-  box-sizing: border-box;
+@theme inline {
+  --color-background: var(--background);
+  --color-foreground: var(--foreground);
+  --color-card: var(--card);
+  --color-card-foreground: var(--card-foreground);
+  --color-popover: var(--popover);
+  --color-popover-foreground: var(--popover-foreground);
+  --color-primary: var(--primary);
+  --color-primary-foreground: var(--primary-foreground);
+  --color-secondary: var(--secondary);
+  --color-secondary-foreground: var(--secondary-foreground);
+  --color-muted: var(--muted);
+  --color-muted-foreground: var(--muted-foreground);
+  --color-accent: var(--accent);
+  --color-accent-foreground: var(--accent-foreground);
+  --color-destructive: var(--destructive);
+  --color-destructive-foreground: var(--destructive-foreground);
+  --color-warning: var(--warning);
+  --color-success: var(--success);
+  --color-border: var(--border);
+  --color-input: var(--input);
+  --color-ring: var(--ring);
+
+  --font-sans: var(--font-sans);
+  --font-mono: var(--font-mono);
+
+  --radius-sm: calc(var(--radius) - 2px);
+  --radius-md: var(--radius);
+  --radius-lg: calc(var(--radius) + 2px);
 }
 
-html,
-body {
-  margin: 0;
-  padding: 0;
-}
+@layer base {
+  * {
+    @apply border-border outline-ring/50;
+  }
 
-body {
-  background: var(--color-bg);
-  color: var(--color-text);
-  font-family: var(--font-sans);
-  line-height: 1.5;
-}
+  html {
+    color-scheme: dark;
+  }
 
-a {
-  color: inherit;
-}
+  body {
+    @apply bg-background text-foreground font-sans antialiased;
+    margin: 0;
+    padding: 0;
+    line-height: 1.5;
+  }
 
-img {
-  max-width: 100%;
+  /* Digits that line up in a column read as data, not prose. */
+  th,
+  td {
+    font-variant-numeric: tabular-nums;
+  }
+
+  img {
+    max-width: 100%;
+  }
 }
