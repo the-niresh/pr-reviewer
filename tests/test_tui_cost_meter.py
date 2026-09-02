@@ -9,6 +9,33 @@ from decimal import Decimal
 
 from pr_reviewer.local_store.budget import BudgetStatus
 from pr_reviewer.tui.screens.review import ReviewPanel
+from pr_reviewer.tui.widgets.cost_meter import CostMeter
+
+
+def test_cost_meter_widget_in_isolation_shows_spent_and_remaining() -> None:
+    async def exercise() -> None:
+        from textual.app import App, ComposeResult
+
+        class Harness(App[None]):
+            def compose(self) -> ComposeResult:
+                yield CostMeter(id="meter")
+
+        status = BudgetStatus(
+            spent_tokens=10,
+            spent_cost_usd=Decimal("0.01"),
+            max_tokens=100,
+            max_cost_usd=Decimal("0.10"),
+        )
+
+        async with Harness().run_test() as pilot:
+            meter = pilot.app.query_one("#meter", CostMeter)
+            meter.update_status(status)
+            await pilot.pause()
+            text = str(meter.render())
+            assert "10/100" in text
+            assert "90" in text
+
+    asyncio.run(exercise())
 
 
 def test_budget_meter_shows_spent_and_remaining() -> None:

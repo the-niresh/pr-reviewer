@@ -18,6 +18,7 @@ from pr_reviewer.local_store.budget import BudgetStatus
 from pr_reviewer.local_store.review_log import ReviewLogStore
 from pr_reviewer.reviewer.receipt import FindingReceipt, SandboxVerification
 from pr_reviewer.reviewer.specialists import SPECIALIST_CONCERNS
+from pr_reviewer.tui.widgets.cost_meter import CostMeter
 
 ReviewPhase = Literal["diffs", "agents"]
 
@@ -121,7 +122,7 @@ class ReviewPanel(Widget):
     def compose(self) -> ComposeResult:
         diff_rows: list[Widget] = [
             Label("Review", classes="review-heading", id="review-heading"),
-            Label("", id="review-budget-meter"),
+            CostMeter(id="review-budget-meter"),
             Label("Changed files", id="review-diffs-heading"),
         ]
         for index, item in enumerate(self._diff_items):
@@ -217,19 +218,7 @@ class ReviewPanel(Widget):
             )
 
     def set_budget_status(self, status: BudgetStatus | None) -> None:
-        """Live cost meter: tokens spent and budget remaining. None means unset, which is a
-        deny, not an unlimited meter (reliability/budget.py), so the meter says so plainly
-        rather than showing a blank or a zero that could read as "free so far".
-        """
-        meter = self.query_one("#review-budget-meter", Label)
-        if status is None:
-            meter.update("Budget: not set (reviews without a budget do not run)")
-            return
-        meter.update(
-            f"Budget: {status.spent_tokens}/{status.max_tokens} tokens, "
-            f"${status.spent_cost_usd} of ${status.max_cost_usd} spent "
-            f"({status.remaining_tokens} tokens, ${status.remaining_cost_usd} remaining)"
-        )
+        self.query_one("#review-budget-meter", CostMeter).update_status(status)
 
     def add_finding(self, finding: Finding, receipt: FindingReceipt) -> None:
         """Render a finding beside its receipt. receipt.verified (receipt.py:115) is the only
