@@ -36,6 +36,7 @@ from pr_reviewer.tui.installation_snapshot import (
 from pr_reviewer.tui.nav import SECTIONS, SectionNav, SectionSelected
 from pr_reviewer.tui.pairing_client import PairingClient
 from pr_reviewer.tui.pairing_wait import HttpLocalPairingStatusClient, LocalPairingStatusClient
+from pr_reviewer.tui.review_dashboard import ReviewDashboardPanel, dashboard_repositories_from_log
 from pr_reviewer.tui.screens.connect import ConnectPanel, PairingExchangeable, can_start_review
 from pr_reviewer.tui.screens.model_access import ModelAccessPanel, ModelKeyStored
 from pr_reviewer.tui.screens.profile import ProfilePanel
@@ -354,20 +355,28 @@ class ReviewerApp(App[None]):
             pane.mount(AgentPromptsPanel(snapshot, repo_config=self._repo_config))
             return
         if section_id == "reviews":
+            if review_id != "live-review":
+                pane.mount(
+                    ReviewPanel(
+                        (
+                            ReviewDiffItem(
+                                "app.py",
+                                "@@ -1,1 +1,2 @@\n-old\n+new\n",
+                            ),
+                            ReviewDiffItem(
+                                "README.md",
+                                "@@ -1,1 +1,2 @@\n # Widgets\n+More docs\n",
+                            ),
+                        ),
+                        review_log=self._review_log,
+                        review_id=review_id,
+                    )
+                )
+                return
             pane.mount(
-                ReviewPanel(
-                    (
-                        ReviewDiffItem(
-                            "app.py",
-                            "@@ -1,1 +1,2 @@\n-old\n+new\n",
-                        ),
-                        ReviewDiffItem(
-                            "README.md",
-                            "@@ -1,1 +1,2 @@\n # Widgets\n+More docs\n",
-                        ),
-                    ),
-                    review_log=self._review_log,
-                    review_id=review_id,
+                ReviewDashboardPanel(
+                    dashboard_repositories_from_log(snapshot, self._review_log),
+                    id="reviews-dashboard",
                 )
             )
             return
@@ -447,6 +456,12 @@ class ReviewerApp(App[None]):
     def action_go_back(self) -> None:
         panes = self._panes()
         if panes is None:
+            return
+        try:
+            dashboard = self.query_one(ReviewDashboardPanel)
+        except NoMatches:
+            dashboard = None
+        if dashboard is not None and dashboard.back_to_table():
             return
         nav, _content = panes
         focusables = self._focusables(nav)

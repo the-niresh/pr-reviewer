@@ -5,6 +5,12 @@ from __future__ import annotations
 import asyncio
 from pathlib import Path
 
+from pr_reviewer.tui.github_reads import (
+    FakeInstallationRepositoriesReader,
+    FakeOpenPullRequestsReader,
+    OpenPullRequest,
+    PermittedRepository,
+)
 from pr_reviewer.tui.installation_snapshot import InstallationSnapshot, RepositoryPermission
 from pr_reviewer.tui.screens.review import ReviewDiffItem, ReviewPanel
 
@@ -75,16 +81,35 @@ def test_review_panel_shows_every_diff_before_agents_speak() -> None:
     asyncio.run(exercise())
 
 
-def test_connected_app_reviews_section_shows_diffs_first(tmp_path: Path) -> None:
+def test_connected_app_pull_request_selection_shows_diffs_first(tmp_path: Path) -> None:
     from pr_reviewer.tui.app import ReviewerApp
 
     async def exercise() -> None:
+        repos = FakeInstallationRepositoriesReader(
+            repositories=(PermittedRepository(id=11, full_name="in-scope"),)
+        )
+        prs = FakeOpenPullRequestsReader(
+            pull_requests=(
+                OpenPullRequest(
+                    number=42,
+                    title="Add widgets",
+                    author="niresh",
+                    head_sha="b" * 40,
+                    updated_at="2026-09-02T12:00:00Z",
+                ),
+            )
+        )
         app = ReviewerApp(
             secrets=_connected_secrets(tmp_path),
             installation_snapshot=SAMPLE_INSTALLATION,
+            repositories_reader=repos,
+            pull_requests_reader=prs,
         )
         async with app.run_test() as pilot:
-            await pilot.click("#nav-reviews")
+            await pilot.pause()
+            await pilot.click("#repository-11")
+            await pilot.pause()
+            await pilot.click("#pull-request-42")
             panel = pilot.app.query_one(ReviewPanel)
             assert panel.phase == "diffs"
             assert panel.query_one("#review-diff-0") is not None

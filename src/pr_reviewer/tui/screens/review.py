@@ -24,6 +24,7 @@ from pr_reviewer.tui.push_review_summary import (
     PushReviewSummaryResult,
     ReviewSummaryClient,
     ReviewSummaryPush,
+    build_summary_payload,
     push_review_summary,
 )
 from pr_reviewer.tui.widgets.cost_meter import CostMeter
@@ -241,6 +242,9 @@ class ReviewPanel(Widget):
                 f"Could not save review to the hosted plane: {result.error}",
                 severity="warning",
             )
+            return result
+        if self._review_log is not None:
+            self._review_log.append_review_summary(build_summary_payload(summary))
         return result
 
     @property
