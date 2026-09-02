@@ -50,6 +50,8 @@ type ReviewSummary = {
   pull_request_number: number | null;
   head_sha: string | null;
   status: string;
+  stopped_early: boolean;
+  stopped_early_message: string | null;
   findings: ReviewFinding[];
 };
 
@@ -143,8 +145,18 @@ export default async function ReviewsPage() {
                       <span className="font-medium">
                         PR #{review.pull_request_number ?? "?"}
                       </span>
-                      <Badge variant="muted">{review.status}</Badge>
+                      {/* stopped_early must never read as a finished review: a distinct
+                          tone and label, never the raw "stopped_early" status token. */}
+                      <Badge variant={review.stopped_early ? "warning" : "muted"}>
+                        {review.stopped_early ? "Stopped early" : review.status}
+                      </Badge>
                     </p>
+
+                    {review.stopped_early ? (
+                      <p className="border-b bg-[var(--warning)]/10 px-4 py-2.5 text-sm leading-relaxed text-[var(--warning)]">
+                        {review.stopped_early_message}
+                      </p>
+                    ) : null}
 
                     {review.findings.map((finding) => (
                       <div key={finding.id} className="border-b px-4 py-4 last:border-b-0">

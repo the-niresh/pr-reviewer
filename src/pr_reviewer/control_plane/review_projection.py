@@ -203,6 +203,21 @@ class ReviewFindingSummary(BaseModel):
     receipt: FindingReceiptSummary | None
 
 
+# Task 33.E2: the web's plain-words explanation for a review that stopped because the runner's
+# provider ran out of tokens. Deliberately not imported from tui/out_of_tokens.py: control_plane
+# may never import models or tui (test_package_boundaries.py), and the pushed summary never
+# carries a provider name or a reason string (tui/push_review_summary.py's ALLOWED_SUMMARY_FIELDS
+# has neither -- reason is exactly the field the hosted boundary must never see). So this stays
+# provider-agnostic on purpose, and it reuses the terminal's own vocabulary ("ran out of tokens",
+# "switch provider") from tui/out_of_tokens.py so the two surfaces never describe the same
+# situation in two different ways.
+STOPPED_EARLY_MESSAGE = (
+    "This review stopped early: the provider ran out of tokens partway through. The findings "
+    "below are still complete and trustworthy for the code they cover. Add credits or switch "
+    "provider on your machine to finish reviewing the rest."
+)
+
+
 class ReviewSummary(BaseModel):
     model_config = ConfigDict(frozen=True, extra="forbid")
 
@@ -210,6 +225,8 @@ class ReviewSummary(BaseModel):
     pull_request_number: int | None
     head_sha: str | None
     status: str
+    stopped_early: bool
+    stopped_early_message: str | None
     findings: list[ReviewFindingSummary]
 
 
@@ -299,12 +316,16 @@ def reviews_for_repository(
                 (review_job_id,),
             ).fetchall()
             findings = [_finding_summary(conn, row) for row in finding_rows]
+            status = str(job_row["status"])
+            stopped_early = status == "stopped_early"
             summaries.append(
                 ReviewSummary(
                     review_job_id=review_job_id,
                     pull_request_number=job_row["pull_request_number"],
                     head_sha=job_row["head_sha"],
-                    status=str(job_row["status"]),
+                    status=status,
+                    stopped_early=stopped_early,
+                    stopped_early_message=STOPPED_EARLY_MESSAGE if stopped_early else None,
                     findings=findings,
                 )
             )
