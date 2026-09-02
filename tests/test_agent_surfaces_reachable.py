@@ -59,10 +59,22 @@ def test_reviewer_routes_acp_to_runner_cli(monkeypatch: pytest.MonkeyPatch) -> N
     assert calls == [[]]
 
 
+def test_reviewer_routes_review_to_runner_cli(monkeypatch: pytest.MonkeyPatch) -> None:
+    from pr_reviewer.reviewer_entry import main as reviewer_main
+
+    calls: list[Sequence[str]] = []
+    monkeypatch.setattr("pr_reviewer.runner.cli.review.main", _fake_main(calls, 7))
+
+    code = reviewer_main(["review", "acme/widgets#1", "--json"])
+
+    assert code == 7
+    assert calls == [["acme/widgets#1", "--json"]]
+
+
 def test_usage_lists_every_agent_surface_subcommand() -> None:
     from pr_reviewer.reviewer_entry import _USAGE
 
-    for name in ("mcp", "a2a", "acp"):
+    for name in ("review", "mcp", "a2a", "acp"):
         assert name in _USAGE
 
 

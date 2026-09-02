@@ -46,20 +46,20 @@ class JSONCLI:
         output = stdout or sys.stdout
         args = list(sys.argv[1:] if argv is None else argv)
         try:
-            result = self._run(args)
+            result = self.run(args)
         except AgentSurfaceRefusal as refusal:
-            _write_json(
+            write_json_result(
                 output,
                 JSONCLIResult(status="refused", refusal=refusal.as_payload()),
             )
             return 2
         except (KeyError, TypeError, ValueError) as error:
-            _write_json(output, JSONCLIResult(status="error", error=str(error)))
+            write_json_result(output, JSONCLIResult(status="error", error=str(error)))
             return 1
-        _write_json(output, JSONCLIResult(status="ok", result=result))
+        write_json_result(output, JSONCLIResult(status="ok", result=result))
         return 0
 
-    def _run(self, argv: Sequence[str]) -> dict[str, Any] | list[dict[str, Any]]:
+    def run(self, argv: Sequence[str]) -> dict[str, Any] | list[dict[str, Any]]:
         namespace = _parser().parse_args(list(argv))
         command = namespace.command
         if command == "review":
@@ -102,7 +102,7 @@ def _parser() -> argparse.ArgumentParser:
     return parser
 
 
-def _write_json(output: TextIO, payload: JSONCLIResult) -> None:
+def write_json_result(output: TextIO, payload: JSONCLIResult) -> None:
     print(
         json.dumps(payload.model_dump(mode="json", exclude_none=True), sort_keys=True),
         file=output,

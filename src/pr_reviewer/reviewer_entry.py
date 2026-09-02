@@ -19,7 +19,7 @@ from collections.abc import Sequence
 
 _USAGE = (
     "usage: reviewer <setup|doctor|trace|start|stop|status|open|update|uninstall"
-    "|mcp|a2a|acp> [args...]"
+    "|review|mcp|a2a|acp> [args...]"
 )
 
 
@@ -73,6 +73,11 @@ def main(argv: Sequence[str] | None = None) -> int:
         from pr_reviewer.runner.cli.uninstall import main as uninstall_main
 
         return uninstall_main(rest)
+
+    if subcommand == "review":
+        from pr_reviewer.runner.cli.review import main as review_main
+
+        return review_main(rest)
 
     if subcommand == "mcp":
         from pr_reviewer.runner.cli.mcp import main as mcp_main
