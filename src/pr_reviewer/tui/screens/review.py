@@ -108,6 +108,7 @@ class ReviewPanel(Widget):
         review_id: str = "live-review",
         reasoning_feed: Iterable[AgentReasoningChunk] | None = None,
         stream_immediately: bool = False,
+        reasoning_stream_interval: float = 0.05,
         id: str | None = None,
     ) -> None:
         super().__init__(id=id)
@@ -116,6 +117,7 @@ class ReviewPanel(Widget):
         self._review_id = review_id
         self._reasoning_feed = tuple(reasoning_feed or default_reasoning_feed())
         self._stream_immediately = stream_immediately
+        self._reasoning_stream_interval = reasoning_stream_interval
         self._pending_chunks: list[AgentReasoningChunk] = []
         self._streamed_concerns: list[str] = []
         self._reasoning_timer: Any = None
@@ -180,7 +182,10 @@ class ReviewPanel(Widget):
         if self._stream_immediately:
             self._flush_pending_reasoning()
             return
-        self._reasoning_timer = self.set_interval(0.05, self._deliver_next_reasoning_chunk)
+        self._reasoning_timer = self.set_interval(
+            self._reasoning_stream_interval,
+            self._deliver_next_reasoning_chunk,
+        )
 
     def _flush_pending_reasoning(self) -> None:
         while self._pending_chunks:
