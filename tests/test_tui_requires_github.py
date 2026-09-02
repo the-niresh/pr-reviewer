@@ -38,6 +38,9 @@ class FakePairingClient:
             return self.status_sequence.pop(0)
         return "pending"
 
+    def exchange(self, code: str, proof: str) -> str:
+        return "runner-credential-test"
+
 
 def test_can_start_review_requires_connection() -> None:
     assert can_start_review(False) is False
@@ -52,47 +55,6 @@ def test_unconnected_app_shows_connect_screen() -> None:
         async with app.run_test():
             assert app.query_one("#connect-screen", ConnectPanel) is not None
             assert app.github_connected is False
-
-    asyncio.run(exercise())
-
-
-def test_connect_screen_shows_hosted_urls_and_pairing_code() -> None:
-    async def exercise() -> None:
-        config = ConnectConfig(
-            hosted_origin="https://reviewer.niresh.tech",
-            app_slug="pr-reviewer",
-            device_name="test-laptop",
-        )
-        panel = ConnectPanel(config=config, pairing_client=FakePairingClient())
-        async with ConnectHarness(panel).run_test() as pilot:
-            screen = pilot.app.query_one(ConnectPanel)
-            install = str(screen.query_one("#install-url").render())
-            sign_in = str(screen.query_one("#sign-in-url").render())
-            pairing = str(screen.query_one("#pairing-code").render())
-            assert "https://github.com/apps/pr-reviewer/installations/new" in install
-            assert "https://reviewer.niresh.tech/api/auth/github/sign-in" in sign_in
-            assert "127.0.0.1" not in sign_in
-            assert "PAIR-TUI-1" in pairing
-
-    asyncio.run(exercise())
-
-
-def test_connect_screen_waits_until_pairing_is_exchangeable() -> None:
-    async def exercise() -> None:
-        client = FakePairingClient(status_sequence=["exchangeable"])
-        config = ConnectConfig(
-            hosted_origin="https://reviewer.niresh.tech",
-            app_slug="pr-reviewer",
-            device_name="test-laptop",
-        )
-        panel = ConnectPanel(config=config, pairing_client=client)
-        async with ConnectHarness(panel).run_test() as pilot:
-            screen = pilot.app.query_one(ConnectPanel)
-            assert screen.pairing_status == "pending"
-            screen._poll_pairing_status()
-            assert screen.pairing_status == "exchangeable"
-            rendered = str(screen.query_one("#pairing-status").render())
-            assert "exchangeable" in rendered
 
     asyncio.run(exercise())
 

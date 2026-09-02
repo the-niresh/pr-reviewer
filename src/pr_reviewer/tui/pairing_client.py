@@ -14,6 +14,8 @@ class PairingClient(Protocol):
 
     def status(self, code: str, challenge: str) -> PairingStatus: ...
 
+    def exchange(self, code: str, proof: str) -> str: ...
+
 
 class HostedPairingClient:
     def __init__(self, hosted_origin: str) -> None:
@@ -46,3 +48,16 @@ class HostedPairingClient:
         if raw_state == "exchangeable":
             return "exchangeable"
         return "invalid_or_expired"
+
+    def exchange(self, code: str, proof: str) -> str:
+        response = httpx.post(
+            f"{self._hosted_origin}/api/runner/pairing-codes/exchange",
+            json={"code": code, "proof": proof},
+            timeout=30.0,
+        )
+        response.raise_for_status()
+        payload = response.json()
+        credential = payload.get("credential")
+        if not isinstance(credential, str) or not credential:
+            raise RuntimeError("pairing exchange response missing credential")
+        return credential

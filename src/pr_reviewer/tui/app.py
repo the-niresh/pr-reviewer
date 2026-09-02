@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import sys
+from collections.abc import Callable
 from pathlib import Path
 from typing import Any
 
@@ -30,8 +31,9 @@ from pr_reviewer.tui.installation_snapshot import (
 )
 from pr_reviewer.tui.nav import SECTIONS, SectionNav, SectionSelected
 from pr_reviewer.tui.pairing_client import PairingClient
+from pr_reviewer.tui.pairing_wait import HttpLocalPairingStatusClient, LocalPairingStatusClient
 from pr_reviewer.tui.screens.byok import ByokPanel, ModelKeyStored
-from pr_reviewer.tui.screens.connect import ConnectPanel, can_start_review
+from pr_reviewer.tui.screens.connect import ConnectPanel, PairingExchangeable, can_start_review
 from pr_reviewer.tui.screens.profile import ProfilePanel
 from pr_reviewer.tui.screens.prompts import AgentPromptsPanel
 from pr_reviewer.tui.screens.repositories import RepositoriesPanel
@@ -55,6 +57,9 @@ class ReviewerApp(App[None]):
         config_dir: Path | None = None,
         auto_review_event_source: AutoReviewEventSource | None = None,
         auto_review_poll_interval: float = 1.0,
+        local_pairing_status_client: LocalPairingStatusClient | None = None,
+        pairing_poll_interval: float = 2.0,
+        browser_opener: Callable[[str], None] | None = None,
     ) -> None:
         super().__init__()
         self.register_theme(REVIEWER_THEME)
@@ -75,6 +80,11 @@ class ReviewerApp(App[None]):
         self._auto_review = AutoReviewCoordinator(on_start_review=self._on_auto_review_start)
         self._auto_review_timer: Any = None
         self._auto_review_was_running = False
+        self._local_pairing_status_client = (
+            local_pairing_status_client or HttpLocalPairingStatusClient()
+        )
+        self._pairing_poll_interval = pairing_poll_interval
+        self._browser_opener = browser_opener
 
     @property
     def github_connected(self) -> bool:
@@ -95,7 +105,13 @@ class ReviewerApp(App[None]):
 
         yield Horizontal(
             SectionNav(id="section-nav"),
-            ConnectPanel(pairing_client=self._pairing_client, id="connect-screen"),
+            ConnectPanel(
+                pairing_client=self._pairing_client,
+                local_status_client=self._local_pairing_status_client,
+                browser_opener=self._browser_opener,
+                pairing_poll_interval=self._pairing_poll_interval,
+                id="connect-screen",
+            ),
             id="main-layout",
         )
 
@@ -110,6 +126,25 @@ class ReviewerApp(App[None]):
 
     def on_unmount(self) -> None:
         self._stop_auto_review()
+
+
+    def on_pairing_exchangeable(self, message: PairingExchangeable) -> None:
+        client = self._pairing_client
+        if client is None:
+            return
+        credential = client.exchange(message.code, message.verifier)
+        self._secrets.set(RUNNER_CREDENTIAL_SECRET, credential)
+        self._rebuild_after_pairing()
+
+    def _rebuild_after_pairing(self) -> None:
+        layout = self.query_one("#main-layout")
+        self.query_one("#connect-screen").remove()
+        layout.mount(Container(id="section-content"))
+        if not self.model_key_configured:
+            self._mount_byok_panel()
+            return
+        self._mount_default_section()
+        self._start_auto_review()
 
     def on_model_key_stored(self, _message: ModelKeyStored) -> None:
         pane = self.query_one("#section-content", Container)
