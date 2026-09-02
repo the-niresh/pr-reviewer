@@ -51,6 +51,10 @@ class SurfaceFinding(BaseModel):
     rationale: str = Field(min_length=1)
     evidence: tuple[str, ...] = Field(min_length=1)
     confidence: float = Field(ge=0, le=1)
+    # False for every backend today: the diff-only reviewer never runs a sandbox. This stays
+    # honest rather than invented -- it flips to True only once a caller actually reproduces the
+    # finding in a sandbox and sets it, never as a default guess.
+    verified: bool = False
 
 
 class RemediationPrompt(BaseModel):
@@ -64,6 +68,10 @@ class SurfaceReview(BaseModel):
     model_config = ConfigDict(frozen=True, extra="forbid")
 
     review_id: str = Field(min_length=1)
+    owner: str = Field(min_length=1)
+    repository: str = Field(min_length=1)
+    pull_request: int = Field(gt=0)
+    head_sha: str = Field(min_length=1)
     status: Literal["queued", "running", "complete", "cancelled", "failed"]
     findings: tuple[SurfaceFinding, ...]
     remediation_prompts: tuple[RemediationPrompt, ...]

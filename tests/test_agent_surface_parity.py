@@ -51,6 +51,10 @@ class FakeBackend:
         assert request == AgentReviewRequest(owner="acme", repository="widgets", pull_request=12)
         return SurfaceReview(
             review_id="review-1",
+            owner=request.owner,
+            repository=request.repository,
+            pull_request=request.pull_request,
+            head_sha="deadbeef00000000000000000000000000000000",
             status="complete",
             findings=self.findings,
             remediation_prompts=self.prompts,

@@ -17,7 +17,10 @@ from __future__ import annotations
 import sys
 from collections.abc import Sequence
 
-_USAGE = "usage: reviewer <setup|doctor|trace|start|stop|status|open|update|uninstall> [args...]"
+_USAGE = (
+    "usage: reviewer <setup|doctor|trace|start|stop|status|open|update|uninstall"
+    "|mcp|a2a|acp> [args...]"
+)
 
 
 def main(argv: Sequence[str] | None = None) -> int:
@@ -70,6 +73,21 @@ def main(argv: Sequence[str] | None = None) -> int:
         from pr_reviewer.runner.cli.uninstall import main as uninstall_main
 
         return uninstall_main(rest)
+
+    if subcommand == "mcp":
+        from pr_reviewer.runner.cli.mcp import main as mcp_main
+
+        return mcp_main(rest)
+
+    if subcommand == "a2a":
+        from pr_reviewer.runner.cli.a2a import main as a2a_main
+
+        return a2a_main(rest)
+
+    if subcommand == "acp":
+        from pr_reviewer.runner.cli.acp import main as acp_main
+
+        return acp_main(rest)
 
     print(f"reviewer: unknown subcommand {subcommand!r}\n{_USAGE}", file=sys.stderr)
     return 1
