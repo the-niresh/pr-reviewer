@@ -15,6 +15,12 @@ services:
       traefik.http.routers.reviewer.entrypoints: websecure
       traefik.http.routers.reviewer.tls.certresolver: letsencrypt
       traefik.http.services.reviewer.loadbalancer.server.port: "8000"
+      # Liveness is Docker's job (/health, no database, restart on failure).
+      # Readiness is Traefik's (/ready runs select 1). If Neon is unreachable the
+      # route is withdrawn instead of serving traffic the app cannot answer.
+      traefik.http.services.reviewer.loadbalancer.healthcheck.path: /ready
+      traefik.http.services.reviewer.loadbalancer.healthcheck.interval: 10s
+      traefik.http.services.reviewer.loadbalancer.healthcheck.timeout: 3s
 
 networks:
   proxy:
