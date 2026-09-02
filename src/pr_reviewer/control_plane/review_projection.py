@@ -7,17 +7,21 @@ has nowhere to go.
 
 from __future__ import annotations
 
+import uuid
 from collections.abc import Sequence
 from dataclasses import dataclass
 from typing import Literal
 
-from fastapi import APIRouter, HTTPException, Request
+from fastapi import APIRouter, Header, HTTPException, Request
 from psycopg import Connection
-from pydantic import BaseModel, ConfigDict
+from pydantic import BaseModel, ConfigDict, Field, model_validator
 
-from pr_reviewer.contracts.finding import Concern, Finding
+from pr_reviewer.contracts.finding import Concern, Finding, FindingStatus, Severity
+from pr_reviewer.contracts.runner import AuthenticatedRunner, AuthorizationDenied, RunnerAuthDenied
 from pr_reviewer.control_plane.github_auth import LiveInstallationAssertion
 from pr_reviewer.control_plane.github_oauth import LIVE_SIGN_IN_COOKIE_NAME, read_live_sign_in
+from pr_reviewer.control_plane.repository_policy import authorize_repository
+from pr_reviewer.control_plane.runner_auth import authenticate_runner
 from pr_reviewer.db.client import Row, connection
 
 
@@ -374,3 +378,151 @@ def list_reviews(
                 )
             )
     return ReviewsResponse(repositories=repositories)
+
+
+# Task 33.A4: the receiving end of tui/push_review_summary.py. That module's ALLOWED_FINDING_FIELDS
+# and ALLOWED_SUMMARY_FIELDS are the sending side's own allowlist; the two Pydantic models below are
+# this endpoint's independent copy of the same shape, field for field, deliberately not shared code
+# -- control_plane must never import tui (the hosted plane cannot depend on code that only makes
+# sense holding a model key on someone's laptop). extra="forbid" on both models is what makes a
+# mistake on the sending side loud: a payload carrying "reasoning", "diff", "source", or anything
+# else outside this shape fails with a 422 naming the field, not a silent drop.
+class PushedFindingBody(BaseModel):
+    model_config = ConfigDict(frozen=True, extra="forbid")
+
+    concern: Concern
+    severity: Severity
+    file_path: str = Field(min_length=1)
+    line_start: int = Field(gt=0)
+    line_end: int = Field(gt=0)
+    title: str = Field(min_length=1)
+    status: FindingStatus
+
+    @model_validator(mode="after")
+    def validate_line_range(self) -> PushedFindingBody:
+        if self.line_end < self.line_start:
+            raise ValueError("line_end must be greater than or equal to line_start")
+        return self
+
+
+class PushedReviewSummaryBody(BaseModel):
+    model_config = ConfigDict(frozen=True, extra="forbid")
+
+    review_job_id: uuid.UUID
+    installation_id: int
+    github_repository_id: int
+    pull_request_number: int
+    head_sha: str = Field(min_length=1)
+    status: Literal["completed", "stopped_early"]
+    stopped_early: bool = False
+    findings: list[PushedFindingBody] = Field(default_factory=list)
+
+    @model_validator(mode="after")
+    def validate_stopped_early_matches_status(self) -> PushedReviewSummaryBody:
+        if self.stopped_early != (self.status == "stopped_early"):
+            raise ValueError("stopped_early must match status == 'stopped_early'")
+        return self
+
+
+class PushedReviewSummaryResult(BaseModel):
+    model_config = ConfigDict(frozen=True, extra="forbid")
+
+    status: Literal["saved"] = "saved"
+
+
+def _authenticate_runner_bearer(authorization: str | None) -> AuthenticatedRunner:
+    if authorization is None or not authorization.startswith("Bearer "):
+        raise HTTPException(status_code=401, detail="missing bearer credential")
+    credential = authorization.removeprefix("Bearer ")
+    authenticated = authenticate_runner(credential)
+    if isinstance(authenticated, RunnerAuthDenied):
+        raise HTTPException(status_code=401, detail=authenticated.reason)
+    return authenticated
+
+
+def save_pushed_review_summary(body: PushedReviewSummaryBody) -> None:
+    """Idempotent on review_job_id: a retried push updates the review_jobs row in place (it is
+    ordinary mutable state, not append-only) rather than inserting a second one, since (id) is
+    its primary key. Findings are append-only by design (review_findings_append_only, migration
+    202609020136) the same as every other writer of that table, so a retried push instead gets a
+    deterministic id per finding (review_job_id + position) and "on conflict do nothing": the
+    second copy of the same retry is a no-op, never a duplicate row.
+
+    category, rationale, confidence, verified, verification_method and public_safe have no
+    equivalent on the thin pushed shape -- Niresh's allowed-to-cross list for this path is
+    narrower than Phase 27/30's (title, concern, severity, file_path, line numbers, status only,
+    never rationale). They get the literal, honest value for "nothing was asserted here":
+    verified=false and verification_method='not_applicable', never a fabricated confidence.
+    """
+    with connection() as conn, conn.transaction():
+        conn.execute(
+            """
+            insert into review_jobs (
+              id, delivery_id, status, installation_id, github_repository_id,
+              pull_request_number, head_sha
+            )
+            values (%s, null, %s, %s, %s, %s, %s)
+            on conflict (id) do update set
+              status = excluded.status,
+              installation_id = excluded.installation_id,
+              github_repository_id = excluded.github_repository_id,
+              pull_request_number = excluded.pull_request_number,
+              head_sha = excluded.head_sha,
+              updated_at = now()
+            """,
+            (
+                str(body.review_job_id),
+                body.status,
+                body.installation_id,
+                body.github_repository_id,
+                body.pull_request_number,
+                body.head_sha,
+            ),
+        )
+        for index, finding in enumerate(body.findings):
+            finding_id = f"{body.review_job_id}:{index}"
+            conn.execute(
+                """
+                insert into review_findings (
+                  id, review_job_id, concern, severity, category, file_path,
+                  line_start, line_end, title, rationale, confidence,
+                  verified, verification_method, public_safe, status
+                )
+                values (
+                  %s, %s, %s, %s, '', %s, %s, %s, %s, '', 0,
+                  false, 'not_applicable', true, %s
+                )
+                on conflict (id) do nothing
+                """,
+                (
+                    finding_id,
+                    str(body.review_job_id),
+                    finding.concern,
+                    finding.severity,
+                    finding.file_path,
+                    finding.line_start,
+                    finding.line_end,
+                    finding.title,
+                    finding.status,
+                ),
+            )
+
+
+@router.post("/summary", response_model=PushedReviewSummaryResult)
+def push_review_summary_route(
+    body: PushedReviewSummaryBody,
+    authorization: str | None = Header(default=None),
+) -> PushedReviewSummaryResult:
+    """A paired runner's terminal pushes exactly one finished review here. Authenticated the same
+    way the runner job protocol is (control_plane/runner_jobs.py's bearer credential), then
+    re-authorized against the specific repository named in the body the same way
+    token_broker.issue_job_token re-checks it: holding a valid credential is not the same as
+    being assigned to this repository.
+    """
+    runner = _authenticate_runner_bearer(authorization)
+    denial = authorize_repository(body.installation_id, body.github_repository_id, runner.runner_id)
+    if isinstance(denial, AuthorizationDenied):
+        raise HTTPException(status_code=403, detail=denial.reason)
+
+    save_pushed_review_summary(body)
+    return PushedReviewSummaryResult()

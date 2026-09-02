@@ -106,8 +106,10 @@ ALLOWLIST: dict[tuple[str, str], str] = {
     ("repositories", "name"): "GitHub repository name: an identifier, not repository content.",
     ("review_jobs", "delivery_id"): "References github_deliveries.id, an opaque identifier.",
     ("review_jobs", "status"): (
-        "Fixed enum ('pending', 'running', 'succeeded', 'failed', 'superseded', 'cancelled'), "
-        "enforced by a check constraint."
+        "Fixed enum ('pending', 'running', 'succeeded', 'failed', 'superseded', 'cancelled', "
+        "'completed', 'stopped_early'), enforced by a check constraint. The last two are set by "
+        "a pushed review summary (control_plane/review_projection.py), never by the queue-driven "
+        "path."
     ),
     ("review_jobs", "locked_by"): "Worker id holding the current lease, an operational identifier.",
     ("review_jobs", "last_error"): (
