@@ -22,6 +22,7 @@ from pr_reviewer.tui.auto_review import (
     AutoReviewOutcome,
     PullRequestSyncEvent,
 )
+from pr_reviewer.tui.github_reads import InstallationRepositoriesReader, OpenPullRequestsReader
 from pr_reviewer.tui.installation_client import HostedInstallationClient, InstallationClient
 from pr_reviewer.tui.installation_snapshot import (
     InstallationSnapshot,
@@ -36,7 +37,7 @@ from pr_reviewer.tui.screens.connect import ConnectPanel, PairingExchangeable, c
 from pr_reviewer.tui.screens.model_access import ModelAccessPanel, ModelKeyStored
 from pr_reviewer.tui.screens.profile import ProfilePanel
 from pr_reviewer.tui.screens.prompts import AgentPromptsPanel
-from pr_reviewer.tui.screens.repositories import RepositoriesPanel
+from pr_reviewer.tui.screens.repositories import PullRequestSelected, RepositoriesPanel
 from pr_reviewer.tui.screens.review import ReviewDiffItem, ReviewPanel
 from pr_reviewer.tui.theme import REVIEWER_CSS, REVIEWER_THEME
 
@@ -60,6 +61,8 @@ class ReviewerApp(App[None]):
         local_pairing_status_client: LocalPairingStatusClient | None = None,
         pairing_poll_interval: float = 2.0,
         browser_opener: Callable[[str], None] | None = None,
+        repositories_reader: InstallationRepositoriesReader | None = None,
+        pull_requests_reader: OpenPullRequestsReader | None = None,
     ) -> None:
         super().__init__()
         self.register_theme(REVIEWER_THEME)
@@ -85,6 +88,8 @@ class ReviewerApp(App[None]):
         )
         self._pairing_poll_interval = pairing_poll_interval
         self._browser_opener = browser_opener
+        self._repositories_reader = repositories_reader
+        self._pull_requests_reader = pull_requests_reader
 
     @property
     def github_connected(self) -> bool:
@@ -151,6 +156,18 @@ class ReviewerApp(App[None]):
         pane.remove_children()
         self._mount_default_section()
         self._start_auto_review()
+
+
+    def on_pull_request_selected(self, message: PullRequestSelected) -> None:
+        snapshot = self._resolve_installation_snapshot()
+        if snapshot is None:
+            return
+        self.query_one(SectionNav).current_section = "reviews"
+        self._show_section(
+            "reviews",
+            snapshot,
+            review_id=f"pr-{message.pull_request_number}",
+        )
 
     def on_section_selected(self, message: SectionSelected) -> None:
         if message.section_id == "reviews" and not can_start_review(
@@ -281,7 +298,14 @@ class ReviewerApp(App[None]):
             pane.mount(ProfilePanel(snapshot))
             return
         if section_id == "repositories":
-            pane.mount(RepositoriesPanel(snapshot, repo_config=self._repo_config))
+            pane.mount(
+                RepositoriesPanel(
+                    snapshot.installation_id,
+                    repositories_reader=self._repositories_reader,
+                    pull_requests_reader=self._pull_requests_reader,
+                    
+                )
+            )
             return
         if section_id == "agent-prompts":
             pane.mount(AgentPromptsPanel(snapshot, repo_config=self._repo_config))

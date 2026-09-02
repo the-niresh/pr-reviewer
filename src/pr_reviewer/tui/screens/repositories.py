@@ -1,39 +1,38 @@
-"""Repositories screen listing installation-permitted repositories."""
+"""Repositories screen: permitted repositories, open pull requests, start review."""
 
 from __future__ import annotations
 
 from textual.app import ComposeResult
 from textual.containers import Vertical
+from textual.message import Message
+from textual.reactive import reactive
 from textual.widget import Widget
-from textual.widgets import Label, Select, Static
+from textual.widgets import Button, Label, Static
 
-from pr_reviewer.local_store.repo_config import (
-    RepoConfigStore,
-    RepoModelChoice,
-    default_repo_model_choice,
+from pr_reviewer.tui.github_reads import (
+    FakeInstallationRepositoriesReader,
+    FakeOpenPullRequestsReader,
+    InstallationRepositoriesReader,
+    OpenPullRequest,
+    OpenPullRequestsReader,
+    PermittedRepository,
+    try_real_installation_repositories_reader,
+    try_real_open_pull_requests_reader,
 )
-from pr_reviewer.models.catalogue import list_providers, models_for
-from pr_reviewer.security.instruction_sources import ReviewPolicy, default_review_policy
-from pr_reviewer.tui.installation_snapshot import InstallationSnapshot
 
 
-def format_policy_summary(policy: ReviewPolicy) -> str:
-    flags: list[str] = []
-    if policy.instructions_enabled:
-        flags.append("instructions")
-    if policy.auto_post:
-        flags.append("auto_post")
-    if policy.specialist_mode:
-        flags.append("specialists")
-    if not policy.verification_required:
-        flags.append("no_verify")
-    if policy.public_posting:
-        flags.append("public_post")
-    return ", ".join(flags) if flags else "defaults"
-
-
-def format_model_summary(choice: RepoModelChoice) -> str:
-    return f"{choice.provider_id}/{choice.model_id}"
+class PullRequestSelected(Message):
+    def __init__(
+        self,
+        *,
+        repository_full_name: str,
+        pull_request_number: int,
+        head_sha: str,
+    ) -> None:
+        self.repository_full_name = repository_full_name
+        self.pull_request_number = pull_request_number
+        self.head_sha = head_sha
+        super().__init__()
 
 
 class RepositoriesPanel(Widget):
@@ -53,98 +52,106 @@ class RepositoriesPanel(Widget):
     }
     """
 
+    view: reactive[str] = reactive("repositories")
+
     def __init__(
         self,
-        snapshot: InstallationSnapshot,
+        installation_id: int,
         *,
-        repo_config: RepoConfigStore | None = None,
+        repositories_reader: InstallationRepositoriesReader | None = None,
+        pull_requests_reader: OpenPullRequestsReader | None = None,
         id: str | None = None,
     ) -> None:
         super().__init__(id=id)
-        self._snapshot = snapshot
-        self._repo_config = repo_config
+        self._installation_id = installation_id
+        self._repositories_reader = (
+            repositories_reader
+            or try_real_installation_repositories_reader()
+            or FakeInstallationRepositoriesReader()
+        )
+        self._pull_requests_reader = (
+            pull_requests_reader
+            or try_real_open_pull_requests_reader()
+            or FakeOpenPullRequestsReader()
+        )
+        self._repositories = self._repositories_reader.list_repositories(installation_id)
+        self._selected_repository: PermittedRepository | None = None
+        self._pull_requests: tuple[OpenPullRequest, ...] = ()
 
     def compose(self) -> ComposeResult:
-        repo_ids = [repo.github_repository_id for repo in self._snapshot.repositories]
-        policies = (
-            self._repo_config.all_for(repo_ids)
-            if self._repo_config is not None
-            else {repo_id: default_review_policy() for repo_id in repo_ids}
-        )
-        model_choices = (
-            self._repo_config.all_model_choices_for(repo_ids)
-            if self._repo_config is not None
-            else {repo_id: default_repo_model_choice() for repo_id in repo_ids}
-        )
-        provider_options = [
-            (provider.label, provider.provider_id) for provider in list_providers()
-        ]
-        rows: list[Widget] = [
-            Label("Repositories", classes="repositories-heading", id="repositories-heading")
-        ]
-        for repo in self._snapshot.repositories:
-            repo_id = repo.github_repository_id
-            choice = model_choices[repo_id]
-            rows.append(
+        if not self._repositories:
+            yield Vertical(
+                Label("Repositories", classes="repositories-heading", id="repositories-heading"),
                 Static(
-                    (
-                        f"{repo.name} ({repo_id})"
-                        f" - {format_policy_summary(policies[repo_id])}"
-                    ),
+                    "No repositories are permitted for this installation yet.",
+                    id="repositories-empty",
+                ),
+            )
+            return
+
+        if self.view == "pull_requests" and self._selected_repository is not None:
+            repo = self._selected_repository
+            rows: list[Widget] = [
+                Label(f"Pull requests for {repo.full_name}", classes="repositories-heading"),
+                Button("Back to repositories", id="repositories-back"),
+            ]
+            if not self._pull_requests:
+                rows.append(
+                    Static(
+                        f"No open pull requests on {repo.full_name}.",
+                        id="pull-requests-empty",
+                    )
+                )
+            else:
+                for pull_request in self._pull_requests:
+                    rows.append(
+                        Button(
+                            f"#{pull_request.number} {pull_request.title} by {pull_request.author}",
+                            id=f"pull-request-{pull_request.number}",
+                            classes="repository-row",
+                        )
+                    )
+            yield Vertical(*rows)
+            return
+
+        rows = [
+            Label("Repositories", classes="repositories-heading", id="repositories-heading"),
+        ]
+        for repository in self._repositories:
+            rows.append(
+                Button(
+                    repository.full_name,
+                    id=f"repository-{repository.id}",
                     classes="repository-row",
-                    id=f"repo-{repo_id}",
                 )
             )
-            rows.append(
-                Select(
-                    provider_options,
-                    id=f"repo-provider-{repo_id}",
-                    value=choice.provider_id,
-                )
-            )
-            rows.append(
-                Select(
-                    [(model.label, model.model_id) for model in models_for(choice.provider_id)],
-                    id=f"repo-model-{repo_id}",
-                    value=choice.model_id,
-                )
-            )
-            rows.append(
-                Static(
-                    format_model_summary(choice),
-                    classes="repository-model-summary",
-                    id=f"repo-model-summary-{repo_id}",
-                )
-            )
-        yield Vertical(*rows, id="repositories-panel")
+        yield Vertical(*rows)
 
-    def on_select_changed(self, event: Select.Changed) -> None:
-        if self._repo_config is None or event.value is Select.NULL:
+    def on_button_pressed(self, event: Button.Pressed) -> None:
+        button_id = event.button.id or ""
+        if button_id == "repositories-back":
+            self.view = "repositories"
+            self._selected_repository = None
+            self._pull_requests = ()
+            self.refresh(recompose=True)
             return
-        widget_id = event.select.id
-        if widget_id is None:
+        if button_id.startswith("repository-"):
+            repo_id = int(button_id.removeprefix("repository-"))
+            selected = next(repo for repo in self._repositories if repo.id == repo_id)
+            owner, _, name = selected.full_name.partition("/")
+            self._selected_repository = selected
+            self._pull_requests = self._pull_requests_reader.list_open_pull_requests(owner, name)
+            self.view = "pull_requests"
+            self.refresh(recompose=True)
             return
-        if widget_id.startswith("repo-provider-"):
-            repo_id = int(widget_id.removeprefix("repo-provider-"))
-            provider_id = str(event.value)
-            model_id = models_for(provider_id)[0].model_id
-            model_select = self.query_one(f"#repo-model-{repo_id}", Select)
-            model_select.set_options(
-                [(model.label, model.model_id) for model in models_for(provider_id)]
+        if button_id.startswith("pull-request-"):
+            number = int(button_id.removeprefix("pull-request-"))
+            pull_request = next(pr for pr in self._pull_requests if pr.number == number)
+            assert self._selected_repository is not None
+            self.post_message(
+                PullRequestSelected(
+                    repository_full_name=self._selected_repository.full_name,
+                    pull_request_number=pull_request.number,
+                    head_sha=pull_request.head_sha,
+                )
             )
-            model_select.value = model_id
-            choice = RepoModelChoice(provider_id=provider_id, model_id=model_id)
-            self._repo_config.set_model_choice(repo_id, choice)
-            self._update_model_summary(repo_id, choice)
-            return
-        if widget_id.startswith("repo-model-"):
-            repo_id = int(widget_id.removeprefix("repo-model-"))
-            provider_id = str(self.query_one(f"#repo-provider-{repo_id}", Select).value)
-            model_id = str(event.value)
-            choice = RepoModelChoice(provider_id=provider_id, model_id=model_id)
-            self._repo_config.set_model_choice(repo_id, choice)
-            self._update_model_summary(repo_id, choice)
-
-    def _update_model_summary(self, repo_id: int, choice: RepoModelChoice) -> None:
-        summary = self.query_one(f"#repo-model-summary-{repo_id}", Static)
-        summary.update(format_model_summary(choice))

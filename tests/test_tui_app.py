@@ -9,6 +9,7 @@ from types import SimpleNamespace
 
 import pytest
 
+from pr_reviewer.tui.github_reads import FakeInstallationRepositoriesReader, PermittedRepository
 from pr_reviewer.tui.installation_snapshot import InstallationSnapshot, RepositoryPermission
 from pr_reviewer.tui.nav import SECTIONS
 from pr_reviewer.tui.theme import REVIEWER_THEME
@@ -29,6 +30,9 @@ def make_connected_app(tmp_path: Path):
     return ReviewerApp(
         secrets=connected_secrets(tmp_path),
         installation_snapshot=SAMPLE_INSTALLATION,
+        repositories_reader=FakeInstallationRepositoriesReader(
+            repositories=(PermittedRepository(11, "acme/in-scope"),)
+        ),
     )
 
 

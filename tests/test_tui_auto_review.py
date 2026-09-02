@@ -16,6 +16,7 @@ from pr_reviewer.tui.auto_review import (
     AutoReviewCoordinator,
     PullRequestSyncEvent,
 )
+from pr_reviewer.tui.github_reads import FakeInstallationRepositoriesReader, PermittedRepository
 from pr_reviewer.tui.installation_snapshot import InstallationSnapshot, RepositoryPermission
 
 if TYPE_CHECKING:
@@ -168,6 +169,9 @@ def test_tui_polls_events_and_opens_review_section(tmp_path: Path) -> None:
         app = ReviewerApp(
             secrets=_connected_secrets(tmp_path),
             installation_snapshot=SAMPLE_INSTALLATION,
+            repositories_reader=FakeInstallationRepositoriesReader(
+                repositories=(PermittedRepository(11, "acme/in-scope"),)
+            ),
             auto_review_event_source=source,
             auto_review_poll_interval=0.01,
         )
@@ -175,14 +179,7 @@ def test_tui_polls_events_and_opens_review_section(tmp_path: Path) -> None:
             nav = app.query_one("#section-nav", SectionNav)
 
             def default_section_settled() -> bool:
-                # The default "repositories" section's own Select widgets finish
-                # mounting themselves (each grows a "#label" child) asynchronously,
-                # after RepositoriesPanel itself is already in the tree. Pushing the
-                # auto-review event before that finishes lets _show_section() rip the
-                # pane out from under a Select mid-mount, which crashes the app - that
-                # was the real nondeterminism here, not the poll interval.
-                selects = list(app.query(Select))
-                return bool(selects) and all(bool(select.query("#label")) for select in selects)
+                return bool(app.query("#repository-11")) or bool(app.query("#repositories-empty"))
 
             await wait_until(
                 pilot,

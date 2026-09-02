@@ -19,6 +19,7 @@ from textual.notifications import SeverityLevel
 from textual.pilot import Pilot
 
 from pr_reviewer.tui.auto_review import PullRequestSyncEvent
+from pr_reviewer.tui.github_reads import FakeInstallationRepositoriesReader, PermittedRepository
 from pr_reviewer.tui.installation_snapshot import InstallationSnapshot, RepositoryPermission
 
 if TYPE_CHECKING:
@@ -95,6 +96,9 @@ def test_tui_reflects_pr_events_live_without_restart(
         app = ReviewerApp(
             secrets=_connected_secrets(tmp_path),
             installation_snapshot=SAMPLE_INSTALLATION,
+            repositories_reader=FakeInstallationRepositoriesReader(
+                repositories=(PermittedRepository(11, "acme/in-scope"),)
+            ),
             auto_review_event_source=source,
             auto_review_poll_interval=0.01,
         )
@@ -119,11 +123,7 @@ def test_tui_reflects_pr_events_live_without_restart(
             nav = app.query_one("#section-nav", SectionNav)
 
             def default_section_settled() -> bool:
-                # See test_tui_auto_review.py: pushing an event before the default
-                # section's Select widgets finish mounting themselves races the pane
-                # being torn down mid-mount and crashes the app.
-                selects = list(app.query(Select))
-                return bool(selects) and all(bool(select.query("#label")) for select in selects)
+                return bool(app.query("#repository-11")) or bool(app.query("#repositories-empty"))
 
             await wait_until(
                 pilot,
