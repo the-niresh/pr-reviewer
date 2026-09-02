@@ -22,6 +22,41 @@ _USAGE = (
     "|review|mcp|a2a|acp> [args...]"
 )
 
+_HELP = """\
+usage: reviewer <command> [args...]
+
+Commands:
+  reviewer                      Open the terminal UI when stdin is a terminal.
+  reviewer setup                Store a local model key.
+  reviewer doctor               Check local Docker isolation.
+  reviewer trace                Join hosted and local trace events for one job.
+  reviewer start                Start the local onboarding server.
+  reviewer stop                 Stop the local onboarding server.
+  reviewer status               Print whether the local onboarding server is running.
+  reviewer open                 Open or print the local onboarding URL.
+  reviewer update               Apply a checked runner update artifact.
+  reviewer uninstall            Remove the local runner, preserving data by default.
+  reviewer review owner/repo#pr --json
+                                Run a PR review from the terminal.
+  reviewer mcp                  Serve MCP tools over newline JSON-RPC on stdio.
+  reviewer a2a                  Serve A2A JSON-RPC on stdio.
+  reviewer acp                  Serve ACP messages on stdio.
+
+Agent JSON:
+  JSON result statuses: ok, refused, error
+  ok:      {"status": "ok", "result": {...}}
+  refused: {"status": "refused", "refusal": {"code": "...", "message": "...", "action": "..."}}
+  error:   {"status": "error", "error": {"code": "...", "message": "...", "action": "..."}}
+
+reviewer review exit codes:
+  0  review completed, no findings
+  1  review completed, findings present
+  2  refused, such as GitHub not connected or provider out of tokens
+  3  failure
+
+Use `reviewer <command> --help` for arguments and per-command output details.
+"""
+
 
 def main(argv: Sequence[str] | None = None) -> int:
     # config.get_settings() loads .env, but the TUI connect path reads os.environ
@@ -34,6 +69,9 @@ def main(argv: Sequence[str] | None = None) -> int:
     load_dotenv()
 
     args = list(sys.argv[1:] if argv is None else argv)
+    if args and args[0] in {"-h", "--help"}:
+        print(_HELP)
+        return 0
     if not args:
         if sys.stdin.isatty():
             from pr_reviewer.tui.app import run_tui

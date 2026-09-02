@@ -40,6 +40,13 @@ def build_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(
         prog="reviewer doctor",
         description="Check whether Docker isolation actually works, and select a runtime mode.",
+        epilog=(
+            "Output: human-readable Docker probe results and selected mode.\n\n"
+            "exit codes:\n"
+            "  0  requested mode is available, or analysis-only mode was confirmed\n"
+            "  1  requested mode is unavailable and was not confirmed\n"
+        ),
+        formatter_class=argparse.RawDescriptionHelpFormatter,
     )
     parser.add_argument(
         "--mode",

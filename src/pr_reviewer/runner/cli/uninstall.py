@@ -52,9 +52,23 @@ def uninstall_runner(
 
 def main(argv: Sequence[str] | None = None) -> int:
     args = list(sys.argv[1:] if argv is None else argv)
-    parser = argparse.ArgumentParser(prog="reviewer uninstall")
-    parser.add_argument("--delete-data", action="store_true")
-    parser.add_argument("--confirm-delete", action="store_true")
+    parser = argparse.ArgumentParser(
+        prog="reviewer uninstall",
+        description="Remove the local runner while preserving local data by default.",
+        epilog=(
+            "Output: no output on success. Refusals are printed to stderr.\n\n"
+            "exit codes:\n"
+            "  0  uninstall completed\n"
+            "  1  uninstall was refused or failed\n"
+        ),
+        formatter_class=argparse.RawDescriptionHelpFormatter,
+    )
+    parser.add_argument("--delete-data", action="store_true", help="Delete local runner data.")
+    parser.add_argument(
+        "--confirm-delete",
+        action="store_true",
+        help="Required with --delete-data.",
+    )
     parsed = parser.parse_args(args)
     from pr_reviewer.runner.cli.service import _data_dir
 

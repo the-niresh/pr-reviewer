@@ -37,11 +37,21 @@ EXIT_ERROR = 3
 _PULL_REQUEST_REF = re.compile(r"^(?P<owner>[^/#]+)/(?P<repository>[^/#]+)#(?P<number>\d+)$")
 
 _EPILOG = """\
+JSON output under --json:
+  success without findings:
+    {"status": "ok", "result": {"status": "complete", "findings": []}}
+  success with findings:
+    {"status": "ok", "result": {"status": "complete", "findings": [{...}]}}
+  refused:
+    {"status": "refused", "refusal": {"code": "...", "message": "...", "action": "..."}}
+  failure:
+    {"status": "error", "error": {"code": "...", "message": "...", "action": "..."}}
+
 exit codes:
   0  review completed, no findings
   1  review completed, findings present
-  2  refused (e.g. GitHub not connected, provider out of tokens)
-  3  the request or the run itself failed unexpectedly
+  2  refused, such as GitHub not connected or provider out of tokens
+  3  failure
 """
 
 
@@ -84,7 +94,11 @@ def main(
     out = stdout if stdout is not None else sys.stdout
     err = stderr if stderr is not None else sys.stderr
     args = list(sys.argv[1:] if argv is None else argv)
-    namespace = _build_parser().parse_args(args)
+    parser = _build_parser()
+    if args and args[0] in {"-h", "--help"}:
+        print(parser.format_help(), file=out, end="")
+        return 0
+    namespace = parser.parse_args(args)
 
     try:
         owner, repository, pull_request = _parse_ref(namespace.pull_request_ref)

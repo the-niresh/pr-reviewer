@@ -43,6 +43,15 @@ def build_parser() -> argparse.ArgumentParser:
         prog="reviewer trace",
         description="Reconstruct one review's trace from hosted agent_events and the runner's "
         "local_events, joined by job id, with no manual database work.",
+        epilog=(
+            "JSON output under --json:\n"
+            "  {\"jobId\": \"...\", \"traceId\": \"...\", \"complete\": true,\n"
+            "   \"missingOrigins\": [], \"segments\": [{...}]}\n\n"
+            "exit codes:\n"
+            "  0  trace found in at least one store\n"
+            "  1  trace was not found or a required store failed\n"
+        ),
+        formatter_class=argparse.RawDescriptionHelpFormatter,
     )
     parser.add_argument("job_id", help="The review job id (review_jobs.id / local_jobs.job_id)")
     parser.add_argument(

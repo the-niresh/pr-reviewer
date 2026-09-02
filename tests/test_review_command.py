@@ -253,6 +253,9 @@ def test_json_mode_out_of_tokens_is_structured_without_provider_reason(
 
 
 def test_help_documents_exit_codes() -> None:
-    with pytest.raises(SystemExit) as excinfo:
-        review_module.main(["--help"], stdout=StringIO(), stderr=StringIO())
-    assert excinfo.value.code == 0
+    out = StringIO()
+
+    code = review_module.main(["--help"], stdout=out, stderr=StringIO())
+
+    assert code == 0
+    assert "exit codes:" in out.getvalue()

@@ -32,8 +32,22 @@ def run_setup(
     for flag in _SECRET_FLAGS:
         if flag in args:
             raise SystemExit(f"refusing secret flag {flag}")
-    parser = argparse.ArgumentParser(prog="reviewer setup")
-    parser.add_argument("--hosted-origin", required=True)
+    parser = argparse.ArgumentParser(
+        prog="reviewer setup",
+        description="Store the local model key for the runner.",
+        epilog=(
+            "Output: prompts for the model key with hidden input. No JSON mode.\n\n"
+            "exit codes:\n"
+            "  0  key stored\n"
+            "  1  setup failed or refused an unsafe argument\n"
+        ),
+        formatter_class=argparse.RawDescriptionHelpFormatter,
+    )
+    parser.add_argument(
+        "--hosted-origin",
+        required=True,
+        help="Hosted control plane origin. Must start with https://.",
+    )
     parsed = parser.parse_args(args)
     if not str(parsed.hosted_origin).startswith("https://"):
         raise SystemExit("hosted origin must be https")

@@ -153,18 +153,29 @@ def stop_local_service() -> int:
 
 def main(argv: Sequence[str] | None = None) -> int:
     args = list(sys.argv[1:] if argv is None else argv)
-    parser = argparse.ArgumentParser(prog="reviewer")
-    parser.add_argument("--port", type=int, default=_DEFAULT_PORT)
-    parser.add_argument("--host", default="127.0.0.1")
+    if not args:
+        print("usage: reviewer <start|stop|status|open> [args...]", file=sys.stderr)
+        return 1
+    command, rest = args[0], args[1:]
+    parser = argparse.ArgumentParser(
+        prog=f"reviewer {command}",
+        description=f"Run the local onboarding service command `{command}`.",
+        epilog=_service_epilog(command),
+        formatter_class=argparse.RawDescriptionHelpFormatter,
+    )
+    parser.add_argument("--port", type=int, default=_DEFAULT_PORT, help="Loopback port.")
+    parser.add_argument("--host", default="127.0.0.1", help="Loopback host.")
     parser.add_argument(
         "--hosted-origin",
         default=os.environ.get("PR_REVIEWER_HOSTED_ORIGIN", ""),
+        help="Hosted control plane origin, for example https://reviewer.niresh.tech.",
     )
-    parser.add_argument("--mode", choices=["full", "analysis_only"], default="full")
-    if not args:
-        parser.print_usage(sys.stderr)
-        return 1
-    command, rest = args[0], args[1:]
+    parser.add_argument(
+        "--mode",
+        choices=["full", "analysis_only"],
+        default="full",
+        help="Requested local review mode.",
+    )
     parsed = parser.parse_args(rest)
     url = f"http://127.0.0.1:{parsed.port}/onboarding"
 
@@ -201,6 +212,22 @@ def main(argv: Sequence[str] | None = None) -> int:
         return stop_local_service()
     print(f"reviewer: unknown service command {command!r}", file=sys.stderr)
     return 1
+
+
+def _service_epilog(command: str) -> str:
+    outputs = {
+        "start": "Output: uvicorn logs on stderr and stdout while the server runs.",
+        "stop": "Output: `stopped` or `not running`.",
+        "status": "Output: `running` or `not running`.",
+        "open": "Output: opens the local URL, or prints it if no browser is available.",
+    }
+    output = outputs.get(command, "Output: command-specific human text.")
+    return (
+        f"{output}\n\n"
+        "exit codes:\n"
+        "  0  command succeeded\n"
+        "  1  command failed or required state is missing\n"
+    )
 
 
 def _probe() -> ContainerProbe:
