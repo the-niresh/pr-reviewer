@@ -68,18 +68,24 @@ def register_runner(
     device_name: str,
     credential: str,
     capabilities: RunnerCapabilities,
+    *,
+    github_user_id: int | None = None,
+    installation_id: int | None = None,
 ) -> uuid.UUID:
     # conn is required, not optional, so a caller composing this into a larger transaction (see
     # control_plane/pairing.py's exchange_pairing_code) always gets exactly that: never a second,
     # independent connection silently committing a runner row the caller's own transaction later
     # rolls back around.
+    if (github_user_id is None) != (installation_id is None):
+        raise ValueError("runner pairing identity requires both github user and installation")
+
     row = conn.execute(
         """
         insert into runners (
           device_name, credential_hash, mode, docker_available, retrieval_available,
-          verification_available, platform, version
+          verification_available, platform, version, github_user_id, installation_id
         )
-        values (%s, %s, %s, %s, %s, %s, %s, %s)
+        values (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
         returning id
         """,
         (
@@ -91,6 +97,8 @@ def register_runner(
             capabilities.verification_available,
             capabilities.platform,
             capabilities.version,
+            github_user_id,
+            installation_id,
         ),
     ).fetchone()
     assert row is not None

@@ -23,6 +23,7 @@ from pr_reviewer.control_plane.pairing import (
     pairing_status,
 )
 from pr_reviewer.control_plane.runner_auth import authenticate_runner, rotate_runner_credential
+from pr_reviewer.db.client import connection
 
 router = APIRouter(prefix="/api/runner", tags=["runner-pairing"])
 
@@ -35,6 +36,18 @@ class CreatePairingCodeRequest(BaseModel):
 class ExchangePairingCodeRequest(BaseModel):
     code: str
     proof: str
+
+
+class RunnerInstallationRepository(BaseModel):
+    github_repository_id: int
+    name: str
+
+
+class RunnerInstallationSnapshot(BaseModel):
+    github_login: str
+    github_user_id: int
+    installation_id: int
+    repositories: list[RunnerInstallationRepository]
 
 
 @router.post("/pairing-codes")
@@ -82,6 +95,51 @@ def rotate_runner_credential_route(
     if isinstance(result, RunnerAuthDenied):
         raise HTTPException(status_code=401, detail=result.reason)
     return {"runner_id": str(result.runner_id), "credential": result.credential}
+
+
+@router.get("/installation")
+def runner_installation_route(
+    authorization: str | None = Header(default=None),
+) -> RunnerInstallationSnapshot:
+    if authorization is None or not authorization.startswith("Bearer "):
+        raise HTTPException(status_code=401, detail="missing bearer credential")
+    authenticated = authenticate_runner(authorization.removeprefix("Bearer "))
+    if isinstance(authenticated, RunnerAuthDenied):
+        raise HTTPException(status_code=401, detail=authenticated.reason)
+
+    with connection() as conn:
+        rows = conn.execute(
+            """
+            select runners.github_user_id, runners.installation_id, installations.account_login,
+                   repositories.github_repository_id, repositories.name
+            from runners
+            join installations on installations.id = runners.installation_id
+              and installations.revoked_at is null
+            left join repository_assignments on repository_assignments.runner_id = runners.id
+            left join repositories on repositories.id = repository_assignments.repository_id
+              and repositories.installation_id = runners.installation_id
+            where runners.id = %s
+            order by repositories.github_repository_id
+            """,
+            (str(authenticated.runner_id),),
+        ).fetchall()
+
+    if not rows or rows[0]["github_user_id"] is None:
+        raise HTTPException(status_code=404, detail="runner installation is unavailable")
+    first = rows[0]
+    repositories = [
+        RunnerInstallationRepository(
+            github_repository_id=int(row["github_repository_id"]), name=str(row["name"])
+        )
+        for row in rows
+        if row["github_repository_id"] is not None
+    ]
+    return RunnerInstallationSnapshot(
+        github_login=str(first["account_login"]),
+        github_user_id=int(first["github_user_id"]),
+        installation_id=int(first["installation_id"]),
+        repositories=repositories,
+    )
 
 
 @router.post("/installations/{installation_id}/token")

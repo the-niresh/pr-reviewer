@@ -141,10 +141,10 @@ def approve_pairing(
         conn.execute(
             """
             update pairing_codes
-            set installation_id = %s, repository_ids = %s, approved_at = now()
+            set github_user_id = %s, installation_id = %s, repository_ids = %s, approved_at = now()
             where id = %s
             """,
-            (access.installation_id, repository_uuids, pairing_row["id"]),
+            (access.github_user_id, access.installation_id, repository_uuids, pairing_row["id"]),
         )
 
     return PairingApproved(
@@ -173,7 +173,8 @@ def exchange_pairing_code(
                 # discouraged, it is not something this query can even do.
                 pairing_row = conn.execute(
                     """
-                    select id, device_name, repository_ids from pairing_codes
+                    select id, device_name, github_user_id, installation_id, repository_ids
+                    from pairing_codes
                     where code_hash = %s
                       and challenge = %s
                       and approved_at is not null
@@ -192,6 +193,8 @@ def exchange_pairing_code(
                     str(pairing_row["device_name"]),
                     credential,
                     _INITIAL_RUNNER_CAPABILITIES,
+                    github_user_id=int(pairing_row["github_user_id"]),
+                    installation_id=int(pairing_row["installation_id"]),
                 )
 
                 for repository_id in pairing_row["repository_ids"] or []:
