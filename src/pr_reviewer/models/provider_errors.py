@@ -6,6 +6,7 @@ from collections.abc import Mapping
 from dataclasses import dataclass
 from enum import StrEnum
 
+from pr_reviewer.contracts.finding_candidate import FindingCandidate
 from pr_reviewer.models.providers import ProviderName
 
 
@@ -26,6 +27,38 @@ class ProviderFailure:
     kind: ProviderErrorKind
     reason: str
     retry_after_seconds: float | None = None
+
+
+@dataclass(frozen=True)
+class OutOfTokensState:
+    """The typed terminal state for an exhausted provider balance."""
+
+    provider: ProviderName
+    reason: str
+
+
+@dataclass(frozen=True)
+class StoppedEarlyReview:
+    """Earlier findings survive when a later provider call cannot continue."""
+
+    findings: tuple[FindingCandidate, ...]
+    stop: OutOfTokensState
+
+    def summary_fields(self) -> dict[str, str | bool]:
+        """Fields the hosted summary needs to avoid calling this review complete."""
+        return {"status": "stopped_early", "stopped_early": True}
+
+
+def stopped_early_review(
+    *,
+    findings: tuple[FindingCandidate, ...],
+    provider: ProviderName,
+    reason: str,
+) -> StoppedEarlyReview:
+    return StoppedEarlyReview(
+        findings=findings,
+        stop=OutOfTokensState(provider=provider, reason=reason),
+    )
 
 
 def _error_message(body: object) -> str:
