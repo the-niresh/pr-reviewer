@@ -6,6 +6,14 @@ from a hosted https origin - that is why they hung on "Loading" forever. They mo
 apps/web entirely; /dashboard/reviews stays, because it is hosted and real: it reads the
 signed-in viewer's session and calls the hosted control plane, never a loopback address.
 
+Task 33.C3 later reintroduced apps/web/src/app/dashboard/page.tsx on purpose, as a real
+overview of the viewer's own reviews. It is not the old Approvals page come back: it reads
+GET /api/reviews through lib/reviews.ts's fetchReviews (the same hosted, server-side,
+credentialed-cookie call dashboard/reviews/page.tsx already makes), never a browser-side
+loopback fetch. It is therefore no longer in REMOVED_PAGES below, and is covered instead by
+test_dashboard_overview_page_is_kept, the same way dashboard/reviews/page.tsx is covered by
+test_dashboard_reviews_page_is_kept.
+
 The loopback-address guard below is a standing one, not a one-time check: it walks every
 page.tsx under apps/web/src/app and fails on any future page that hardcodes a loopback
 address, with two named exceptions:
@@ -38,7 +46,6 @@ DASHBOARD_DIR = WEB_APP / "dashboard"
 LOOPBACK = re.compile(r"127\.0\.0\.1|\blocalhost\b", re.IGNORECASE)
 
 REMOVED_PAGES = (
-    DASHBOARD_DIR / "page.tsx",
     DASHBOARD_DIR / "evals" / "page.tsx",
     DASHBOARD_DIR / "connectors" / "page.tsx",
     DASHBOARD_DIR / "jobs" / "[jobId]" / "page.tsx",
@@ -62,6 +69,12 @@ def test_local_runner_pages_are_removed_from_the_hosted_build() -> None:
 def test_dashboard_reviews_page_is_kept() -> None:
     assert (DASHBOARD_DIR / "reviews" / "page.tsx").is_file(), (
         "dashboard/reviews is hosted and real; it must stay"
+    )
+
+
+def test_dashboard_overview_page_is_kept() -> None:
+    assert (DASHBOARD_DIR / "page.tsx").is_file(), (
+        "dashboard is hosted and real (task 33.C3's overview); it must stay"
     )
 
 

@@ -12,6 +12,7 @@ from pr_reviewer.control_plane.approval_api import router as approval_router
 from pr_reviewer.control_plane.oauth_api import router as oauth_router
 from pr_reviewer.control_plane.ops import router as ops_router
 from pr_reviewer.control_plane.pairing_api import router as pairing_router
+from pr_reviewer.control_plane.profile_api import router as profile_router
 from pr_reviewer.control_plane.review_projection import router as reviews_router
 from pr_reviewer.control_plane.runner_jobs import router as runner_jobs_router
 from pr_reviewer.github import verify_github_signature
@@ -28,6 +29,7 @@ app.include_router(oauth_router)
 app.include_router(approval_router)
 app.include_router(runner_jobs_router)
 app.include_router(reviews_router)
+app.include_router(profile_router)
 
 
 @app.post("/api/github/webhook")
