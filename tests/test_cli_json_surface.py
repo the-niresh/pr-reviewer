@@ -33,8 +33,14 @@ def _finding() -> SurfaceFinding:
 
 
 class FakeBackend:
-    def __init__(self, *, connected: bool = True) -> None:
+    def __init__(
+        self,
+        *,
+        connected: bool = True,
+        raise_error: BaseException | None = None,
+    ) -> None:
         self.connected = connected
+        self.raise_error = raise_error
         self.requests: list[AgentReviewRequest] = []
         self.findings = (_finding(),)
         self.prompts = tuple(remediation_prompt_for_finding(finding) for finding in self.findings)
@@ -47,6 +53,8 @@ class FakeBackend:
 
     def start_review(self, request: AgentReviewRequest) -> SurfaceReview:
         self.requests.append(request)
+        if self.raise_error is not None:
+            raise self.raise_error
         return SurfaceReview(
             review_id="review-1",
             owner=request.owner,
@@ -123,6 +131,7 @@ def test_json_cli_refuses_without_github_connected() -> None:
         "refusal": {
             "code": "github_not_connected",
             "message": "GitHub is not connected. Connect GitHub before requesting a review.",
+            "action": "Connect GitHub, then retry the request.",
         },
     }
 
@@ -133,4 +142,23 @@ def test_json_cli_reports_usage_errors_as_json() -> None:
     assert exit_code == 1
     assert stderr == ""
     assert payload["status"] == "error"
-    assert "required" in payload["error"]
+    assert payload["error"]["code"] == "invalid_request"
+    assert "required" in payload["error"]["message"]
+
+
+def test_json_cli_reports_unexpected_errors_as_structured_json_without_traceback() -> None:
+    exit_code, payload, stderr = _run_cli(
+        FakeBackend(raise_error=RuntimeError("boom\nTraceback raw provider payload")),
+        ["review", "--owner", "acme", "--repository", "widgets", "--pull-request", "12"],
+    )
+
+    assert exit_code == 1
+    assert stderr == ""
+    assert payload["status"] == "error"
+    assert payload["error"] == {
+        "code": "unexpected_error",
+        "message": "Review failed unexpectedly.",
+        "action": "Check the local logs, fix the cause, then retry the request.",
+    }
+    assert "Traceback" not in json.dumps(payload)
+    assert "boom" not in json.dumps(payload)

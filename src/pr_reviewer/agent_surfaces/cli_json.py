@@ -14,6 +14,7 @@ from pr_reviewer.agent_surfaces.core import (
     AgentReviewRequest,
     AgentSurfaceCore,
     AgentSurfaceRefusal,
+    agent_surface_error_payload,
 )
 
 
@@ -23,7 +24,7 @@ class JSONCLIResult(BaseModel):
     status: Literal["ok", "refused", "error"]
     result: dict[str, Any] | list[dict[str, Any]] | None = None
     refusal: dict[str, str] | None = None
-    error: str | None = None
+    error: dict[str, str] | None = None
 
 
 class _JSONArgumentParser(argparse.ArgumentParser):
@@ -54,7 +55,16 @@ class JSONCLI:
             )
             return 2
         except (KeyError, TypeError, ValueError) as error:
-            write_json_result(output, JSONCLIResult(status="error", error=str(error)))
+            write_json_result(
+                output,
+                JSONCLIResult(status="error", error=agent_surface_error_payload(error)),
+            )
+            return 1
+        except Exception as error:
+            write_json_result(
+                output,
+                JSONCLIResult(status="error", error=agent_surface_error_payload(error)),
+            )
             return 1
         write_json_result(output, JSONCLIResult(status="ok", result=result))
         return 0

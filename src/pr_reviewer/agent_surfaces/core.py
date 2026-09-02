@@ -8,18 +8,100 @@ from typing import Literal, Protocol
 from pydantic import BaseModel, ConfigDict, Field
 
 from pr_reviewer.contracts.finding_candidate import Concern, Severity
+from pr_reviewer.models.provider import (
+    InvalidModelJson,
+    ModelContextLimit,
+    ModelKeyInvalid,
+    ModelProviderFailure,
+    ModelRateLimit,
+    ModelSchemaMismatch,
+    ModelTimeout,
+)
 
 
 class AgentSurfaceRefusal(Exception):
     """A request the surface must refuse rather than guess or degrade."""
 
-    def __init__(self, code: str, message: str) -> None:
+    def __init__(self, code: str, message: str, *, action: str | None = None) -> None:
         super().__init__(message)
         self.code = code
         self.message = message
+        self.action = action
 
     def as_payload(self) -> dict[str, str]:
-        return {"code": self.code, "message": self.message}
+        payload = {"code": self.code, "message": self.message}
+        if self.action is not None:
+            payload["action"] = self.action
+        return payload
+
+
+class AgentSurfaceError(BaseModel):
+    model_config = ConfigDict(frozen=True, extra="forbid")
+
+    code: str = Field(min_length=1)
+    message: str = Field(min_length=1)
+    action: str | None = Field(default=None, min_length=1)
+
+
+def agent_surface_error_payload(error: BaseException) -> dict[str, str]:
+    payload = agent_surface_error_from_exception(error).model_dump(exclude_none=True)
+    return {str(key): str(value) for key, value in payload.items()}
+
+
+def agent_surface_error_from_exception(error: BaseException) -> AgentSurfaceError:
+    if isinstance(error, ValueError):
+        return AgentSurfaceError(
+            code="invalid_request",
+            message=str(error),
+            action="Fix the request arguments, then retry the request.",
+        )
+    if isinstance(error, (KeyError, TypeError)):
+        return AgentSurfaceError(
+            code="invalid_request",
+            message="Request arguments are invalid.",
+            action="Fix the request arguments, then retry the request.",
+        )
+    if isinstance(error, ModelKeyInvalid):
+        return AgentSurfaceError(
+            code="model_key_invalid",
+            message="The model provider rejected the API key.",
+            action="Set a valid provider key, then retry the request.",
+        )
+    if isinstance(error, ModelRateLimit):
+        return AgentSurfaceError(
+            code="provider_rate_limited",
+            message="The model provider rate limited the review.",
+            action="Wait for the provider limit to reset, then retry the request.",
+        )
+    if isinstance(error, ModelContextLimit):
+        return AgentSurfaceError(
+            code="context_limit_exceeded",
+            message="The pull request diff is too large for the selected model.",
+            action="Use a model with a larger context window or review a smaller pull request.",
+        )
+    if isinstance(error, ModelTimeout):
+        return AgentSurfaceError(
+            code="model_timeout",
+            message="The model provider did not answer before the timeout.",
+            action="Retry the request. If it repeats, check provider status.",
+        )
+    if isinstance(error, (InvalidModelJson, ModelSchemaMismatch)):
+        return AgentSurfaceError(
+            code="invalid_model_response",
+            message="The model response did not match the review schema.",
+            action="Retry the request. If it repeats, switch provider or model.",
+        )
+    if isinstance(error, ModelProviderFailure):
+        return AgentSurfaceError(
+            code="provider_failure",
+            message="The model provider failed the review request.",
+            action="Check provider status and local provider settings, then retry.",
+        )
+    return AgentSurfaceError(
+        code="unexpected_error",
+        message="Review failed unexpectedly.",
+        action="Check the local logs, fix the cause, then retry the request.",
+    )
 
 
 class GitHubConnectionState(BaseModel):
@@ -111,6 +193,7 @@ class AgentSurfaceCore:
         raise AgentSurfaceRefusal(
             "github_not_connected",
             f"{reason} Connect GitHub before requesting a review.",
+            action="Connect GitHub, then retry the request.",
         )
 
 

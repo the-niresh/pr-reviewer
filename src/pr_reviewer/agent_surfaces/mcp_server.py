@@ -10,6 +10,7 @@ from pr_reviewer.agent_surfaces.core import (
     AgentReviewRequest,
     AgentSurfaceCore,
     AgentSurfaceRefusal,
+    agent_surface_error_payload,
 )
 
 
@@ -27,7 +28,7 @@ class MCPToolResult(BaseModel):
     status: Literal["ok", "refused", "error"]
     result: dict[str, Any] | list[dict[str, Any]] | None = None
     refusal: dict[str, str] | None = None
-    error: str | None = None
+    error: dict[str, str] | None = None
 
 
 _TOOLS: tuple[MCPTool, ...] = (
@@ -74,7 +75,15 @@ class MCPServer:
                 exclude_none=True
             )
         except (KeyError, TypeError, ValidationError, ValueError) as error:
-            return MCPToolResult(status="error", error=str(error)).model_dump(exclude_none=True)
+            return MCPToolResult(
+                status="error",
+                error=agent_surface_error_payload(error),
+            ).model_dump(exclude_none=True)
+        except Exception as error:
+            return MCPToolResult(
+                status="error",
+                error=agent_surface_error_payload(error),
+            ).model_dump(exclude_none=True)
         return MCPToolResult(status="ok", result=result).model_dump(exclude_none=True)
 
     def handle_json_rpc(self, payload: dict[str, Any]) -> dict[str, Any]:

@@ -36,8 +36,14 @@ def _finding() -> SurfaceFinding:
 
 
 class FakeBackend:
-    def __init__(self, *, connected: bool = True) -> None:
+    def __init__(
+        self,
+        *,
+        connected: bool = True,
+        raise_error: BaseException | None = None,
+    ) -> None:
         self.connected = connected
+        self.raise_error = raise_error
         self.findings = (_finding(),)
         self.prompts = tuple(remediation_prompt_for_finding(finding) for finding in self.findings)
 
@@ -49,6 +55,8 @@ class FakeBackend:
 
     def start_review(self, request: AgentReviewRequest) -> SurfaceReview:
         assert request == AgentReviewRequest(owner="acme", repository="widgets", pull_request=12)
+        if self.raise_error is not None:
+            raise self.raise_error
         return SurfaceReview(
             review_id="review-1",
             owner=request.owner,
@@ -69,13 +77,26 @@ class FakeBackend:
         return self.prompts
 
 
-def _core(*, connected: bool = True) -> AgentSurfaceCore:
-    return AgentSurfaceCore(FakeBackend(connected=connected))
+def _core(
+    *,
+    connected: bool = True,
+    raise_error: BaseException | None = None,
+) -> AgentSurfaceCore:
+    return AgentSurfaceCore(FakeBackend(connected=connected, raise_error=raise_error))
 
 
-def _cli_payload(argv: list[str], *, connected: bool = True) -> dict[str, Any]:
+def _cli_payload(
+    argv: list[str],
+    *,
+    connected: bool = True,
+    raise_error: BaseException | None = None,
+) -> dict[str, Any]:
     stdout = StringIO()
-    JSONCLI(_core(connected=connected)).main(argv, stdout=stdout, stderr=StringIO())
+    JSONCLI(_core(connected=connected, raise_error=raise_error)).main(
+        argv,
+        stdout=stdout,
+        stderr=StringIO(),
+    )
     return cast(dict[str, Any], json.loads(stdout.getvalue()))
 
 
@@ -84,8 +105,9 @@ def _a2a_payload(
     arguments: dict[str, object],
     *,
     connected: bool = True,
+    raise_error: BaseException | None = None,
 ) -> dict[str, Any]:
-    response = A2ASurface(_core(connected=connected)).handle_json_rpc(
+    response = A2ASurface(_core(connected=connected, raise_error=raise_error)).handle_json_rpc(
         {
             "jsonrpc": "2.0",
             "id": "call-1",
@@ -110,14 +132,21 @@ def _a2a_payload(
     return cast(dict[str, Any], part["data"])
 
 
-def _review_payloads(*, connected: bool = True) -> list[dict[str, Any]]:
+def _review_payloads(
+    *,
+    connected: bool = True,
+    raise_error: BaseException | None = None,
+) -> list[dict[str, Any]]:
     arguments: dict[str, object] = {
         "owner": "acme",
         "repository": "widgets",
         "pull_request": 12,
     }
     return [
-        MCPServer(_core(connected=connected)).call_tool("review_pull_request", arguments),
+        MCPServer(_core(connected=connected, raise_error=raise_error)).call_tool(
+            "review_pull_request",
+            arguments,
+        ),
         _cli_payload(
             [
                 "review",
@@ -129,9 +158,18 @@ def _review_payloads(*, connected: bool = True) -> list[dict[str, Any]]:
                 "12",
             ],
             connected=connected,
+            raise_error=raise_error,
         ),
-        ACPSurface(_core(connected=connected)).call_action("review_pull_request", arguments),
-        _a2a_payload("review_pull_request", arguments, connected=connected),
+        ACPSurface(_core(connected=connected, raise_error=raise_error)).call_action(
+            "review_pull_request",
+            arguments,
+        ),
+        _a2a_payload(
+            "review_pull_request",
+            arguments,
+            connected=connected,
+            raise_error=raise_error,
+        ),
     ]
 
 
@@ -181,5 +219,24 @@ def test_all_agent_surfaces_refuse_without_github_the_same_way() -> None:
         "refusal": {
             "code": "github_not_connected",
             "message": "GitHub is not connected. Connect GitHub before requesting a review.",
+            "action": "Connect GitHub, then retry the request.",
         },
     }
+
+
+def test_all_agent_surfaces_report_unexpected_errors_the_same_structured_way() -> None:
+    payloads = _review_payloads(
+        raise_error=RuntimeError("boom\nTraceback raw provider payload")
+    )
+
+    assert payloads == [payloads[0]] * 4
+    assert payloads[0] == {
+        "status": "error",
+        "error": {
+            "code": "unexpected_error",
+            "message": "Review failed unexpectedly.",
+            "action": "Check the local logs, fix the cause, then retry the request.",
+        },
+    }
+    assert "Traceback" not in json.dumps(payloads)
+    assert "boom" not in json.dumps(payloads)

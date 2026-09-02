@@ -132,7 +132,8 @@ def test_review_unexpected_failure_exits_three(monkeypatch: pytest.MonkeyPatch) 
 
     assert code == review_module.EXIT_ERROR
     assert out == ""
-    assert "boom" in err
+    assert "Review failed unexpectedly" in err
+    assert "boom" not in err
 
 
 def test_bad_pull_request_ref_exits_three(monkeypatch: pytest.MonkeyPatch) -> None:
@@ -198,16 +199,57 @@ def test_json_mode_refusal_is_one_json_document_on_stdout(
 def test_json_mode_error_is_one_json_document_on_stdout(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
-    _patch_backend(monkeypatch, FakeBackend(raise_error=AgentSurfaceRefusal("x", "y")))
+    _patch_backend(monkeypatch, FakeBackend(raise_error=RuntimeError("boom")))
+
+    code, out, err = _run(["acme/widgets#12", "--json"])
+
+    assert code == review_module.EXIT_ERROR
+    assert err == ""
+    lines = [line for line in out.splitlines() if line.strip()]
+    assert len(lines) == 1
+    payload = json.loads(lines[0])
+    assert payload["status"] == "error"
+    assert payload["error"] == {
+        "code": "unexpected_error",
+        "message": "Review failed unexpectedly.",
+        "action": "Check the local logs, fix the cause, then retry the request.",
+    }
+    assert "Traceback" not in out
+    assert "boom" not in out
+
+
+def test_json_mode_out_of_tokens_is_structured_without_provider_reason(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    _patch_backend(
+        monkeypatch,
+        FakeBackend(
+            raise_error=AgentSurfaceRefusal(
+                "out_of_tokens",
+                (
+                    "OpenAI balance is exhausted. "
+                    "Add credits or switch provider to continue reviewing."
+                ),
+                action="Add credits or switch provider, then retry the review.",
+            )
+        ),
+    )
 
     code, out, err = _run(["acme/widgets#12", "--json"])
 
     assert code == review_module.EXIT_REFUSED
     assert err == ""
-    lines = [line for line in out.splitlines() if line.strip()]
-    assert len(lines) == 1
-    payload = json.loads(lines[0])
+    payload = json.loads(out)
     assert payload["status"] == "refused"
+    assert payload["refusal"] == {
+        "code": "out_of_tokens",
+        "message": (
+            "OpenAI balance is exhausted. "
+            "Add credits or switch provider to continue reviewing."
+        ),
+        "action": "Add credits or switch provider, then retry the review.",
+    }
+    assert "raw provider" not in out
 
 
 def test_help_documents_exit_codes() -> None:

@@ -23,7 +23,11 @@ from typing import Any, TextIO
 
 from pr_reviewer.agent_surfaces.backend import LiveAgentReviewBackend
 from pr_reviewer.agent_surfaces.cli_json import JSONCLI, JSONCLIResult, write_json_result
-from pr_reviewer.agent_surfaces.core import AgentSurfaceCore, AgentSurfaceRefusal
+from pr_reviewer.agent_surfaces.core import (
+    AgentSurfaceCore,
+    AgentSurfaceRefusal,
+    agent_surface_error_payload,
+)
 
 EXIT_OK_NO_FINDINGS = 0
 EXIT_OK_FINDINGS = 1
@@ -85,7 +89,7 @@ def main(
     try:
         owner, repository, pull_request = _parse_ref(namespace.pull_request_ref)
     except ValueError as error:
-        payload = JSONCLIResult(status="error", error=str(error))
+        payload = JSONCLIResult(status="error", error=agent_surface_error_payload(error))
         _emit(payload, EXIT_ERROR, as_json=namespace.json, out=out, err=err)
         return EXIT_ERROR
 
@@ -106,8 +110,8 @@ def main(
     except AgentSurfaceRefusal as refusal:
         payload = JSONCLIResult(status="refused", refusal=refusal.as_payload())
         exit_code = EXIT_REFUSED
-    except Exception as error:  # last resort: never a bare traceback under --json
-        payload = JSONCLIResult(status="error", error=str(error))
+    except Exception as error:
+        payload = JSONCLIResult(status="error", error=agent_surface_error_payload(error))
         exit_code = EXIT_ERROR
     else:
         payload = JSONCLIResult(status="ok", result=result)
@@ -138,7 +142,9 @@ def _print_human_summary(payload: JSONCLIResult, *, out: TextIO, err: TextIO) ->
         print(f"Review refused: {refusal.get('message', 'unknown reason')}", file=err)
         return
     if payload.status == "error":
-        print(f"Review failed: {payload.error or 'unknown error'}", file=err)
+        error = payload.error or {}
+        message = error.get("message", "unknown error")
+        print(f"Review failed: {message}", file=err)
         return
     result = payload.result
     if not isinstance(result, dict):

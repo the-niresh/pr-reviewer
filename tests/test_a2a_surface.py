@@ -168,6 +168,7 @@ def test_a2a_refuses_without_github_connected() -> None:
         "refusal": {
             "code": "github_not_connected",
             "message": "GitHub is not connected. Connect GitHub before requesting a review.",
+            "action": "Connect GitHub, then retry the request.",
         },
     }
 
@@ -193,4 +194,6 @@ def test_a2a_reports_invalid_messages_as_failed_tasks() -> None:
     assert task["status"] == {"state": "failed"}
     payload = _artifact_payload(response)
     assert payload["status"] == "error"
-    assert "data part" in cast(str, payload["error"])
+    error = cast(dict[str, str], payload["error"])
+    assert error["code"] == "invalid_request"
+    assert "data part" in error["message"]

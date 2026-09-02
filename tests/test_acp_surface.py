@@ -123,6 +123,7 @@ def test_acp_refuses_without_github_connected() -> None:
         "refusal": {
             "code": "github_not_connected",
             "message": "GitHub is not connected. Connect GitHub before requesting a review.",
+            "action": "Connect GitHub, then retry the request.",
         },
     }
 

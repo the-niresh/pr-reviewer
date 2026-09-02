@@ -10,6 +10,7 @@ from pr_reviewer.agent_surfaces.core import (
     AgentReviewRequest,
     AgentSurfaceCore,
     AgentSurfaceRefusal,
+    agent_surface_error_payload,
 )
 
 
@@ -19,7 +20,7 @@ class A2AResult(BaseModel):
     status: Literal["ok", "refused", "error"]
     result: dict[str, Any] | list[dict[str, Any]] | None = None
     refusal: dict[str, str] | None = None
-    error: str | None = None
+    error: dict[str, str] | None = None
 
 
 class A2ASurface:
@@ -89,7 +90,16 @@ class A2ASurface:
             )
             return _task(message, state="rejected", payload=payload)
         except (KeyError, TypeError, ValidationError, ValueError) as error:
-            payload = A2AResult(status="error", error=str(error)).model_dump(exclude_none=True)
+            payload = A2AResult(
+                status="error",
+                error=agent_surface_error_payload(error),
+            ).model_dump(exclude_none=True)
+            return _task(message, state="failed", payload=payload)
+        except Exception as error:
+            payload = A2AResult(
+                status="error",
+                error=agent_surface_error_payload(error),
+            ).model_dump(exclude_none=True)
             return _task(message, state="failed", payload=payload)
         payload = A2AResult(status="ok", result=result).model_dump(exclude_none=True)
         return _task(message, state="completed", payload=payload)
