@@ -18,7 +18,7 @@ import sys
 from collections.abc import Sequence
 
 _USAGE = (
-    "usage: reviewer <setup|doctor|trace|start|stop|status|open|update|uninstall"
+    "usage: reviewer <setup|login|logout|doctor|trace|start|stop|status|open|update|uninstall"
     "|review|mcp|a2a|acp> [args...]"
 )
 
@@ -26,7 +26,13 @@ _HELP = """\
 usage: reviewer <command> [args...]
 
 Commands:
-  reviewer                      Open the terminal UI when stdin is a terminal.
+  reviewer                      Open the terminal UI when stdin is a terminal. Signing in
+                                 (GitHub pairing) happens here, interactively -- there is
+                                 no headless equivalent, since it needs a browser.
+  reviewer login                Alias for bare `reviewer`: open the terminal UI to sign in.
+  reviewer logout               Revoke this terminal's pairing and forget its credential.
+                                 Requires --yes. Non-interactive counterpart to the TUI's
+                                 `l` key.
   reviewer setup                Store a local model key.
   reviewer doctor               Check local Docker isolation.
   reviewer trace                Join hosted and local trace events for one job.
@@ -81,6 +87,22 @@ def main(argv: Sequence[str] | None = None) -> int:
         return 1
 
     subcommand, rest = args[0], args[1:]
+
+    if subcommand == "login":
+        # Not a distinct flow: signing in only ever happens through the interactive TUI
+        # (it needs a browser), so this is the same bare-`reviewer` entry point under a
+        # name people look for out of habit (gh auth login, etc).
+        if sys.stdin.isatty():
+            from pr_reviewer.tui.app import run_tui
+
+            return run_tui()
+        print("reviewer login: needs a terminal (stdin is not a tty)", file=sys.stderr)
+        return 1
+
+    if subcommand == "logout":
+        from pr_reviewer.runner.cli.logout import main as logout_main
+
+        return logout_main(rest)
 
     if subcommand == "setup":
         from pr_reviewer.cli.main import main as setup_main

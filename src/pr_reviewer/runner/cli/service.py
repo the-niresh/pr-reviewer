@@ -25,7 +25,7 @@ from typing import cast
 
 from pr_reviewer.containers.runtime import ContainerProbe
 from pr_reviewer.runner.modes import RuntimeMode
-from pr_reviewer.runner.secrets import SecretStore, get_secret_store
+from pr_reviewer.runner.secrets import SecretStore, default_config_dir, get_secret_store
 
 LINUX_UNIT_RELATIVE = Path(".config") / "systemd" / "user" / "pr-reviewer.service"
 DARWIN_PLIST_RELATIVE = Path("Library") / "LaunchAgents" / "com.pr-reviewer.plist"
@@ -104,7 +104,7 @@ def start_local_onboarding(
 
     active_probe = probe if probe is not None else _probe()
     store = secrets if secrets is not None else get_secret_store(
-        file_fallback_directory=_data_dir() / "secrets"
+        file_fallback_directory=default_config_dir()
     )
     session_secret = store.get(_SESSION_SECRET_NAME)
     if not session_secret:

@@ -13,7 +13,7 @@ from collections.abc import Sequence
 from pathlib import Path
 from typing import Protocol
 
-from pr_reviewer.runner.secrets import SecretStore, get_secret_store
+from pr_reviewer.runner.secrets import SecretStore, default_config_dir, get_secret_store
 
 _SECRET_NAMES = (
     "model_key",
@@ -73,7 +73,7 @@ def main(argv: Sequence[str] | None = None) -> int:
     from pr_reviewer.runner.cli.service import _data_dir
 
     data_dir = _data_dir()
-    secrets = get_secret_store(file_fallback_directory=data_dir / "secrets")
+    secrets = get_secret_store(file_fallback_directory=default_config_dir())
     try:
         uninstall_runner(
             data_dir=data_dir,

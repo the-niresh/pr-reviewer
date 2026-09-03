@@ -17,7 +17,8 @@ from textual.widgets import Footer, Static
 from pr_reviewer.local_store.repo_config import RepoConfigStore, default_repo_config_path
 from pr_reviewer.local_store.review_log import ReviewLogStore, default_review_log_path
 from pr_reviewer.runner.client import RunnerClient
-from pr_reviewer.runner.secrets import SecretStore, get_secret_store
+from pr_reviewer.runner.logout import log_out
+from pr_reviewer.runner.secrets import SecretStore, default_config_dir, get_secret_store
 from pr_reviewer.tui.auth_state import RUNNER_CREDENTIAL_SECRET, has_model_key, is_github_connected
 from pr_reviewer.tui.auto_review import (
     TUI_CLOSED_AUTO_REVIEW_MESSAGE,
@@ -34,7 +35,6 @@ from pr_reviewer.tui.installation_snapshot import (
     load_installation_snapshot,
     save_installation_snapshot,
 )
-from pr_reviewer.tui.logout import log_out
 from pr_reviewer.tui.nav import SECTIONS, SectionNav, SectionSelected
 from pr_reviewer.tui.pairing_client import PairingClient
 from pr_reviewer.tui.pairing_wait import LocalPairingStatusClient
@@ -113,7 +113,7 @@ class ReviewerApp(App[None]):
         super().__init__()
         self.register_theme(REVIEWER_THEME)
         self.theme = REVIEWER_THEME.name
-        self._config_dir = config_dir or (Path.home() / ".config" / "pr-reviewer")
+        self._config_dir = config_dir or default_config_dir()
         self._secrets = secrets or get_secret_store(file_fallback_directory=self._config_dir)
         self._pairing_client = pairing_client
         self._installation_client = installation_client or HostedInstallationClient()

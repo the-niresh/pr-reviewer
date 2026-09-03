@@ -89,6 +89,19 @@ def _real_keyring_backend() -> KeyringBackend:
     return keyring
 
 
+def default_config_dir() -> Path:
+    """The one local-runner config directory every entry point must agree on.
+
+    reviewer setup, reviewer uninstall/start/stop, and the bare `reviewer` TUI each used
+    to compute their own: ~/.config/pr-reviewer/secrets, ~/.local/share/pr-reviewer/secrets,
+    and ~/.config/pr-reviewer (no subdirectory) respectively. Three different directories
+    meant a model key or runner credential set through one entry point was invisible to
+    the others. This is the TUI's own convention (the one most people actually use), now
+    the only one.
+    """
+    return Path.home() / ".config" / "pr-reviewer"
+
+
 def get_secret_store(
     *,
     file_fallback_directory: str | Path,

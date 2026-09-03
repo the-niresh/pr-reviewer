@@ -66,9 +66,6 @@ def main(argv: Sequence[str] | None = None) -> int:
 
 
 def _default_secrets() -> SecretStore:
-    from pathlib import Path
+    from pr_reviewer.runner.secrets import default_config_dir, get_secret_store
 
-    from pr_reviewer.runner.secrets import get_secret_store
-
-    config = Path.home() / ".config" / "pr-reviewer" / "secrets"
-    return get_secret_store(file_fallback_directory=config)
+    return get_secret_store(file_fallback_directory=default_config_dir())

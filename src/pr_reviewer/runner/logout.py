@@ -12,7 +12,10 @@ import contextlib
 
 from pr_reviewer.runner.client import RunnerClient
 from pr_reviewer.runner.secrets import SecretStore
-from pr_reviewer.tui.auth_state import RUNNER_CREDENTIAL_SECRET
+
+# Same literal as tui/auth_state.RUNNER_CREDENTIAL_SECRET -- not imported from there, since
+# this module lives on the runner side and that one is tui-side; both name the same secret.
+RUNNER_CREDENTIAL_SECRET = "runner_credential"
 
 
 def log_out(secrets: SecretStore, *, runner_client: RunnerClient | None = None) -> None:
