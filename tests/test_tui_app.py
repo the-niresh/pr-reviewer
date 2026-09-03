@@ -165,9 +165,30 @@ def test_log_out_deletes_the_runner_credential_and_returns_to_the_connect_screen
             assert pilot.app.github_connected is True
             await pilot.press("l")
             await pilot.pause()
+            await pilot.click("#confirm-yes")
+            await pilot.pause()
             assert app._secrets.get("runner_credential") is None
             assert pilot.app.github_connected is False
             assert pilot.app.query("#connect-screen")
+
+    asyncio.run(exercise())
+
+
+def test_cancelling_the_log_out_confirmation_keeps_the_session(tmp_path: Path) -> None:
+    # The whole point of the confirmation: a stray "l" (or a misclick on the footer's own
+    # "Log out" hint) must not be enough on its own to end a session that has no way back.
+    app = make_connected_app(tmp_path)
+
+    async def exercise() -> None:
+        async with app.run_test() as pilot:
+            assert pilot.app.github_connected is True
+            await pilot.press("l")
+            await pilot.pause()
+            await pilot.click("#confirm-cancel")
+            await pilot.pause()
+            assert app._secrets.get("runner_credential") == "test-runner-credential"
+            assert pilot.app.github_connected is True
+            assert not pilot.app.query("#connect-screen")
 
     asyncio.run(exercise())
 

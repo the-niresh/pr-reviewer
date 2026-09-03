@@ -39,6 +39,7 @@ from pr_reviewer.tui.nav import SECTIONS, SectionNav, SectionSelected
 from pr_reviewer.tui.pairing_client import PairingClient
 from pr_reviewer.tui.pairing_wait import LocalPairingStatusClient
 from pr_reviewer.tui.review_dashboard import ReviewDashboardPanel, dashboard_repositories_from_log
+from pr_reviewer.tui.screens.confirm import ConfirmScreen
 from pr_reviewer.tui.screens.connect import ConnectPanel, PairingExchangeable, can_start_review
 from pr_reviewer.tui.screens.model_access import ModelAccessPanel, ModelKeyStored
 from pr_reviewer.tui.screens.profile import ProfilePanel
@@ -519,9 +520,25 @@ class ReviewerApp(App[None]):
             timeout=8,
         )
 
-    async def action_log_out(self) -> None:
+    def action_log_out(self) -> None:
         if not self.github_connected:
             self.notify("Not signed in.", severity="warning")
+            return
+        # Revoking is not something a stray keypress or an accidental click on the
+        # footer's own "Log out" hint gets to do by itself: pairing.py has no way to
+        # un-revoke a runner, so this session is genuinely gone once confirmed.
+        # push_screen's own wait_for_dismiss=True requires running inside a worker,
+        # which an action is not, so the continuation is a callback instead.
+        self.push_screen(
+            ConfirmScreen(
+                "Log out of this terminal? You will need to sign in again to review.",
+                confirm_label="Log out",
+            ),
+            self._log_out_if_confirmed,
+        )
+
+    async def _log_out_if_confirmed(self, confirmed: bool | None) -> None:
+        if not confirmed:
             return
         credential = self._secrets.get(RUNNER_CREDENTIAL_SECRET)
         hosted_origin = _hosted_origin_from_env()
