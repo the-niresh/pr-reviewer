@@ -17,7 +17,10 @@ export default async function ProfilePage() {
     return (
       <main className="mx-auto w-full max-w-3xl px-6 py-14">
         <h1 className="text-3xl font-semibold tracking-tight">Profile</h1>
-        <SignInPrompt returnTo="/dashboard/profile" />
+        {/* /dashboard/profile is not in the hosted allowlist (github_oauth.py's
+            ALLOWED_RETURN_TO_PATHS is only /dashboard and /dashboard/reviews); passing it
+            here made the sign-in link 400 at the control plane. */}
+        <SignInPrompt returnTo="/dashboard" />
       </main>
     );
   }

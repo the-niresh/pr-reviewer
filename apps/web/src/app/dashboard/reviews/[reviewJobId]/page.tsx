@@ -23,7 +23,10 @@ export default async function ReviewDetailPage({ params }: PageProps) {
     return (
       <main className="mx-auto w-full max-w-3xl px-6 py-14">
         <h1 className="text-3xl font-semibold tracking-tight">Review</h1>
-        <SignInPrompt returnTo={`/dashboard/reviews/${reviewJobId}`} />
+        {/* A per-review path is not in the hosted allowlist (github_oauth.py's
+            ALLOWED_RETURN_TO_PATHS is only /dashboard and /dashboard/reviews); passing one
+            here made the sign-in link 400 at the control plane. */}
+        <SignInPrompt returnTo="/dashboard/reviews" />
       </main>
     );
   }
