@@ -152,6 +152,24 @@ def _pairing_denied_page(reason: str) -> HTMLResponse:
     )
 
 
+def _pairing_approved_page(return_to: str) -> HTMLResponse:
+    # Meta-refresh, not JS: this must still redirect even under a strict CSP with no
+    # script-src for inline scripts, and the person only needs to see this once, not
+    # interact with it.
+    destination = html.escape(return_to, quote=True)
+    return HTMLResponse(
+        f"""<!doctype html>
+<title>Terminal signed in</title>
+<meta http-equiv="refresh" content="5;url={destination}">
+<body style="font:16px/1.6 system-ui;max-width:34rem;margin:12vh auto;padding:0 1.5rem">
+<h1 style="font-size:1.4rem">Your terminal is signed in</h1>
+<p>The runner waiting in your terminal is now paired with this GitHub App
+installation. You can go back to it, or wait a moment to continue here.</p>
+<p><a href="{destination}">Continue now</a></p>
+</body>"""
+    )
+
+
 def _auto_approve_waiting_pairing(
     pairing_code_hash: str,
     user: VerifiedGitHubUser,
@@ -195,6 +213,11 @@ def callback_route(
         outcome = _auto_approve_waiting_pairing(pairing_code_hash, user, assertion)
         if isinstance(outcome, PairingDenied):
             response = _pairing_denied_page(outcome.reason)
+        elif isinstance(outcome, PairingApproved):
+            # A person who just watched a "sign in with GitHub" button turn into a
+            # 302 with no other feedback has no way to tell the terminal actually
+            # received anything -- this is that confirmation, not just a redirect.
+            response = _pairing_approved_page(user.return_to)
         else:
             response = RedirectResponse(url=user.return_to, status_code=302)
     else:

@@ -689,3 +689,14 @@ def test_sign_out_route_deletes_the_live_sign_in_cookie() -> None:
     assert LIVE_SIGN_IN_COOKIE_NAME in set_cookie
     # Deletion is expressed as an already-expired Max-Age=0, not by omission.
     assert "max-age=0" in set_cookie.lower()
+
+
+def test_pairing_approved_page_redirects_after_five_seconds_to_return_to() -> None:
+    from pr_reviewer.control_plane.oauth_api import _pairing_approved_page
+
+    response = _pairing_approved_page("/dashboard/reviews")
+
+    assert response.status_code == 200
+    body = response.body.decode("utf-8")
+    assert '<meta http-equiv="refresh" content="5;url=/dashboard/reviews">' in body
+    assert "signed in" in body.lower()
