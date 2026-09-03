@@ -12,7 +12,7 @@ import httpx
 
 from pr_reviewer.runner.secrets import get_secret_store
 from pr_reviewer.tui.auth_state import RUNNER_CREDENTIAL_SECRET
-from pr_reviewer.tui.github_connect import HostedOriginError, hosted_origin_from_env
+from pr_reviewer.tui.github_connect import HostedOriginError, resolved_hosted_origin
 
 # The reader never keeps its own copy of a runner credential or a minted token: both are read
 # fresh on every call (secret store) or minted fresh on every call (hosted endpoint), matching
@@ -99,7 +99,7 @@ def _try_installation_token_provider() -> InstallationTokenProvider | None:
     raises out of the returned callable; it never falls back to an empty or placeholder token.
     """
     try:
-        hosted_origin = hosted_origin_from_env()
+        hosted_origin = resolved_hosted_origin()
     except HostedOriginError:
         return None
     credential = _default_runner_credential()
@@ -124,11 +124,10 @@ class ReaderUnavailable:
 
 def _reader_unavailable_reason() -> str:
     try:
-        hosted_origin_from_env()
+        resolved_hosted_origin()
     except HostedOriginError:
         return (
-            "Not connected to the hosted plane: set PR_REVIEWER_HOSTED_ORIGIN and pair this "
-            "runner before repositories can be listed."
+            "Not connected to the hosted plane, so repositories cannot be listed yet."
         )
     credential = _default_runner_credential()
     if not credential or not credential.strip():

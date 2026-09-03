@@ -114,6 +114,7 @@ class ReviewerApp(App[None]):
         self._pairing_client = pairing_client
         self._installation_client = installation_client or HostedInstallationClient()
         self._installation_snapshot = installation_snapshot
+        self._installation_problem = "Installation details are not available yet."
         self._repo_config = repo_config or RepoConfigStore(
             default_repo_config_path(self._config_dir)
         )
@@ -241,7 +242,7 @@ class ReviewerApp(App[None]):
         snapshot = self._resolve_installation_snapshot()
         if snapshot is None:
             self.query_one("#section-content", Container).mount(
-                Static("Installation details are not available yet.", id="installation-missing")
+                Static(self._installation_problem, id="installation-missing")
             )
             return
         self._show_section("repositories", snapshot)
@@ -254,15 +255,29 @@ class ReviewerApp(App[None]):
         cached = load_installation_snapshot(snapshot_path)
         credential = self._secrets.get(RUNNER_CREDENTIAL_SECRET)
         hosted_origin = _hosted_origin_from_env()
-        if credential and hosted_origin is not None:
-            try:
-                fetched = self._installation_client.fetch(hosted_origin, credential)
-            except Exception:
-                return cached
-            save_installation_snapshot(snapshot_path, fetched)
-            self._installation_snapshot = fetched
-            return fetched
-        return cached
+        if not credential:
+            self._installation_problem = "This terminal is not paired yet. Sign in to connect it."
+            return cached
+        if hosted_origin is None:
+            self._installation_problem = "No hosted plane is configured for this terminal."
+            return cached
+        try:
+            fetched = self._installation_client.fetch(hosted_origin, credential)
+        except Exception as exc:  # noqa: BLE001 - every failure has to reach the screen in words
+            # A stored credential the hosted plane rejects is the trap worth naming: the app
+            # treats a credential's mere presence as "connected", so every section rendered
+            # empty and the user had no way to learn the pairing had lapsed.
+            if "401" in str(exc) or "unknown_credential" in str(exc):
+                self._installation_problem = (
+                    "This terminal's pairing is no longer recognised by reviewer.niresh.tech. "
+                    "Sign in again to re-pair it."
+                )
+            else:
+                self._installation_problem = f"Could not reach reviewer.niresh.tech ({exc})."
+            return cached
+        save_installation_snapshot(snapshot_path, fetched)
+        self._installation_snapshot = fetched
+        return fetched
 
     def _start_auto_review(self) -> None:
         if not self.github_connected or not self.model_key_configured:
@@ -488,12 +503,18 @@ class ReviewerApp(App[None]):
 
 
 def _hosted_origin_from_env() -> str | None:
-    import os
+    """The hosted origin this runner talks to, defaulting to production.
 
-    origin = os.environ.get("PR_REVIEWER_HOSTED_ORIGIN", "").strip().rstrip("/")
-    if origin.startswith("https://"):
-        return origin
-    return None
+    This used to read PR_REVIEWER_HOSTED_ORIGIN and return None when it was unset. A real
+    install never sets it, so the snapshot fetch was skipped, the cached snapshot did not
+    exist either, and every section rendered "Installation details are not available yet."
+    """
+    from pr_reviewer.tui.github_connect import HostedOriginError, resolved_hosted_origin
+
+    try:
+        return resolved_hosted_origin()
+    except HostedOriginError:
+        return None
 
 
 def run_tui() -> int:

@@ -51,7 +51,7 @@ def test_repositories_panel_says_so_when_not_paired_instead_of_showing_an_empty_
     def raise_hosted_origin_error() -> str:
         raise HostedOriginError("PR_REVIEWER_HOSTED_ORIGIN is not set")
 
-    monkeypatch.setattr(github_reads, "hosted_origin_from_env", raise_hosted_origin_error)
+    monkeypatch.setattr(github_reads, "resolved_hosted_origin", raise_hosted_origin_error)
 
     async def exercise() -> None:
         from textual.app import App, ComposeResult
