@@ -35,7 +35,7 @@ from pr_reviewer.tui.installation_snapshot import (
 )
 from pr_reviewer.tui.nav import SECTIONS, SectionNav, SectionSelected
 from pr_reviewer.tui.pairing_client import PairingClient
-from pr_reviewer.tui.pairing_wait import HttpLocalPairingStatusClient, LocalPairingStatusClient
+from pr_reviewer.tui.pairing_wait import LocalPairingStatusClient
 from pr_reviewer.tui.review_dashboard import ReviewDashboardPanel, dashboard_repositories_from_log
 from pr_reviewer.tui.screens.connect import ConnectPanel, PairingExchangeable, can_start_review
 from pr_reviewer.tui.screens.model_access import ModelAccessPanel, ModelKeyStored
@@ -125,9 +125,11 @@ class ReviewerApp(App[None]):
         self._auto_review = AutoReviewCoordinator(on_start_review=self._on_auto_review_start)
         self._auto_review_timer: Any = None
         self._auto_review_was_running = False
-        self._local_pairing_status_client = (
-            local_pairing_status_client or HttpLocalPairingStatusClient()
-        )
+        # Deliberately no HttpLocalPairingStatusClient default: that pointed sign-in at the
+        # local daemon on 127.0.0.1:8742, which is not running when a new user first types
+        # `reviewer`. Left as None, ConnectPanel polls the hosted plane, which is where the
+        # pairing state lives and which is reachable before any local setup exists.
+        self._local_pairing_status_client = local_pairing_status_client
         self._pairing_poll_interval = pairing_poll_interval
         self._browser_opener = browser_opener
         self._repositories_reader = repositories_reader

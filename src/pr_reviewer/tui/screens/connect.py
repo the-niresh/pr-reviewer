@@ -243,13 +243,18 @@ class ConnectPanel(Widget):
 
         self.post_message(_SignInReady(url, code))
 
-        if self._local_status_client is None:
-            return
+        # The hosted pairing client already satisfies the status protocol, and it is the
+        # plane that actually owns the pairing state. Polling the local daemon on
+        # 127.0.0.1:8742 instead made sign-in depend on a daemon the user has not started
+        # yet, which is backwards: signing in is how they get set up in the first place.
+        # A refused connection there raised httpx.ConnectError out of this worker and
+        # Textual killed the app, right after the link appeared on screen.
+        status_client = self._local_status_client or self._pairing_client
         try:
             wait_for_pairing(
                 code=code,
                 challenge=self._challenge,
-                status_client=self._local_status_client,
+                status_client=status_client,
                 deadline_seconds=self._pairing_deadline_seconds,
                 poll_interval_seconds=self._pairing_poll_interval,
             )
@@ -261,6 +266,9 @@ class ConnectPanel(Widget):
                     "press Sign in to get a new link"
                 )
             )
+            return
+        except Exception as exc:  # noqa: BLE001 - nothing here may ever kill the TUI
+            self.post_message(_SignInFailed(f"lost contact while waiting ({exc})"))
             return
         self.post_message(_PairingCompleted(code))
 
