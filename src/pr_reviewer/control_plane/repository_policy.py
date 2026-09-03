@@ -119,9 +119,20 @@ def register_runner(
 
 
 def revoke_runner(runner_id: uuid.UUID) -> None:
-    with connection() as conn:
+    # repository_assignments carries a hard unique(repository_id) -- one runner per
+    # repository, ever, enforced by the schema itself (see assign_repository_to_runner's
+    # UniqueViolation handling). Revoking without releasing left every repository this
+    # runner ever held permanently unassignable: exchange_pairing_code's own 409 message
+    # already says "revoke it there first", so revoking is exactly the action that must
+    # make "there" available again. The runner row itself stays -- see
+    # test_runner_revocation_is_a_timestamp_not_a_delete -- only its assignments go.
+    with connection() as conn, conn.transaction():
         conn.execute(
             "update runners set revoked_at = now() where id = %s and revoked_at is null",
+            (str(runner_id),),
+        )
+        conn.execute(
+            "delete from repository_assignments where runner_id = %s",
             (str(runner_id),),
         )
 

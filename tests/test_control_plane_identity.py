@@ -364,6 +364,26 @@ def test_revoked_runner_fails_authorization() -> None:
     assert result.reason == "revoked_runner"
 
 
+def test_revoking_a_runner_frees_its_repository_for_reassignment() -> None:
+    # Regression: repository_assignments carries unique(repository_id) -- one runner per
+    # repository, ever, enforced by the schema. revoke_runner used to only stamp
+    # revoked_at, leaving that row in place, so every repository a runner ever held
+    # stayed permanently unassignable: exchange_pairing_code's own 409 detail already
+    # says "revoke it there first", which was not actually possible before this fix.
+    from pr_reviewer.contracts.runner import AssignmentGranted
+
+    make_installation(6201)
+    repository_row_id = make_repository(6201, github_repository_id=1401, name="freed-repo")
+    old_runner_id = make_runner(device_name="old-runner", credential="old-cred")
+    assert isinstance(make_assignment(repository_row_id, old_runner_id), AssignmentGranted)
+
+    revoke_runner(old_runner_id)
+
+    new_runner_id = make_runner(device_name="new-runner", credential="new-cred")
+    result = make_assignment(repository_row_id, new_runner_id)
+    assert isinstance(result, AssignmentGranted)
+
+
 def test_revoked_installation_fails_authorization() -> None:
     make_installation(6101)
     repository_row_id = make_repository(

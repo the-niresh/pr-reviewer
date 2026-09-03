@@ -197,9 +197,25 @@ class ReviewerApp(App[None]):
             from pr_reviewer.tui.pairing_client import HostedPairingClient
 
             client = HostedPairingClient(message.hosted_origin)
-        credential = client.exchange(message.code, message.verifier)
+        try:
+            credential = client.exchange(message.code, message.verifier)
+        except Exception as exc:  # noqa: BLE001 - a failed exchange must never crash the TUI
+            # Textual's default reaction to an uncaught exception here is to panic and exit
+            # the whole app, with the ConnectPanel still saying "signed in" as the last thing
+            # on screen -- indistinguishable from a random crash right after a real sign-in.
+            self._report_exchange_failure(exc)
+            return
         self._secrets.set(RUNNER_CREDENTIAL_SECRET, credential)
         self._rebuild_after_pairing()
+
+    def _report_exchange_failure(self, exc: Exception) -> None:
+        reason = _exchange_failure_reason(exc)
+        self.notify(f"Sign-in did not complete: {reason}", severity="error", timeout=10)
+        try:
+            connect_panel = self.query_one(ConnectPanel)
+        except NoMatches:
+            return
+        connect_panel.pairing_status = f"pairing failed: {reason}"
 
     def _rebuild_after_pairing(self) -> None:
         layout = self.query_one("#main-layout")
@@ -553,6 +569,27 @@ class ReviewerApp(App[None]):
         self._stop_auto_review()
         self.notify("Signed out.")
         await self.recompose()
+
+
+def _exchange_failure_reason(exc: Exception) -> str:
+    """A word a person can act on, not a stack trace.
+
+    The one exchange failure worth naming specifically is 409: exchange_pairing_code_route
+    returns it with a detail saying exactly which other runner already holds the
+    repository (see control_plane/repository_policy.assign_repository_to_runner) -- that
+    is actionable in a way "HTTP 409" alone is not.
+    """
+    import httpx
+
+    if isinstance(exc, httpx.HTTPStatusError):
+        try:
+            detail = exc.response.json().get("detail")
+        except Exception:  # noqa: BLE001 - a malformed error body must not itself raise
+            detail = None
+        if isinstance(detail, str) and detail:
+            return detail
+        return f"the hosted plane returned {exc.response.status_code}"
+    return str(exc)
 
 
 def _hosted_origin_from_env() -> str | None:

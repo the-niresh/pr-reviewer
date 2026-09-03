@@ -279,3 +279,53 @@ def test_real_pairing_flow_stores_a_credential_and_shows_the_repositories_tab(
             assert pilot.app.query_one("#repositories-heading") is not None
 
     asyncio.run(exercise())
+
+
+def test_exchange_conflict_is_reported_instead_of_crashing_the_app(tmp_path: Path) -> None:
+    """Regression: an exchange failure (409 -- repository already held by another
+    runner, or any other error) used to be an uncaught exception in
+    on_pairing_exchangeable. Textual's default reaction to that is to panic and exit
+    the whole app, right after ConnectPanel had already said "signed in" -- looking
+    exactly like the TUI signing in and then immediately quitting.
+    """
+    import httpx
+
+    class ConflictingPairingClient:
+        def create_code(self, device_name: str, challenge: str) -> str:
+            return "PAIR-1"
+
+        def status(self, code: str, challenge: str) -> str:
+            return "exchangeable"
+
+        def exchange(self, code: str, proof: str) -> str:
+            request = httpx.Request("POST", "https://reviewer.niresh.tech/api/x")
+            response = httpx.Response(
+                409,
+                json={"detail": "repository already assigned to runner other-laptop (…); "
+                                 "revoke it there first"},
+                request=request,
+            )
+            raise httpx.HTTPStatusError("409", request=request, response=response)
+
+    from pr_reviewer.runner.secrets import FileSecretStore
+    from pr_reviewer.tui.app import ReviewerApp
+
+    secrets = FileSecretStore(tmp_path)
+    secrets.set("model_key", "sk-test-model-key")
+    app = ReviewerApp(
+        secrets=secrets, config_dir=tmp_path, pairing_client=ConflictingPairingClient()
+    )
+
+    async def exercise() -> None:
+        async with app.run_test() as pilot:
+            await pilot.click("#connect-sign-in")
+            for _ in range(100):
+                status_text = str(pilot.app.query_one("#pairing-status").render())
+                if status_text.startswith("pairing failed"):
+                    break
+                await pilot.pause()
+            assert "revoke it there first" in status_text
+            assert secrets.get("runner_credential") is None
+            assert pilot.app.is_running
+
+    asyncio.run(exercise())
