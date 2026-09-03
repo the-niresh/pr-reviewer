@@ -69,11 +69,19 @@ class ConnectConfig:
 
 
 class PairingExchangeable(Message):
-    """Posted when pairing completes and the runner credential can be exchanged."""
+    """Posted when pairing completes and the runner credential can be exchanged.
 
-    def __init__(self, code: str, verifier: str) -> None:
+    Carries hosted_origin, not just code/verifier: the App's own on_pairing_exchangeable
+    handler has no pairing client of its own in real use (self._pairing_client there is a
+    test-injection seam that stays None outside tests), so it needs enough here to build
+    one rather than silently reusing this panel's already-configured client, which lives on
+    a different object.
+    """
+
+    def __init__(self, code: str, verifier: str, hosted_origin: str) -> None:
         self.code = code
         self.verifier = verifier
+        self.hosted_origin = hosted_origin
         super().__init__()
 
 
@@ -311,7 +319,10 @@ class ConnectPanel(Widget):
         # the eye the moment this arrives, and it clears itself after the timeout instead of
         # sitting there needing to be dismissed.
         self.notify("Signed in! Continuing...", severity="information", timeout=5)
-        self.post_message(PairingExchangeable(message.code, self._verifier))
+        assert self._config is not None  # set in _start_sign_in before this can ever fire
+        self.post_message(
+            PairingExchangeable(message.code, self._verifier, self._config.hosted_origin)
+        )
 
 
 def _default_device_name() -> str:

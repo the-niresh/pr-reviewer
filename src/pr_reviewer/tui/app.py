@@ -184,9 +184,18 @@ class ReviewerApp(App[None]):
 
 
     def on_pairing_exchangeable(self, message: PairingExchangeable) -> None:
-        client = self._pairing_client
-        if client is None:
-            return
+        # self._pairing_client is a test-injection seam, not the client that ran this
+        # pairing attempt: in real use it is None and ConnectPanel built its own
+        # HostedPairingClient, which lives on that widget, not on this App. Reusing it
+        # here would need a widget reference this handler has no business holding, so a
+        # fresh client for the same hosted_origin is built instead -- message.hosted_origin
+        # exists on PairingExchangeable for exactly this.
+        if self._pairing_client is not None:
+            client = self._pairing_client
+        else:
+            from pr_reviewer.tui.pairing_client import HostedPairingClient
+
+            client = HostedPairingClient(message.hosted_origin)
         credential = client.exchange(message.code, message.verifier)
         self._secrets.set(RUNNER_CREDENTIAL_SECRET, credential)
         self._rebuild_after_pairing()
@@ -233,6 +242,12 @@ class ReviewerApp(App[None]):
             return
         snapshot = self._resolve_installation_snapshot()
         if snapshot is None:
+            # Leaving whichever section was on screen before looked identical to this
+            # section having loaded and having nothing to show -- the whole point of
+            # _installation_problem is to say why, not to be read only on first connect.
+            pane = self.query_one("#section-content", Container)
+            pane.remove_children()
+            pane.mount(Static(self._installation_problem, id="installation-missing"))
             return
         self._show_section(message.section_id, snapshot)
 

@@ -186,3 +186,75 @@ def test_log_out_when_not_connected_warns_instead_of_crashing(tmp_path: Path) ->
             assert pilot.app.is_running
 
     asyncio.run(exercise())
+
+
+def test_real_pairing_flow_stores_a_credential_and_shows_the_repositories_tab(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """Regression test: on_pairing_exchangeable used to read self._pairing_client, an
+    App-level test-injection seam that stays None in real use, instead of a client for
+    the pairing attempt ConnectPanel actually ran (which lives on that widget, a
+    different object). In production this meant sign-in showed "signed in" and did
+    nothing else: no exchange call was ever made, no credential was ever stored, no
+    runner was ever created hosted-side, and every section tab silently no-opped
+    forever after -- exactly what looked like "stale tabs" from the outside.
+
+    No pairing_client is injected into the App below on purpose: that is the exact seam
+    the bug hid behind, so injecting one here would hide the bug from this test too.
+    """
+    from pr_reviewer.runner.secrets import FileSecretStore
+    from pr_reviewer.tui.app import ReviewerApp
+
+    class FakeHostedPairingClient:
+        def __init__(self, hosted_origin: str) -> None:
+            self.hosted_origin = hosted_origin
+
+        def create_code(self, device_name: str, challenge: str) -> str:
+            return "PAIR-1"
+
+        def status(self, code: str, challenge: str) -> str:
+            return "exchangeable"
+
+        def exchange(self, code: str, proof: str) -> str:
+            return "real-runner-credential"
+
+    monkeypatch.setattr(
+        "pr_reviewer.tui.pairing_client.HostedPairingClient", FakeHostedPairingClient
+    )
+
+    fetched_snapshot = InstallationSnapshot(
+        github_login="the-niresh",
+        github_user_id=89511644,
+        installation_id=158479604,
+        repositories=(RepositoryPermission(760275660, "Niresh-portfolio"),),
+    )
+
+    class FakeInstallationClient:
+        def fetch(self, hosted_origin: str, credential: str) -> InstallationSnapshot:
+            assert credential == "real-runner-credential"
+            return fetched_snapshot
+
+    secrets = FileSecretStore(tmp_path)
+    secrets.set("model_key", "sk-test-model-key")
+    app = ReviewerApp(
+        secrets=secrets,
+        config_dir=tmp_path,
+        installation_client=FakeInstallationClient(),
+        repositories_reader=FakeInstallationRepositoriesReader(
+            repositories=(PermittedRepository(760275660, "the-niresh/Niresh-portfolio"),)
+        ),
+    )
+
+    async def exercise() -> None:
+        async with app.run_test() as pilot:
+            assert pilot.app.github_connected is False
+            await pilot.click("#connect-sign-in")
+            for _ in range(100):
+                if secrets.get("runner_credential"):
+                    break
+                await pilot.pause()
+            assert secrets.get("runner_credential") == "real-runner-credential"
+            assert pilot.app.github_connected is True
+            assert pilot.app.query_one("#repositories-heading") is not None
+
+    asyncio.run(exercise())
