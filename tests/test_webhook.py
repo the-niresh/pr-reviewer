@@ -273,3 +273,27 @@ def test_webhook_cancel_tells_a_running_runner_the_job_is_cancelled(
     )
     assert heartbeat.status_code == 200
     assert heartbeat.json() == {"status": "cancelled"}
+
+
+def test_webhook_routes_installation_deleted_to_the_lifecycle_handler() -> None:
+    # "deleted" needs no GitHub API call (unlike "created", which fetches the repository
+    # list), so this is the one installation action safe to exercise over the real route
+    # without mocking GitHub -- created/unsuspend/repository-sync are covered directly in
+    # test_installation_lifecycle.py.
+    _insert_installation(8501)
+    client = TestClient(app)
+
+    response = _post_webhook(
+        client,
+        "delivery-installation-deleted",
+        {"action": "deleted", "installation": {"id": 8501, "account": {"login": "acme"}}},
+        event="installation",
+    )
+
+    assert response.status_code == 200
+    with connection() as conn:
+        row = conn.execute(
+            "select revoked_at from installations where id = %s", (8501,)
+        ).fetchone()
+    assert row is not None
+    assert row["revoked_at"] is not None

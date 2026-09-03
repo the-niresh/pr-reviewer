@@ -26,9 +26,17 @@ def hash_runner_credential(credential: str) -> str:
 
 
 def register_installation(installation_id: int, account_login: str) -> None:
+    # Upsert, not insert: GitHub redelivers webhooks, and "unsuspend" / "new_permissions_accepted"
+    # register the same installation id a "created" event already registered. Reactivating always
+    # clears revoked_at too, so a reinstall after uninstall (same numeric id, GitHub does reuse
+    # them) does not stay stuck revoked.
     with connection() as conn:
         conn.execute(
-            "insert into installations (id, account_login) values (%s, %s)",
+            """
+            insert into installations (id, account_login) values (%s, %s)
+            on conflict (id) do update
+              set account_login = excluded.account_login, revoked_at = null
+            """,
             (installation_id, account_login),
         )
 
@@ -42,11 +50,16 @@ def revoke_installation(installation_id: int) -> None:
 
 
 def register_repository(installation_id: int, github_repository_id: int, name: str) -> uuid.UUID:
+    # Upsert on the same (installation_id, github_repository_id) uniqueness the schema already
+    # enforces: a webhook redelivery, or "installation" re-registering every repository the
+    # installation covers, must not crash on a repository already registered by an earlier event.
     with connection() as conn:
         row = conn.execute(
             """
             insert into repositories (installation_id, github_repository_id, name)
             values (%s, %s, %s)
+            on conflict (installation_id, github_repository_id) do update
+              set name = excluded.name, updated_at = now()
             returning id
             """,
             (installation_id, github_repository_id, name),

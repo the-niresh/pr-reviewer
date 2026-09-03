@@ -9,6 +9,10 @@ from pydantic import ValidationError
 
 from pr_reviewer.config import get_settings
 from pr_reviewer.control_plane.approval_api import router as approval_router
+from pr_reviewer.control_plane.installation_lifecycle import (
+    handle_installation_event,
+    handle_installation_repositories_event,
+)
 from pr_reviewer.control_plane.oauth_api import router as oauth_router
 from pr_reviewer.control_plane.ops import router as ops_router
 from pr_reviewer.control_plane.pairing_api import router as pairing_router
@@ -61,6 +65,14 @@ async def github_webhook(request: Request) -> JSONResponse:
         payload: Any = await request.json()
     except ValueError:
         return JSONResponse({"error": "malformed json"}, status_code=400)
+
+    if event_name == "installation":
+        handle_installation_event(payload)
+        return JSONResponse({"result": "processed"}, status_code=200)
+
+    if event_name == "installation_repositories":
+        handle_installation_repositories_event(payload)
+        return JSONResponse({"result": "processed"}, status_code=200)
 
     if event_name != "pull_request":
         ignored = enqueue_review_job(delivery_id, event_name, payload)
