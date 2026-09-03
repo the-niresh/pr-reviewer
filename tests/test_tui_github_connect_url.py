@@ -36,6 +36,16 @@ def test_build_github_sign_in_url_uses_hosted_origin() -> None:
     assert "127.0.0.1" not in url
 
 
+def test_build_github_sign_in_url_carries_the_pairing_code() -> None:
+    url = build_github_sign_in_url("https://reviewer.niresh.tech", pairing_code="PAIR-CODE-1")
+    assert "pairing_code=PAIR-CODE-1" in url
+
+
+def test_build_github_sign_in_url_omits_pairing_code_when_not_given() -> None:
+    url = build_github_sign_in_url("https://reviewer.niresh.tech")
+    assert "pairing_code" not in url
+
+
 def test_build_github_sign_in_url_rejects_unknown_return_to() -> None:
     with pytest.raises(HostedOriginError, match="allowlisted"):
         build_github_sign_in_url("https://reviewer.niresh.tech", return_to="/evil")

@@ -73,6 +73,11 @@ ALLOWLIST: dict[tuple[str, str], str] = {
         "github_oauth.ALLOWED_RETURN_TO_PATHS), validated before this row is ever written. Never "
         "a caller-supplied URL, never review content."
     ),
+    ("oauth_states", "pairing_code_hash"): (
+        "A one-way hash of the pairing code a waiting terminal is polling on. The code itself is "
+        "never stored, so this column cannot be reversed back into it; null for a plain web "
+        "sign-in with no terminal involved."
+    ),
     ("pairing_codes", "device_name"): (
         "Operator-chosen label for the runner device being paired, not review content."
     ),

@@ -1,0 +1,17 @@
+-- The sign-in link a terminal shows now carries the pairing code it is waiting on, so that
+-- completing GitHub sign-in in the browser can approve that terminal's pairing automatically.
+-- GitHub's callback only ever echoes back "code" and "state"; there is no channel to carry a
+-- third value through that round trip that is not itself either tamperable (a bare query
+-- parameter on the redirect_uri, which nothing authenticates) or the state itself. return_to
+-- already solved exactly this problem by living on the oauth_states row instead of the URL, so
+-- pairing_code_hash follows the same pattern: written at begin_sign_in, read back by the one
+-- atomic consume complete_sign_in already performs, never carried on the wire a second time.
+--
+-- Hashed, not plaintext, matching every other opaque secret this schema stores (state_hash,
+-- binding_hash, pairing_codes.code_hash, runners.credential_hash): the raw pairing code never
+-- touches this table. control_plane.pairing.approve_pairing_by_hash consumes the pairing_codes
+-- row by this same hash, so nothing here ever needs the plaintext code back.
+--
+-- Nullable: a plain web sign-in (return_to=/dashboard, nobody's terminal involved) never has a
+-- pairing code, and that is most sign-ins this table records.
+alter table oauth_states add column pairing_code_hash text;

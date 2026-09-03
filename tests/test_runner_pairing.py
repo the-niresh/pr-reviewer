@@ -394,3 +394,27 @@ def test_concurrent_exchange_of_the_same_code_exactly_one_wins(
     assert len(credentials) == 1, f"expected exactly one winner, got: {results}"
     assert len(denials) == 1
     assert denials[0].reason == "invalid_or_expired_code"
+
+
+def test_approve_pairing_cannot_be_approved_twice(
+    make_verified_installation_access: VerifiedAccessFactory,
+) -> None:
+    # Security guard: a pairing code is single-use at approval, not just at exchange. Without
+    # the "approved_at is null" clause, a second approve_pairing call (a replayed browser
+    # request, or a hijacked pairing code hash sent through the sign-in callback a second time)
+    # could re-point an already-approved code at a different installation or repository set.
+    from pr_reviewer.contracts.runner import PairingApproved, PairingDenied
+    from pr_reviewer.control_plane.pairing import approve_pairing, create_pairing_code
+
+    installation_id = 5011
+    insert_installation(installation_id)
+
+    challenge_result = create_pairing_code("laptop", sha256_hex("v"))
+    access = make_verified_installation_access(42, installation_id, {778903: "widgets"})
+
+    first = approve_pairing(challenge_result.code, access, [778903])
+    assert isinstance(first, PairingApproved)
+
+    second = approve_pairing(challenge_result.code, access, [778903])
+    assert isinstance(second, PairingDenied)
+    assert second.reason == "invalid_or_expired_code"

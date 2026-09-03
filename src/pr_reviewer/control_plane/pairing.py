@@ -97,8 +97,23 @@ def approve_pairing(
     access: VerifiedInstallationAccess,
     repository_ids: Sequence[int],
 ) -> PairingApproved | PairingDenied:
-    code_hash = hash_runner_credential(code)
+    return approve_pairing_by_hash(hash_runner_credential(code), access, repository_ids)
 
+
+def approve_pairing_by_hash(
+    code_hash: str,
+    access: VerifiedInstallationAccess,
+    repository_ids: Sequence[int],
+) -> PairingApproved | PairingDenied:
+    """Same as approve_pairing, but starting from an already-hashed code.
+
+    The hosted GitHub sign-in callback (control_plane/oauth_api.py) never sees a plaintext
+    pairing code: the code the TUI's sign-in link carries is hashed once, at begin_sign_in, and
+    stored on the oauth_states row exactly like every other opaque secret this schema keeps
+    (state_hash, binding_hash, pairing_codes.code_hash itself). This is the one place that hash
+    is spent, so approve_pairing below is a one-line wrapper around it, not a second
+    implementation.
+    """
     with connection() as conn, conn.transaction():
         pairing_row = conn.execute(
             """

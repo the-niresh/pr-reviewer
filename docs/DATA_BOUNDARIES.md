@@ -46,6 +46,7 @@ must stay that way -- see Exemptions below.
 | `notification_channels` | `purpose` | Fixed enum ('security_alert', 'review_ping'), which job this channel may carry, not review content. |
 | `notification_channels` | `transport` | Fixed enum ('slack', 'telegram', 'discord'), the outbound transport, not a webhook URL and not review content. |
 | `oauth_states` | `binding_hash` | A one-way hash of the per-attempt binding secret. The secret itself is never stored, so this column cannot be reversed back into it. |
+| `oauth_states` | `pairing_code_hash` | A one-way hash of the pairing code a waiting terminal is polling on. The code itself is never stored, so this column cannot be reversed back into it; null for a plain web sign-in with no terminal involved. |
 | `oauth_states` | `return_to` | One of our own fixed, allowlisted control-plane paths (see github_oauth.ALLOWED_RETURN_TO_PATHS), validated before this row is ever written. Never a caller-supplied URL, never review content. |
 | `oauth_states` | `state_hash` | A one-way hash of the OAuth state value. The state itself is never stored, so this column cannot be reversed back into it. |
 | `pairing_codes` | `challenge` | PKCE code_challenge sent by the runner before any human is involved. Not secret, and not reversible to the verifier it was derived from; not review content either way. |

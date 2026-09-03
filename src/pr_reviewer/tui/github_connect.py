@@ -30,12 +30,24 @@ def normalize_hosted_origin(origin: str) -> str:
 
 
 def build_github_sign_in_url(
-    hosted_origin: str, *, return_to: str = "/dashboard/reviews"
+    hosted_origin: str,
+    *,
+    return_to: str = "/dashboard/reviews",
+    pairing_code: str | None = None,
 ) -> str:
+    """pairing_code, when given, is the same code this terminal is polling
+    /api/runner/pairing-codes/status for. Carrying it in this link is what lets completing
+    sign-in in the browser approve this terminal's pairing automatically, instead of the two
+    never meeting up (see control_plane/oauth_api.py's /sign-in route, which is the only place
+    this value is read).
+    """
     if return_to not in ALLOWED_RETURN_TO_PATHS:
         raise HostedOriginError(f"return_to {return_to!r} is not allowlisted")
     origin = normalize_hosted_origin(hosted_origin)
-    query = urlencode({"return_to": return_to})
+    params = {"return_to": return_to}
+    if pairing_code:
+        params["pairing_code"] = pairing_code
+    query = urlencode(params)
     return f"{origin}{GITHUB_SIGN_IN_PATH}?{query}"
 
 
@@ -51,11 +63,14 @@ def build_github_connect_urls(
     *,
     app_slug: str,
     return_to: str = "/dashboard/reviews",
+    pairing_code: str | None = None,
 ) -> tuple[str, str]:
     """Return (app_install_url, authorize_url) for the TUI connect step."""
 
     install_url = build_github_app_install_url(app_slug)
-    authorize_url = build_github_sign_in_url(hosted_origin, return_to=return_to)
+    authorize_url = build_github_sign_in_url(
+        hosted_origin, return_to=return_to, pairing_code=pairing_code
+    )
     return install_url, authorize_url
 
 

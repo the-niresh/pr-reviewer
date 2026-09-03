@@ -188,7 +188,9 @@ def test_replayed_state_is_denied() -> None:
     first = complete_sign_in(
         "some-code", challenge.state, challenge.binding_secret, http_client=fake_client
     )
-    assert isinstance(first, VerifiedGitHubUser)
+    assert isinstance(first, tuple)
+    first_user, _first_pairing_code_hash = first
+    assert isinstance(first_user, VerifiedGitHubUser)
 
     replay = complete_sign_in(
         "some-code",
@@ -272,12 +274,48 @@ def test_successful_sign_in_returns_verified_github_user() -> None:
     result = complete_sign_in(
         "some-code", challenge.state, challenge.binding_secret, http_client=fake_client
     )
+    assert isinstance(result, tuple)
+    user, pairing_code_hash = result
 
-    assert isinstance(result, VerifiedGitHubUser)
-    assert result.github_user_id == 555
-    assert result.login == "paired-user"
-    assert result.access_token.get_secret_value() == "gho_fake_token"
-    assert result.return_to == "/dashboard"
+    assert isinstance(user, VerifiedGitHubUser)
+    assert user.github_user_id == 555
+    assert user.login == "paired-user"
+    assert user.access_token.get_secret_value() == "gho_fake_token"
+    assert user.return_to == "/dashboard"
+    assert pairing_code_hash is None
+
+
+def test_successful_sign_in_carries_the_pairing_code_hash_from_begin_sign_in() -> None:
+    from pr_reviewer.control_plane.github_oauth import begin_sign_in, complete_sign_in
+    from pr_reviewer.control_plane.repository_policy import hash_runner_credential
+
+    pairing_code_hash = hash_runner_credential("a-real-pairing-code")
+    challenge = begin_sign_in("/dashboard", pairing_code_hash=pairing_code_hash)
+    assert isinstance(challenge, SignInChallenge)
+    fake_client = FakeGitHubClient()
+
+    result = complete_sign_in(
+        "some-code", challenge.state, challenge.binding_secret, http_client=fake_client
+    )
+
+    assert isinstance(result, tuple)
+    _user, returned_hash = result
+    assert returned_hash == pairing_code_hash
+
+
+def test_plain_sign_in_with_no_pairing_code_carries_none() -> None:
+    from pr_reviewer.control_plane.github_oauth import complete_sign_in
+
+    challenge = start_a_sign_in()
+    fake_client = FakeGitHubClient()
+
+    result = complete_sign_in(
+        "some-code", challenge.state, challenge.binding_secret, http_client=fake_client
+    )
+
+    assert isinstance(result, tuple)
+    _user, pairing_code_hash = result
+    assert pairing_code_hash is None
 
 
 def test_begin_sign_in_rejects_return_to_outside_allowlist() -> None:
@@ -530,3 +568,111 @@ def test_verify_installation_access_from_assertion_does_not_call_github() -> Non
     assert granted.repositories == {111: "widgets"}
     assert isinstance(denied, AccessDenied)
     assert denied.reason == "installation_not_controlled"
+
+
+# --- carrying a pairing code through the GitHub sign-in round trip (Runtime Task 2A/2B link) ---
+
+
+def insert_installation_row(installation_id: int) -> None:
+    with connection() as conn, conn.transaction():
+        conn.execute(
+            "insert into installations (id, account_login) values (%s, %s) "
+            "on conflict (id) do nothing",
+            (installation_id, "acme"),
+        )
+
+
+def test_auto_approve_waiting_pairing_grants_only_the_signed_in_account() -> None:
+    # This is the whole point of the wire-up: the runner ends up assigned to the GitHub account
+    # that actually completed sign-in, never a different one, because the only inputs are the
+    # LiveInstallationAssertion capture_live_assertion produced for THIS sign-in.
+    from pr_reviewer.contracts.runner import PairingApproved
+    from pr_reviewer.control_plane.github_auth import LiveInstallationAssertion
+    from pr_reviewer.control_plane.oauth_api import _auto_approve_waiting_pairing
+    from pr_reviewer.control_plane.pairing import create_pairing_code, pairing_status
+    from pr_reviewer.control_plane.repository_policy import hash_runner_credential
+
+    installation_id = 424242
+    insert_installation_row(installation_id)
+    pairing = create_pairing_code("laptop", "the-challenge")
+    user = make_verified_github_user(github_user_id=777)
+    assertion = LiveInstallationAssertion(
+        github_user_id=777,
+        installations={installation_id: {111: "widgets"}},
+        expires_at=9999999999,
+    )
+
+    outcome = _auto_approve_waiting_pairing(
+        hash_runner_credential(pairing.code), user, assertion
+    )
+
+    assert isinstance(outcome, PairingApproved)
+    assert outcome.installation_id == installation_id
+    assert pairing_status(pairing.code, "the-challenge") == "exchangeable"
+    with connection() as conn:
+        row = conn.execute(
+            "select github_user_id from pairing_codes where challenge = %s",
+            ("the-challenge",),
+        ).fetchone()
+    assert row is not None
+    assert int(row["github_user_id"]) == 777
+
+
+def test_auto_approve_waiting_pairing_skips_when_the_installation_is_ambiguous() -> None:
+    # Two installations means guessing which one the terminal should get, so this must decline
+    # rather than silently pick one -- the existing manual /dashboard approval still handles it.
+    from pr_reviewer.control_plane.github_auth import LiveInstallationAssertion
+    from pr_reviewer.control_plane.oauth_api import _auto_approve_waiting_pairing
+    from pr_reviewer.control_plane.pairing import create_pairing_code, pairing_status
+    from pr_reviewer.control_plane.repository_policy import hash_runner_credential
+
+    insert_installation_row(424243)
+    insert_installation_row(424244)
+    pairing = create_pairing_code("laptop", "another-challenge")
+    user = make_verified_github_user(github_user_id=778)
+    assertion = LiveInstallationAssertion(
+        github_user_id=778,
+        installations={424243: {111: "widgets"}, 424244: {222: "gadgets"}},
+        expires_at=9999999999,
+    )
+
+    outcome = _auto_approve_waiting_pairing(
+        hash_runner_credential(pairing.code), user, assertion
+    )
+
+    assert outcome is None
+    assert pairing_status(pairing.code, "another-challenge") == "pending"
+
+
+def test_callback_never_approves_a_pairing_without_a_completed_sign_in() -> None:
+    # Security guard: a caller holding only the state (visible in the sign-in URL an attacker
+    # could observe or replay) and no matching binding_secret cookie must never reach pairing
+    # approval, even when a real pairing code is waiting on that exact sign-in attempt.
+    from pr_reviewer.control_plane.pairing import create_pairing_code, pairing_status
+    from pr_reviewer.control_plane.repository_policy import hash_runner_credential
+
+    pairing = create_pairing_code("laptop", "guarded-challenge")
+    sign_in_challenge = start_a_sign_in()
+    # begin_sign_in above did not carry the pairing code hash; attach it directly to the same
+    # row a real /sign-in?pairing_code=... request would have written, so this test exercises
+    # exactly the case where a pairing code IS waiting on this attempt.
+    with connection() as conn, conn.transaction():
+        conn.execute(
+            "update oauth_states set pairing_code_hash = %s where state_hash = %s",
+            (
+                hash_runner_credential(pairing.code),
+                hash_runner_credential(sign_in_challenge.state),
+            ),
+        )
+
+    client = TestClient(app)
+    # No binding_secret cookie attached: this is what an attacker who only ever saw the state
+    # in the sign-in URL, or a browser that never started this sign-in, would present.
+    response = client.get(
+        "/api/auth/github/callback",
+        params={"code": "some-code", "state": sign_in_challenge.state},
+        follow_redirects=False,
+    )
+
+    assert response.status_code == 401
+    assert pairing_status(pairing.code, "guarded-challenge") == "pending"

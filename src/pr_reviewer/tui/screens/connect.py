@@ -236,7 +236,7 @@ class ConnectPanel(Widget):
             return
 
         try:
-            url = build_github_sign_in_url(hosted_origin)
+            url = build_github_sign_in_url(hosted_origin, pairing_code=code)
         except HostedOriginError as exc:
             self.post_message(_SignInFailed(f"could not build the sign-in link ({exc})"))
             return
@@ -258,14 +258,13 @@ class ConnectPanel(Widget):
                 deadline_seconds=self._pairing_deadline_seconds,
                 poll_interval_seconds=self._pairing_poll_interval,
             )
-        except PairingWaitDeadlineExceeded:
-            deadline = int(self._pairing_deadline_seconds)
-            self.post_message(
-                _SignInFailed(
-                    f"timed out after {deadline}s waiting for you to finish in the browser -- "
-                    "press Sign in to get a new link"
-                )
-            )
+        except PairingWaitDeadlineExceeded as exc:
+            # exc's own message already says which happened: the code was denied outright
+            # (invalid, expired, or already used -- see pairing_wait.wait_for_pairing) or the
+            # full deadline simply passed with nobody finishing in the browser. Either way the
+            # wait has already stopped; this must not paper over that with a fixed message that
+            # claims the full deadline elapsed when it did not.
+            self.post_message(_SignInFailed(f"{exc} -- press Sign in to get a new link"))
             return
         except Exception as exc:  # noqa: BLE001 - nothing here may ever kill the TUI
             self.post_message(_SignInFailed(f"lost contact while waiting ({exc})"))

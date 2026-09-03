@@ -64,7 +64,9 @@ class HttpClient(Protocol):
     ) -> httpx.Response: ...
 
 
-def begin_sign_in(return_to: str) -> SignInChallenge | ReturnToRejected:
+def begin_sign_in(
+    return_to: str, pairing_code_hash: str | None = None
+) -> SignInChallenge | ReturnToRejected:
     if return_to not in ALLOWED_RETURN_TO_PATHS:
         return ReturnToRejected(reason="return_to_not_allowed")
 
@@ -74,14 +76,15 @@ def begin_sign_in(return_to: str) -> SignInChallenge | ReturnToRejected:
     with connection() as conn:
         row = conn.execute(
             """
-            insert into oauth_states (state_hash, binding_hash, return_to)
-            values (%s, %s, %s)
+            insert into oauth_states (state_hash, binding_hash, return_to, pairing_code_hash)
+            values (%s, %s, %s, %s)
             returning created_at
             """,
             (
                 hash_runner_credential(state),
                 hash_runner_credential(binding_secret),
                 return_to,
+                pairing_code_hash,
             ),
         ).fetchone()
     assert row is not None
@@ -96,7 +99,12 @@ def complete_sign_in(
     binding_secret: str,
     *,
     http_client: HttpClient | None = None,
-) -> VerifiedGitHubUser | SignInDenied:
+) -> tuple[VerifiedGitHubUser, str | None] | SignInDenied:
+    """On success, returns the verified user alongside the pairing_code_hash begin_sign_in stored
+    against this same state row, or None when this sign-in never carried one (the common case:
+    plain web sign-in, nobody's terminal waiting). The caller decides what to do with it; this
+    function's only job is to hand back what was atomically consumed with the state.
+    """
     with connection() as conn, conn.transaction():
         # One statement: an unconsumed, unexpired row matching BOTH hashes, marked consumed in
         # the same breath it is read. There is no window between "this looked valid" and "this is
@@ -110,13 +118,17 @@ def complete_sign_in(
               and binding_hash = %s
               and consumed_at is null
               and created_at > now() - interval '10 minutes'
-            returning return_to
+            returning return_to, pairing_code_hash
             """,
             (hash_runner_credential(state), hash_runner_credential(binding_secret)),
         ).fetchone()
     if row is None:
         return SignInDenied(reason="invalid_or_expired_state")
     return_to = str(row["return_to"])
+    stored_pairing_code_hash = row["pairing_code_hash"]
+    pairing_code_hash = (
+        str(stored_pairing_code_hash) if stored_pairing_code_hash is not None else None
+    )
 
     client = http_client or httpx.Client()
     settings = get_settings()
@@ -145,12 +157,13 @@ def complete_sign_in(
     user_response.raise_for_status()
     user_payload = user_response.json()
 
-    return VerifiedGitHubUser(
+    user = VerifiedGitHubUser(
         github_user_id=int(user_payload["id"]),
         login=str(user_payload["login"]),
         access_token=SecretStr(access_token),
         return_to=return_to,
     )
+    return user, pairing_code_hash
 
 
 def capture_live_assertion(
