@@ -48,7 +48,12 @@ class FakePairingClient:
         return "runner-credential"
 
 
-def make_harness(*, pairing_client: FakePairingClient, browser_opener: Callable[[str], object]):
+def make_harness(
+    *,
+    pairing_client: FakePairingClient,
+    browser_opener: Callable[[str], object],
+    pairing_deadline_seconds: float = 300.0,
+):
     from textual.app import App, ComposeResult
 
     class Harness(App[None]):
@@ -60,6 +65,7 @@ def make_harness(*, pairing_client: FakePairingClient, browser_opener: Callable[
                 ),
                 pairing_client=pairing_client,
                 browser_opener=browser_opener,
+                pairing_deadline_seconds=pairing_deadline_seconds,
             )
 
     return Harness()
@@ -187,5 +193,73 @@ def test_browser_open_failure_is_reported_in_words_and_does_not_kill_the_app(
             # The app is still alive and responsive: querying and re-rendering both still work.
             assert pilot.app.query_one(ConnectPanel) is not None
             assert pilot.app.is_running
+
+    asyncio.run(exercise())
+
+
+def test_c_copies_the_sign_in_link_to_the_clipboard(monkeypatch: pytest.MonkeyPatch) -> None:
+    copied: list[str] = []
+    monkeypatch.setattr(
+        "textual.app.App.copy_to_clipboard", lambda self, text: copied.append(text)
+    )
+
+    async def exercise() -> None:
+        pairing = FakePairingClient()
+        app = make_harness(
+            pairing_client=pairing, browser_opener=lambda _url: None, pairing_deadline_seconds=0.1
+        )
+        async with app.run_test() as pilot:
+            await pilot.click("#connect-sign-in")
+            await wait_until(
+                pilot,
+                lambda: bool(pilot.app.query("#sign-in-url")),
+                description="the sign-in url to appear",
+            )
+            await pilot.press("c")
+            await pilot.pause()
+            assert copied == ["https://reviewer.niresh.tech/api/auth/github/sign-in"
+                               "?return_to=%2Fdashboard%2Freviews&pairing_code=PAIR-DEVICE-1"]
+
+    asyncio.run(exercise())
+
+
+def test_pressing_c_before_a_link_exists_warns_instead_of_crashing() -> None:
+    async def exercise() -> None:
+        pairing = FakePairingClient()
+        app = make_harness(
+            pairing_client=pairing, browser_opener=lambda _url: None, pairing_deadline_seconds=0.1
+        )
+        async with app.run_test() as pilot:
+            await pilot.press("c")
+            await pilot.pause()
+            assert pilot.app.query_one(ConnectPanel) is not None
+            assert pilot.app.is_running
+
+    asyncio.run(exercise())
+
+
+class ExchangeablePairingClient(FakePairingClient):
+    """A hosted plane reporting this pairing code exchangeable on the very first poll."""
+
+    def status(self, code: str, challenge: str) -> str:
+        return "exchangeable"
+
+
+def test_completed_pairing_shows_a_signed_in_notification() -> None:
+    async def exercise() -> None:
+        pairing = ExchangeablePairingClient()
+        app = make_harness(pairing_client=pairing, browser_opener=lambda _url: None)
+        async with app.run_test() as pilot:
+            await pilot.click("#connect-sign-in")
+            await wait_until(
+                pilot,
+                lambda: str(pilot.app.query_one("#pairing-status").render()) == "signed in",
+                description="pairing to complete",
+            )
+            await pilot.pause()
+            assert any(
+                "signed in" in notification.message.lower()
+                for notification in pilot.app._notifications
+            )
 
     asyncio.run(exercise())

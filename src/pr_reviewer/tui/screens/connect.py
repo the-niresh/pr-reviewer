@@ -105,7 +105,10 @@ class _PairingCompleted(Message):
 class ConnectPanel(Widget):
     """Show a sign-in link and pairing code, then wait for pairing without blocking the UI."""
 
-    BINDINGS = [("o", "open_browser", "Open browser")]
+    BINDINGS = [
+        ("o", "open_browser", "Open browser"),
+        ("c", "copy_link", "Copy link"),
+    ]
 
     DEFAULT_CSS = """
     ConnectPanel {
@@ -183,6 +186,13 @@ class ConnectPanel(Widget):
         widget.update(status)
         widget.set_class(status == "signed in", "pairing-status--exchangeable")
         widget.set_class(status.startswith("pairing failed"), "pairing-status--error")
+
+    def action_copy_link(self) -> None:
+        if not self._sign_in_url:
+            self.notify("No link yet -- press Sign in first.", severity="warning")
+            return
+        self.app.copy_to_clipboard(self._sign_in_url)
+        self.notify("Link copied.", severity="information")
 
     def action_open_browser(self) -> None:
         if not self._sign_in_url:
@@ -278,7 +288,10 @@ class ConnectPanel(Widget):
         status = self.query_one("#pairing-status", Static)
         panel.mount(Static(message.url, id="sign-in-url"), before=status)
         panel.mount(
-            Static(f"Code: {message.code}  (press o to try opening a browser)", id="pairing-code"),
+            Static(
+                f"Code: {message.code}  (press o to open in a browser, c to copy the link)",
+                id="pairing-code",
+            ),
             before=status,
         )
         self.pairing_status = "waiting for you to finish in the browser"
@@ -289,6 +302,10 @@ class ConnectPanel(Widget):
 
     def on__pairing_completed(self, message: _PairingCompleted) -> None:
         self.pairing_status = "signed in"
+        # notify(), not just the status line's own colour: a toast is what actually catches
+        # the eye the moment this arrives, and it clears itself after the timeout instead of
+        # sitting there needing to be dismissed.
+        self.notify("Signed in! Continuing...", severity="information", timeout=5)
         self.post_message(PairingExchangeable(message.code, self._verifier))
 
 
