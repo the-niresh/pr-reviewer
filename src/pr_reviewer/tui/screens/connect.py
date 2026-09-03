@@ -301,6 +301,11 @@ class ConnectPanel(Widget):
         self.pairing_status = f"pairing failed: {message.reason}"
 
     def on__pairing_completed(self, message: _PairingCompleted) -> None:
+        # The link and code were only ever useful for getting here -- once signed in,
+        # showing them is at best clutter and at worst an invitation to reuse a code that
+        # is already spent (pairing_codes rows are single-use, see control_plane/pairing.py).
+        self.query("#sign-in-url").remove()
+        self.query("#pairing-code").remove()
         self.pairing_status = "signed in"
         # notify(), not just the status line's own colour: a toast is what actually catches
         # the eye the moment this arrives, and it clears itself after the timeout instead of

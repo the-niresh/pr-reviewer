@@ -263,3 +263,25 @@ def test_completed_pairing_shows_a_signed_in_notification() -> None:
             )
 
     asyncio.run(exercise())
+
+
+def test_completed_pairing_removes_the_sign_in_link_and_code() -> None:
+    async def exercise() -> None:
+        pairing = ExchangeablePairingClient()
+        app = make_harness(pairing_client=pairing, browser_opener=lambda _url: None)
+        async with app.run_test() as pilot:
+            await pilot.click("#connect-sign-in")
+            # ExchangeablePairingClient resolves on the very first poll, so the link can be
+            # mounted and removed again before this test ever observes it present -- waiting
+            # for "signed in" alone still proves removal, since that status is only reached
+            # after on__pairing_completed's own removal call has run.
+            await wait_until(
+                pilot,
+                lambda: str(pilot.app.query_one("#pairing-status").render()) == "signed in",
+                description="pairing to complete",
+            )
+            await pilot.pause()
+            assert not pilot.app.query("#sign-in-url")
+            assert not pilot.app.query("#pairing-code")
+
+    asyncio.run(exercise())
