@@ -1,8 +1,12 @@
 "use client";
 
 import Link from "next/link";
-import { usePathname } from "next/navigation";
+import { usePathname, useRouter } from "next/navigation";
+import { useState } from "react";
 import type { ReactNode } from "react";
+
+import { Avatar, AvatarFallback } from "@/components/ui/avatar";
+import { Button } from "@/components/ui/button";
 
 // Approvals, Evals and Connectors used to live here too, each reading a session from the
 // local runner's own loopback API. They moved to the runner's own web surface (task
@@ -17,7 +21,50 @@ const NAV = [
   { href: "/dashboard/settings", label: "Settings" },
 ] as const;
 
-export function DashboardShell({ children }: { children: ReactNode }) {
+type Profile = { login: string | null } | null;
+
+function initialsFor(login: string | null): string {
+  return login ? login.slice(0, 2).toUpperCase() : "?";
+}
+
+function UserMenu({ profile }: { profile: Profile }) {
+  const router = useRouter();
+  const [isSigningOut, setIsSigningOut] = useState(false);
+
+  if (!profile) return null;
+
+  async function handleSignOut() {
+    setIsSigningOut(true);
+    try {
+      await fetch("/api/auth/github/sign-out", { method: "POST", credentials: "same-origin" });
+    } finally {
+      // A full navigation, not router.refresh(): every /dashboard page is a Server
+      // Component that already reads the sign-in cookie once at request time, so this is
+      // what makes them re-render as signed out instead of serving a stale, cached "ok".
+      router.push("/");
+      router.refresh();
+    }
+  }
+
+  return (
+    <div className="ml-auto flex items-center gap-3">
+      <Avatar size="sm">
+        <AvatarFallback>{initialsFor(profile.login)}</AvatarFallback>
+      </Avatar>
+      <Button variant="outline" size="sm" onClick={handleSignOut} disabled={isSigningOut}>
+        {isSigningOut ? "Signing out..." : "Log out"}
+      </Button>
+    </div>
+  );
+}
+
+export function DashboardShell({
+  children,
+  profile,
+}: {
+  children: ReactNode;
+  profile: Profile;
+}) {
   const pathname = usePathname();
 
   return (
@@ -46,6 +93,7 @@ export function DashboardShell({ children }: { children: ReactNode }) {
               );
             })}
           </nav>
+          <UserMenu profile={profile} />
         </div>
       </header>
       {children}

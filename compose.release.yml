@@ -38,4 +38,10 @@ services:
     environment:
       NEXT_PUBLIC_CONTROL_PLANE_ORIGIN: ${PR_REVIEWER_HOSTED_ORIGIN:?PR_REVIEWER_HOSTED_ORIGIN must be set}
       NEXT_PUBLIC_GITHUB_APP_SLUG: ${GITHUB_APP_SLUG:?GITHUB_APP_SLUG must be set}
+      # Server-only: lets the dashboard's Server Components reach the api container directly
+      # over the compose network instead of round-tripping through the public hostname and
+      # Traefik on every navigation. Same service, same data -- just the fast path.
+      CONTROL_PLANE_INTERNAL_ORIGIN: http://api:8000
+    depends_on:
+      - api
     stop_grace_period: 15s

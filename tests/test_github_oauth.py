@@ -676,3 +676,16 @@ def test_callback_never_approves_a_pairing_without_a_completed_sign_in() -> None
 
     assert response.status_code == 401
     assert pairing_status(pairing.code, "guarded-challenge") == "pending"
+
+
+def test_sign_out_route_deletes_the_live_sign_in_cookie() -> None:
+    from pr_reviewer.control_plane.github_oauth import LIVE_SIGN_IN_COOKIE_NAME
+
+    client = TestClient(app)
+    response = client.post("/api/auth/github/sign-out")
+
+    assert response.status_code == 200
+    set_cookie = response.headers.get("set-cookie", "")
+    assert LIVE_SIGN_IN_COOKIE_NAME in set_cookie
+    # Deletion is expressed as an already-expired Max-Age=0, not by omission.
+    assert "max-age=0" in set_cookie.lower()

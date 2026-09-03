@@ -3,8 +3,16 @@
  *  "loaded, and there is nothing here yet" stay three distinct, honest outcomes everywhere
  *  they are shown, instead of each page re-deriving its own guess at the difference. */
 
+// This module only ever runs in a Server Component (see the `cookies()` callers in
+// app/dashboard/**), never shipped to the browser, so it can read the internal, non-public
+// origin: CONTROL_PLANE_INTERNAL_ORIGIN points at the api container directly
+// (http://api:8000 in compose.release.yml), skipping the hairpin through Traefik and TLS
+// that NEXT_PUBLIC_CONTROL_PLANE_ORIGIN's public hostname would otherwise cost on every
+// dashboard navigation.
 export const CONTROL_PLANE_ORIGIN =
-  process.env.NEXT_PUBLIC_CONTROL_PLANE_ORIGIN ?? "http://127.0.0.1:8000";
+  process.env.CONTROL_PLANE_INTERNAL_ORIGIN ??
+  process.env.NEXT_PUBLIC_CONTROL_PLANE_ORIGIN ??
+  "http://127.0.0.1:8000";
 
 export type ReceiptContextSource = {
   kind: string;

@@ -13,7 +13,7 @@ import html
 from urllib.parse import urlencode
 
 from fastapi import APIRouter, HTTPException, Request
-from fastapi.responses import HTMLResponse, RedirectResponse
+from fastapi.responses import HTMLResponse, JSONResponse, RedirectResponse
 
 from pr_reviewer.config import get_settings
 from pr_reviewer.contracts.runner import PairingApproved, PairingDenied
@@ -80,6 +80,17 @@ def begin_sign_in_route(
         secure=True,
         samesite="lax",
     )
+    return response
+
+
+@router.post("/sign-out")
+def sign_out_route() -> JSONResponse:
+    """Deletes the live sign-in cookie. There is no server-side session to invalidate --
+    LIVE_SIGN_IN_COOKIE_NAME is the whole session, sealed by issue_live_sign_in -- so
+    discarding it here is the entire logout.
+    """
+    response = JSONResponse({"signed_out": True})
+    response.delete_cookie(LIVE_SIGN_IN_COOKIE_NAME, path="/")
     return response
 
 
