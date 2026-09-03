@@ -16,6 +16,7 @@ from textual.widgets import Footer, Static
 
 from pr_reviewer.local_store.repo_config import RepoConfigStore, default_repo_config_path
 from pr_reviewer.local_store.review_log import ReviewLogStore, default_review_log_path
+from pr_reviewer.runner.client import RunnerClient
 from pr_reviewer.runner.secrets import SecretStore, get_secret_store
 from pr_reviewer.tui.auth_state import RUNNER_CREDENTIAL_SECRET, has_model_key, is_github_connected
 from pr_reviewer.tui.auto_review import (
@@ -33,6 +34,7 @@ from pr_reviewer.tui.installation_snapshot import (
     load_installation_snapshot,
     save_installation_snapshot,
 )
+from pr_reviewer.tui.logout import log_out
 from pr_reviewer.tui.nav import SECTIONS, SectionNav, SectionSelected
 from pr_reviewer.tui.pairing_client import PairingClient
 from pr_reviewer.tui.pairing_wait import LocalPairingStatusClient
@@ -85,6 +87,7 @@ class ReviewerApp(App[None]):
         Binding("3", "jump_section(2)", SECTIONS[2], show=True),
         Binding("4", "jump_section(3)", SECTIONS[3], show=True),
         Binding("question_mark", "show_help", "Help", show=True),
+        Binding("l", "log_out", "Log out", show=True),
         Binding("q", "quit", "Quit", show=True),
     ]
 
@@ -496,10 +499,28 @@ class ReviewerApp(App[None]):
     def action_show_help(self) -> None:
         self.notify(
             "tab/shift+tab: switch pane  up/down: move  enter: open  escape: back to nav  "
-            "1-4: jump to a section  q: quit",
+            "1-4: jump to a section  l: log out  q: quit",
             title="Keys",
             timeout=8,
         )
+
+    async def action_log_out(self) -> None:
+        if not self.github_connected:
+            self.notify("Not signed in.", severity="warning")
+            return
+        credential = self._secrets.get(RUNNER_CREDENTIAL_SECRET)
+        hosted_origin = _hosted_origin_from_env()
+        runner_client: RunnerClient | None = None
+        if credential and hosted_origin:
+            runner_client = RunnerClient(hosted_origin, credential)
+        log_out(self._secrets, runner_client=runner_client)
+        # The cached snapshot names the installation and repositories the credential just
+        # deleted was scoped to -- leaving it on disk would show a signed-out terminal
+        # someone else's profile and repository list the moment they pair a new account.
+        default_snapshot_path(self._config_dir).unlink(missing_ok=True)
+        self._stop_auto_review()
+        self.notify("Signed out.")
+        await self.recompose()
 
 
 def _hosted_origin_from_env() -> str | None:

@@ -79,6 +79,10 @@ class RunnerClient:
             raise JobProtocolDenied(reason="invalid_or_expired")
         response.raise_for_status()
 
+    def log_out(self) -> None:
+        response = self._http.post("/api/runner/logout", headers=self._auth_headers())
+        response.raise_for_status()
+
 
 def _detail_reason(response: httpx.Response) -> str:
     try:

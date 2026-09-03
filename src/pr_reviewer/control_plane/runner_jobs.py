@@ -27,7 +27,7 @@ from pr_reviewer.contracts.runner import (
     NoJob,
     RunnerAuthDenied,
 )
-from pr_reviewer.control_plane.repository_policy import hash_runner_credential
+from pr_reviewer.control_plane.repository_policy import hash_runner_credential, revoke_runner
 from pr_reviewer.control_plane.runner_auth import authenticate_runner
 from pr_reviewer.control_plane.token_broker import issue_job_token
 from pr_reviewer.db.client import connection
@@ -68,6 +68,18 @@ def claim_jobs_route(
     if isinstance(result, NoJob):
         return {"status": "no_job"}
     return result
+
+
+@router.post("/logout")
+def logout_route(authorization: str | None = Header(default=None)) -> dict[str, str]:
+    # The runner deletes its own local credential regardless of what happens here (see
+    # tui/logout.py) -- this route is what stops that same credential from still working
+    # if it were ever copied off the machine. revoke_runner is already checked on every
+    # claim (see claim_job/RevocationGate), so a runner mid-job when this is called stops
+    # picking up new work immediately, not at its next poll.
+    runner = _authenticate_bearer(authorization)
+    revoke_runner(runner.runner_id)
+    return {"status": "revoked"}
 
 
 @router.post("/jobs/{job_id}/heartbeat")

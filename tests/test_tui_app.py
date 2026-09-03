@@ -148,3 +148,41 @@ def test_each_section_screen_renders_headless(section_id: str, tmp_path: Path) -
                 assert str(placeholder.render()) == section_id
 
     asyncio.run(exercise())
+
+
+def test_log_out_deletes_the_runner_credential_and_returns_to_the_connect_screen(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    # No real hosted origin is configured in this test, so the best-effort server-side
+    # revoke is a no-op here (see tui/logout.py) -- this test is only about what
+    # logging out does on this machine: forget the credential, and go back to the
+    # connect screen exactly like a terminal that was never paired.
+    monkeypatch.setattr("pr_reviewer.tui.app._hosted_origin_from_env", lambda: None)
+    app = make_connected_app(tmp_path)
+
+    async def exercise() -> None:
+        async with app.run_test() as pilot:
+            assert pilot.app.github_connected is True
+            await pilot.press("l")
+            await pilot.pause()
+            assert app._secrets.get("runner_credential") is None
+            assert pilot.app.github_connected is False
+            assert pilot.app.query("#connect-screen")
+
+    asyncio.run(exercise())
+
+
+def test_log_out_when_not_connected_warns_instead_of_crashing(tmp_path: Path) -> None:
+    from pr_reviewer.runner.secrets import FileSecretStore
+    from pr_reviewer.tui.app import ReviewerApp
+
+    app = ReviewerApp(secrets=FileSecretStore(tmp_path))
+
+    async def exercise() -> None:
+        async with app.run_test() as pilot:
+            assert pilot.app.github_connected is False
+            await pilot.press("l")
+            await pilot.pause()
+            assert pilot.app.is_running
+
+    asyncio.run(exercise())

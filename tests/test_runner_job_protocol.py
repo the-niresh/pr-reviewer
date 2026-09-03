@@ -643,3 +643,79 @@ def test_runner_client_polls_outbound_https_and_never_listens() -> None:
     assert 0 < timeout <= 30
     delay = runner_client.RunnerClient.poll_delay_seconds(attempt=1)
     assert delay > 0
+
+
+def test_logout_route_rejects_missing_credential() -> None:
+    client = TestClient(app)
+    response = client.post("/api/runner/logout")
+    assert response.status_code == 401
+
+
+def test_logout_route_revokes_the_calling_runner(
+    make_verified_installation_access: VerifiedAccessFactory,
+) -> None:
+    installation_id = 7101
+    github_repository_id = 81101
+    insert_installation(installation_id)
+    credential = pair_runner_assigned_to_repo(
+        installation_id, github_repository_id, make_verified_installation_access
+    )
+
+    client = TestClient(app)
+    response = client.post(
+        "/api/runner/logout",
+        headers={"authorization": f"Bearer {credential.credential}"},
+    )
+    assert response.status_code == 200
+    assert response.json() == {"status": "revoked"}
+
+    # The same credential must now be turned away the same way any other revoked
+    # runner is (see test_revoked_runner_cannot_claim_a_queued_job), never a crash
+    # or a silent success on its next claim.
+    second_call = client.post(
+        "/api/runner/jobs/claim",
+        headers={"authorization": f"Bearer {credential.credential}"},
+    )
+    assert second_call.status_code == 401
+    assert second_call.json()["detail"] == "revoked_runner"
+
+
+def test_runner_client_log_out_posts_to_the_logout_route() -> None:
+    import httpx
+
+    from pr_reviewer.runner.client import RunnerClient
+
+    calls: list[httpx.Request] = []
+
+    def handler(request: httpx.Request) -> httpx.Response:
+        calls.append(request)
+        return httpx.Response(200, json={"status": "revoked"})
+
+    client = RunnerClient("https://control-plane.example", "runner-credential")
+    client._http = httpx.Client(
+        transport=httpx.MockTransport(handler),
+        base_url="https://control-plane.example",
+    )
+    client.log_out()
+
+    assert len(calls) == 1
+    assert calls[0].url.path == "/api/runner/logout"
+    assert calls[0].headers["authorization"] == "Bearer runner-credential"
+
+
+def test_runner_client_log_out_raises_on_a_rejected_credential() -> None:
+    import httpx
+
+    from pr_reviewer.runner.client import RunnerClient
+
+    def handler(request: httpx.Request) -> httpx.Response:
+        del request
+        return httpx.Response(401, json={"detail": "unknown_credential"})
+
+    client = RunnerClient("https://control-plane.example", "runner-credential")
+    client._http = httpx.Client(
+        transport=httpx.MockTransport(handler),
+        base_url="https://control-plane.example",
+    )
+    with pytest.raises(httpx.HTTPStatusError):
+        client.log_out()
