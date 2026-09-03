@@ -245,7 +245,13 @@ class ExchangeablePairingClient(FakePairingClient):
         return "exchangeable"
 
 
-def test_completed_pairing_shows_a_signed_in_notification() -> None:
+def test_approved_pairing_does_not_claim_signed_in_before_the_exchange() -> None:
+    # ConnectPanel in isolation (this harness, no App-level handler for
+    # PairingExchangeable) can only ever reach here: approval alone is not "signed in",
+    # which used to be shown at this exact point, before the exchange that can still
+    # fail had even run. Only App.on_pairing_exchangeable, after a real credential is
+    # stored, calls ConnectPanel.show_signed_in() to make it true (see test_tui_app.py's
+    # test_real_pairing_flow_stores_a_credential_and_shows_the_repositories_tab).
     async def exercise() -> None:
         pairing = ExchangeablePairingClient()
         app = make_harness(pairing_client=pairing, browser_opener=lambda _url: None)
@@ -253,35 +259,31 @@ def test_completed_pairing_shows_a_signed_in_notification() -> None:
             await pilot.click("#connect-sign-in")
             await wait_until(
                 pilot,
-                lambda: str(pilot.app.query_one("#pairing-status").render()) == "signed in",
-                description="pairing to complete",
-            )
-            await pilot.pause()
-            assert any(
-                "signed in" in notification.message.lower()
-                for notification in pilot.app._notifications
-            )
-
-    asyncio.run(exercise())
-
-
-def test_completed_pairing_removes_the_sign_in_link_and_code() -> None:
-    async def exercise() -> None:
-        pairing = ExchangeablePairingClient()
-        app = make_harness(pairing_client=pairing, browser_opener=lambda _url: None)
-        async with app.run_test() as pilot:
-            await pilot.click("#connect-sign-in")
-            # ExchangeablePairingClient resolves on the very first poll, so the link can be
-            # mounted and removed again before this test ever observes it present -- waiting
-            # for "signed in" alone still proves removal, since that status is only reached
-            # after on__pairing_completed's own removal call has run.
-            await wait_until(
-                pilot,
-                lambda: str(pilot.app.query_one("#pairing-status").render()) == "signed in",
-                description="pairing to complete",
+                lambda: str(pilot.app.query_one("#pairing-status").render())
+                == "finishing sign-in...",
+                description="pairing to be approved",
             )
             await pilot.pause()
             assert not pilot.app.query("#sign-in-url")
             assert not pilot.app.query("#pairing-code")
+            assert pilot.app.query("#connect-sign-in")
+
+    asyncio.run(exercise())
+
+
+def test_show_signed_in_removes_the_button_and_notifies() -> None:
+    async def exercise() -> None:
+        pairing = FakePairingClient()
+        app = make_harness(pairing_client=pairing, browser_opener=lambda _url: None)
+        async with app.run_test() as pilot:
+            panel = pilot.app.query_one(ConnectPanel)
+            panel.show_signed_in()
+            await pilot.pause()
+            assert not pilot.app.query("#connect-sign-in")
+            assert str(pilot.app.query_one("#pairing-status").render()) == "signed in"
+            assert any(
+                "signed in" in notification.message.lower()
+                for notification in pilot.app._notifications
+            )
 
     asyncio.run(exercise())

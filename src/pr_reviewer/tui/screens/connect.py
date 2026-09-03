@@ -309,20 +309,31 @@ class ConnectPanel(Widget):
         self.pairing_status = f"pairing failed: {message.reason}"
 
     def on__pairing_completed(self, message: _PairingCompleted) -> None:
-        # The link and code were only ever useful for getting here -- once signed in,
+        # The link and code were only ever useful for getting here -- once approved,
         # showing them is at best clutter and at worst an invitation to reuse a code that
         # is already spent (pairing_codes rows are single-use, see control_plane/pairing.py).
         self.query("#sign-in-url").remove()
         self.query("#pairing-code").remove()
-        self.pairing_status = "signed in"
-        # notify(), not just the status line's own colour: a toast is what actually catches
-        # the eye the moment this arrives, and it clears itself after the timeout instead of
-        # sitting there needing to be dismissed.
-        self.notify("Signed in! Continuing...", severity="information", timeout=5)
+        # Not "signed in" yet: the browser approving this pairing is not the same thing as
+        # the exchange that actually mints a credential and stores it (App.
+        # on_pairing_exchangeable does that). Saying "signed in" here, before that has
+        # happened, is exactly backwards -- and it is what happens on the App side that
+        # decides whether this ever becomes true at all (a 409 from an already-held
+        # repository denies it outright).
+        self.pairing_status = "finishing sign-in..."
         assert self._config is not None  # set in _start_sign_in before this can ever fire
         self.post_message(
             PairingExchangeable(message.code, self._verifier, self._config.hosted_origin)
         )
+
+    def show_signed_in(self) -> None:
+        """Called by the App only after the exchange has actually stored a credential --
+        this is the real "signed in", not the premature one on_pairing_completed used to
+        show before the credential existed at all.
+        """
+        self.query("#connect-sign-in").remove()
+        self.pairing_status = "signed in"
+        self.notify("Signed in! Continuing...", severity="information", timeout=5)
 
 
 def _default_device_name() -> str:

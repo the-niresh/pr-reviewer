@@ -274,8 +274,18 @@ def test_real_pairing_flow_stores_a_credential_and_shows_the_repositories_tab(
                 if secrets.get("runner_credential"):
                     break
                 await pilot.pause()
+            # Order matters here: the credential (the "db update") is stored before the
+            # screen ever shows "signed in" or removes the Sign in button -- both of
+            # those are still visible on the still-mounted ConnectPanel at this exact
+            # point, one tick after storage and a beat before the delayed rebuild.
             assert secrets.get("runner_credential") == "real-runner-credential"
             assert pilot.app.github_connected is True
+            assert not pilot.app.query("#connect-sign-in")
+            assert str(pilot.app.query_one("#pairing-status").render()) == "signed in"
+            # _rebuild_after_pairing is deliberately delayed (see on_pairing_exchangeable)
+            # so that confirmation is actually visible instead of appearing and vanishing
+            # in the same tick; wait it out for real before the connected view appears.
+            await pilot.pause(1.6)
             assert pilot.app.query_one("#repositories-heading") is not None
 
     asyncio.run(exercise())

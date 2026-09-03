@@ -205,8 +205,21 @@ class ReviewerApp(App[None]):
             # on screen -- indistinguishable from a random crash right after a real sign-in.
             self._report_exchange_failure(exc)
             return
+        # The credential is stored -- this is the real "signed in", not the premature one
+        # ConnectPanel used to show on approval alone, before the exchange that can still
+        # fail (a 409 from an already-held repository, say) had even been attempted.
         self._secrets.set(RUNNER_CREDENTIAL_SECRET, credential)
-        self._rebuild_after_pairing()
+        try:
+            connect_panel = self.query_one(ConnectPanel)
+        except NoMatches:
+            connect_panel = None
+        if connect_panel is not None:
+            connect_panel.show_signed_in()
+        # A beat to actually see the green "signed in" and the Sign in button gone before
+        # the screen changes underneath it -- rebuilding in the same tick made that
+        # confirmation invisible, since the whole panel it appeared on was removed in the
+        # same breath it was shown.
+        self.set_timer(1.5, self._rebuild_after_pairing)
 
     def _report_exchange_failure(self, exc: Exception) -> None:
         reason = _exchange_failure_reason(exc)
