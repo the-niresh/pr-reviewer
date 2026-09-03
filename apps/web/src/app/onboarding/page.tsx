@@ -4,9 +4,10 @@ import { useEffect, useState } from "react";
 import { CircleAlert, ShieldCheck } from "lucide-react";
 
 import { GithubMark } from "@/components/github-mark";
+import { cn } from "@/lib/utils";
 
 import { Badge } from "@/components/ui/badge";
-import { Button } from "@/components/ui/button";
+import { Button, buttonVariants } from "@/components/ui/button";
 import {
   Card,
   CardContent,
@@ -37,22 +38,29 @@ const STEPS = [
 export default function OnboardingPage() {
   const [mode, setMode] = useState<ModePayload | null>(null);
   const [modeError, setModeError] = useState(false);
+  // The local daemon (not this page) knows the hosted origin and the allowlisted
+  // return_to it is configured with, so the URL is fetched rather than built here -- the
+  // same reason the button used to have nothing to link to at all.
+  const [signInUrl, setSignInUrl] = useState<string | null>(null);
 
   useEffect(() => {
     let cancelled = false;
 
     async function load() {
       try {
-        const [modeResponse, sessionResponse] = await Promise.all([
+        const [modeResponse, sessionResponse, signInResponse] = await Promise.all([
           fetch(`${LOCAL_API}/onboarding/mode`, { credentials: "include" }),
           fetch(`${LOCAL_API}/onboarding/session`, { credentials: "include" }),
+          fetch(`${LOCAL_API}/onboarding/pairing/sign-in`, { credentials: "include" }),
         ]);
-        if (!modeResponse.ok || !sessionResponse.ok) {
+        if (!modeResponse.ok || !sessionResponse.ok || !signInResponse.ok) {
           throw new Error("onboarding API unavailable");
         }
         const payload = (await modeResponse.json()) as ModePayload;
+        const signIn = (await signInResponse.json()) as { url: string };
         if (!cancelled) {
           setMode(payload);
+          setSignInUrl(signIn.url);
         }
       } catch {
         if (!cancelled) {
@@ -105,10 +113,20 @@ export default function OnboardingPage() {
             </CardDescription>
           </CardHeader>
           <CardContent>
-            <Button variant="outline">
-              <GithubMark className="size-4" />
-              Sign in with GitHub
-            </Button>
+            {signInUrl ? (
+              <a
+                href={signInUrl}
+                className={cn(buttonVariants({ variant: "outline" }), "gap-2")}
+              >
+                <GithubMark className="size-4" />
+                Sign in with GitHub
+              </a>
+            ) : (
+              <Button variant="outline" disabled>
+                <GithubMark className="size-4" />
+                Sign in with GitHub
+              </Button>
+            )}
           </CardContent>
         </Card>
 
