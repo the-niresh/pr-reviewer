@@ -218,8 +218,27 @@ class ReviewerApp(App[None]):
         # A beat to actually see the green "signed in" and the Sign in button gone before
         # the screen changes underneath it -- rebuilding in the same tick made that
         # confirmation invisible, since the whole panel it appeared on was removed in the
-        # same breath it was shown.
-        self.set_timer(1.5, self._rebuild_after_pairing)
+        # same breath it was shown. The countdown is what makes that beat visible rather
+        # than just a pause nobody can see happening.
+        self._start_post_sign_in_countdown(connect_panel)
+
+    def _start_post_sign_in_countdown(
+        self, connect_panel: ConnectPanel | None, seconds: int = 5
+    ) -> None:
+        remaining = seconds
+
+        def tick() -> None:
+            nonlocal remaining
+            remaining -= 1
+            if connect_panel is not None:
+                connect_panel.pairing_status = (
+                    f"signed in -- continuing in {remaining}s..." if remaining > 0 else "signed in"
+                )
+            if remaining <= 0:
+                timer.stop()
+                self._rebuild_after_pairing()
+
+        timer = self.set_interval(1.0, tick)
 
     def _report_exchange_failure(self, exc: Exception) -> None:
         reason = _exchange_failure_reason(exc)

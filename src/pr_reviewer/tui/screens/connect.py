@@ -192,7 +192,11 @@ class ConnectPanel(Widget):
     def watch_pairing_status(self, status: str) -> None:
         widget = self.query_one("#pairing-status", Static)
         widget.update(status)
-        widget.set_class(status == "signed in", "pairing-status--exchangeable")
+        # startswith, not ==: the App's post-sign-in countdown (see app.py's
+        # _start_post_sign_in_countdown) reuses this same status to count down to the
+        # connected view, and that text must stay the "signed in" green the whole time,
+        # not just for the one tick before the countdown starts changing it.
+        widget.set_class(status.startswith("signed in"), "pairing-status--exchangeable")
         widget.set_class(status.startswith("pairing failed"), "pairing-status--error")
 
     def action_copy_link(self) -> None:

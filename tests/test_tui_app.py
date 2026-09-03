@@ -282,10 +282,16 @@ def test_real_pairing_flow_stores_a_credential_and_shows_the_repositories_tab(
             assert pilot.app.github_connected is True
             assert not pilot.app.query("#connect-sign-in")
             assert str(pilot.app.query_one("#pairing-status").render()) == "signed in"
-            # _rebuild_after_pairing is deliberately delayed (see on_pairing_exchangeable)
-            # so that confirmation is actually visible instead of appearing and vanishing
-            # in the same tick; wait it out for real before the connected view appears.
-            await pilot.pause(1.6)
+            # The 5s post-sign-in countdown (see app.py's _start_post_sign_in_countdown)
+            # is what actually delays _rebuild_after_pairing, and ticks the status text
+            # down each second -- both are real, so this waits them out for real rather
+            # than mocking the clock.
+            for _ in range(100):
+                if "continuing in" in str(pilot.app.query_one("#pairing-status").render()):
+                    break
+                await pilot.pause()
+            assert "continuing in" in str(pilot.app.query_one("#pairing-status").render())
+            await pilot.pause(5.2)
             assert pilot.app.query_one("#repositories-heading") is not None
 
     asyncio.run(exercise())
